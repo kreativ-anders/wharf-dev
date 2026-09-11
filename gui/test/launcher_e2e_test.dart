@@ -11,7 +11,8 @@ import 'package:wharf_gui/ipc/endpoint.dart';
 /// The launcher against the real wharfd binary: the app must be one thing to
 /// start and leave nothing behind. Run with `make gui-e2e`.
 void main() {
-  final binary = Platform.environment['WHARFD_BIN'] ??
+  final binary =
+      Platform.environment['WHARFD_BIN'] ??
       '${Directory.current.parent.path}/build/${daemonBinaryName()}';
 
   late Directory root;

@@ -58,7 +58,13 @@ void main() {
       'version': '8.4',
       'available': ['8.4'],
       'installs': [
-        {'version': '8.4', 'full_version': '8.4.3', 'dir': '/opt/php', 'source': 'system', 'status': 'active'},
+        {
+          'version': '8.4',
+          'full_version': '8.4.3',
+          'dir': '/opt/php',
+          'source': 'system',
+          'status': 'active',
+        },
       ],
       'recommended': '8.4',
       'status': 'active',

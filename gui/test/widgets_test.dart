@@ -50,7 +50,8 @@ void main() {
     expect(find.byIcon(Icons.stop), findsOneWidget);
     expect(find.byIcon(Icons.play_arrow), findsOneWidget);
     expect(find.byIcon(Icons.open_in_new), findsOneWidget);
-    expect(find.byTooltip('Project settings'), findsNWidgets(2));
+    expect(find.byTooltip('Settings for my-kirby-site'), findsOneWidget);
+    expect(find.byTooltip('Settings for legacy-app'), findsOneWidget);
   });
 
   // features/app-configuration.feature — "Every project row leads to its settings"
@@ -58,7 +59,7 @@ void main() {
     final daemon = fixture(_twoProjects);
     await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
 
-    await tester.tap(find.byTooltip('Project settings').first);
+    await tester.tap(find.byTooltip('Settings for my-kirby-site'));
     await tester.pumpAndSettle();
 
     for (final label in [
@@ -83,7 +84,7 @@ void main() {
     final daemon = fixture(_twoProjects);
     await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
 
-    await tester.tap(find.byTooltip('Project settings').first);
+    await tester.tap(find.byTooltip('Settings for my-kirby-site'));
     await tester.pumpAndSettle();
     expect(find.text('/Users/x/Code/my-kirby-site'), findsOneWidget);
     await tester.tap(find.text('Open folder'));
@@ -109,7 +110,7 @@ void main() {
     final daemon = fixture(_twoProjects.replaceFirst('"trusted": true', '"trusted": false'));
     await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
 
-    await tester.tap(find.byTooltip('Project settings').last);
+    await tester.tap(find.byTooltip('Settings for legacy-app'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Browsers will warn'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Trust…'), findsOneWidget);
@@ -281,9 +282,93 @@ void main() {
     expect(find.text('No PHP installation found on this machine.'), findsOneWidget);
     expect(find.textContaining('/Users/x/Wharf/bin/php'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Download'), findsOneWidget);
-    expect(find.widgetWithText(TextButton, 'Re-scan'), findsOneWidget);
+    // One per section: PHP and webservers are scanned separately.
+    expect(find.widgetWithText(TextButton, 'Re-scan'), findsWidgets);
+  });
+
+  testWidgets('status is not told by colour alone', (tester) async {
+    final semantics = tester.ensureSemantics();
+    final daemon = fixture(_twoProjects);
+    await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
+
+    // Each row reads as one item that says its status in words.
+    expect(find.bySemanticsLabel(RegExp(r'Running[\s\S]*my-kirby-site')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'Stopped[\s\S]*legacy-app')), findsOneWidget);
+    semantics.dispose();
+  });
+
+  // features/settings.feature — "Choosing light or dark appearance"
+  testWidgets('the appearance setting picks the theme', (tester) async {
+    final daemon = fixture(_twoProjects.replaceFirst('"root":', '"appearance": "dark", "root":'));
+    tall(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: wharfTheme(Brightness.light),
+        darkTheme: wharfTheme(Brightness.dark),
+        themeMode: themeModeFor(daemon.state.appearance),
+        home: SettingsPage(daemon: daemon),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Appearance'), findsOneWidget);
+    final picker = tester.widget<SegmentedButton<String>>(find.byType(SegmentedButton<String>));
+    expect(picker.selected, {'dark'});
+    expect(Theme.of(tester.element(find.text('Appearance'))).brightness, Brightness.dark);
+    expect(themeModeFor('system'), ThemeMode.system);
+    expect(themeModeFor('light'), ThemeMode.light);
+  });
+
+  // features/webserver-install.feature — "Installing nginx"
+  testWidgets('a missing webserver Wharf can install offers to, then shows progress', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final installable = _withNginx(
+      '"installed": false, "binary": "/Users/x/Wharf/bin/nginx/nginx", "projects": [], '
+      '"install": {"installable": true, "via": "download", "hint": "Downloads the latest nginx."}',
+    );
+    tall(tester);
+    await tester.pumpWidget(wrap(SettingsPage(daemon: fixture(installable))));
+    await tester.pump();
+    expect(find.widgetWithText(FilledButton, 'Install nginx'), findsOneWidget);
+
+    final installing = installable.replaceFirst(
+      '"projects": [], "install"',
+      '"projects": [], "installing": true, "install"',
+    );
+    await tester.pumpWidget(wrap(SettingsPage(daemon: fixture(installing))));
+    await tester.pump();
+    expect(find.text('Installing…'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('Installing nginx')), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Install nginx'), findsNothing);
+    semantics.dispose();
+  });
+
+  // features/webserver-install.feature — "A webserver Wharf cannot install says
+  // how to get it"
+  testWidgets('a webserver Wharf cannot install says how to get it', (tester) async {
+    final daemon = fixture(
+      _twoProjects.replaceFirst(
+        '"binary": "/Users/x/Wharf/bin/apache/httpd", "projects": []',
+        '"binary": "/Users/x/Wharf/bin/apache/httpd", "projects": [], '
+            '"install": {"installable": false, "hint": "Install Apache with your package manager."}',
+      ),
+    );
+    tall(tester);
+    await tester.pumpWidget(wrap(SettingsPage(daemon: daemon)));
+    await tester.pump();
+
+    expect(find.textContaining('Install Apache with your package manager.'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Install apache'), findsNothing);
   });
 }
+
+/// The two-project snapshot with nginx described by [fields].
+String _withNginx(String fields) => _twoProjects.replaceFirst(
+  '"installed": true, "binary": "/Users/x/Wharf/bin/nginx/nginx",\n         "projects": ["my-kirby-site"]',
+  fields,
+);
 
 const _twoProjects = '''
 {

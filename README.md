@@ -32,7 +32,8 @@ one is renamed, deleted or left unimplemented. See [CLAUDE.md](CLAUDE.md) §1.
 | `wharfctl` CLI | Implemented — a complete way to use Wharf without the GUI. |
 | PHP runtime | Detected on the machine and adopted where it is, or downloaded from Settings with one click. |
 | SSL | mkcert is downloaded (pinned, checksum-verified) and its authority trusted when a project first turns SSL on. |
-| Vendored binaries (nginx, apache) | Not shipped; Settings shows where each one is expected. |
+| Webservers | Adopted where installed (a Mac's own Apache is used out of the box), or installed from Settings: nginx on Linux/Windows by download, on macOS via Homebrew; Apache on Windows by download. |
+| Appearance | Kirby-plain light and dark themes, or follow the system. |
 | Packaging (DMG / MSI / AppImage) | Not started. |
 
 ## Running it
@@ -88,10 +89,8 @@ make spec    # the spec-to-test coverage matrix
 make run     # the daemon alone, against a throwaway root
 ```
 
-**Note:** nginx and Apache are not vendored yet, so *starting* a project
-reports where it expects to find them (Settings shows it too). Everything
-else — adding projects, hosts entries, PHP downloads, SSL, settings, the
-tray — works today.
+**Note:** on Linux, Apache comes from your distribution's package — Settings
+names the command. Everything else installs itself on request.
 
 ## Scope statement (v1)
 

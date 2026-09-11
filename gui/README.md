@@ -78,7 +78,10 @@ From `dev/design-principles.md`:
   project or its settings button, never on the list itself.
 - **No dashboard-itis.** No charts, no telemetry, no onboarding.
 - **Tray-first.** Start, stop and open are in the tray; the window is optional.
-- **Settings shows only Webserver, PHP and SSL.** Database and mail are `@roadmap`
+- **Kirby-plain, and accessible.** Black on white or white on near-black,
+  colour only for status, WCAG AA contrast enforced by `test/theme_test.dart`
+  (`dev/design-principles.md` §4).
+- **Settings shows only Appearance, Webserver, PHP and SSL.** Database and mail are `@roadmap`
   and are not rendered at all — a widget test asserts their absence.
 
 ## Platform notes

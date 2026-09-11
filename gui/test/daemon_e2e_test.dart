@@ -18,8 +18,8 @@ void main() {
   late Process daemon;
   late String hostsPath;
 
-  final binary = Platform.environment['WHARFD_BIN'] ??
-      '${Directory.current.parent.path}/build/wharfd';
+  final binary =
+      Platform.environment['WHARFD_BIN'] ?? '${Directory.current.parent.path}/build/wharfd';
 
   setUpAll(() async {
     if (!File(binary).existsSync()) {
@@ -126,8 +126,10 @@ void main() {
 
     await other.setWebserver(next);
 
-    await _waitFor(() => gui.state.services.webserver.active == next,
-        reason: 'the pushed snapshot never arrived');
+    await _waitFor(
+      () => gui.state.services.webserver.active == next,
+      reason: 'the pushed snapshot never arrived',
+    );
   });
 
   test('a daemon error arrives as a code the GUI can branch on', () async {
@@ -143,8 +145,8 @@ void main() {
   });
 }
 
-Future<void> _waitForFile(String path) => _waitFor(() => File(path).existsSync(),
-    reason: 'the daemon never published $path');
+Future<void> _waitForFile(String path) =>
+    _waitFor(() => File(path).existsSync(), reason: 'the daemon never published $path');
 
 Future<void> _waitFor(bool Function() condition, {required String reason}) async {
   final deadline = DateTime.now().add(const Duration(seconds: 10));

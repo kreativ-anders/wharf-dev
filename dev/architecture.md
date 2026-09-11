@@ -106,13 +106,31 @@ user asks — "Download" in the PHP picker, or turning SSL on without mkcert:
 | PHP, macOS/Linux | static-php-cli builds (`dl.static-php.dev`): single static `php-fpm` and `php`, every extension Kirby needs | HTTPS; no checksums are published |
 | PHP, Windows | the official builds (`windows.php.net`), NTS x64 | SHA-256 from `releases.json` |
 | mkcert | a pinned GitHub release | SHA-256 pinned in `internal/certs` |
+| nginx, Linux/Windows | static builds from jirutka/nginx-binaries, newest version | SHA-1 from the index — the only checksum published |
+| nginx, macOS | Homebrew (`brew install nginx`) | Homebrew's own |
+| Apache, Windows | Apache Lounge, newest 2.4 Win64 build | SHA-256 published beside each zip |
+| Apache, macOS | nothing to install — macOS ships `/usr/sbin/httpd` | — |
+| Apache, Linux | not installable by Wharf; Settings names the package command | — |
 
 Each download is staged beside its destination and renamed into place only
 when complete, so a failure leaves no half-installed folder. The newest patch
 of a PHP minor version is found from each source's index, not hard-coded.
 
-Nginx and Apache are not downloaded: neither publishes portable builds for
-all three OS. Settings shows where each binary is expected instead.
+Neither nginx.org nor apache.org publishes portable builds, so webservers
+come from the best source each platform has, and a copy already on the
+machine is always adopted first — a Mac's own Apache means the first project
+starts with no install at all (`features/webserver-install.feature`). The
+exceptions are honest, not hidden: every macOS nginx build in the index
+links Homebrew's libpcre2 and cannot start without Homebrew, so macOS nginx
+*is* Homebrew's; and a Linux distribution's Apache package is the only sane
+Apache on Linux. Settings says so instead of offering an install that would
+fail.
+
+One copy of each webserver serves every project. Each project's server
+block is generated into its own file (`data/gen/<webserver>/<project>.conf`)
+and the main config includes those files. Wharf also writes its own
+`mime.types` and `fastcgi_params`, and finds Apache's modules wherever the
+install keeps them, so the generated config works with any install.
 
 ## 5. Directory layout (the tool's own runtime folder, not the source repo)
 
@@ -120,8 +138,8 @@ all three OS. Settings shows where each binary is expected instead.
 wharf/
 ├── bin/
 │   ├── php/            # versioned, one folder per version (downloaded or vendored)
-│   ├── nginx/
-│   ├── apache/
+│   ├── nginx/          # nginx, when Wharf installed it
+│   ├── apache/         # bin/httpd + modules/, when Wharf installed it
 │   └── mkcert/         # downloaded when SSL is first turned on
 ├── www/                # user projects live here (Kirby-style: folder = project)
 ├── config/
@@ -132,7 +150,9 @@ wharf/
     ├── wharf.endpoint  # where the daemon is listening — see §4a
     ├── log/wharfd.log  # the daemon's own log (per-service logs sit beside it)
     ├── wharf.sock      # unix transport only
-    ├── gen/            # generated nginx/apache/php-fpm configs (overwritten on start)
+    ├── gen/            # generated configs (overwritten on start): nginx.conf and
+    │                   #   apache.conf include nginx/<project>.conf and
+    │                   #   apache/<project>.conf; run/ holds pid files
     ├── log/            # per-service logs
     ├── certs/          # mkcert output, one pair per SSL project
     └── mailpit/        # roadmap
@@ -168,6 +188,7 @@ them surviving a restart:
 - `projects[].hosts_entry` — whether a hosts line exists. Removing a project
   must delete exactly the entry that was written, and elevation may have been
   declined when it was added.
+- `appearance` — `"light"` or `"dark"`; absent means follow the system.
 - `projects[].path` — appears only for a project whose folder is not in
   `www/`: the folder is added where it is (`features/project-folders.feature`).
 - `services.php.paths` — appears only when the tool adopted a PHP already

@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import '../daemon.dart';
 import '../folders.dart';
 import '../models/state.dart';
+import '../theme.dart';
 
-/// Global settings. Only Webserver, PHP runtime and SSL appear: database and
+/// Global settings. Only Appearance, Webserver, PHP runtime and SSL appear: database and
 /// mail are roadmap capabilities and are not shown at all in v1
 /// (features/settings.feature, "Settings screen hides roadmap services in v1").
 class SettingsPage extends StatelessWidget {
@@ -30,6 +31,9 @@ class SettingsPage extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
                   child: Text(daemon.notice!, style: muted),
                 ),
+              _SectionHeader('Appearance'),
+              _AppearanceSection(daemon: daemon, mode: state.appearance),
+              const SizedBox(height: 28),
               _SectionHeader('Webserver'),
               _WebserverSection(webserver: services.webserver, daemon: daemon),
               const SizedBox(height: 28),
@@ -66,10 +70,40 @@ class SettingsPage extends StatelessWidget {
   }
 }
 
+/// Light, dark, or whatever the system uses (features/settings.feature,
+/// "Choosing light or dark appearance").
+class _AppearanceSection extends StatelessWidget {
+  const _AppearanceSection({required this.daemon, required this.mode});
+
+  final Daemon daemon;
+  final String mode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: SegmentedButton<String>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(value: 'system', label: Text('System')),
+            ButtonSegment(value: 'light', label: Text('Light')),
+            ButtonSegment(value: 'dark', label: Text('Dark')),
+          ],
+          selected: {mode},
+          onSelectionChanged: (s) => daemon.setAppearance(s.first),
+        ),
+      ),
+    );
+  }
+}
+
 /// The default webserver. "Stopped" on its own reads as broken when it only
 /// means no project is running, so each server says what it serves and when
 /// it runs (features/settings.feature, "Webserver status while nothing is
-/// running").
+/// running"). One that is missing offers to install itself, or says how to
+/// get it (features/webserver-install.feature).
 class _WebserverSection extends StatelessWidget {
   const _WebserverSection({required this.webserver, required this.daemon});
 
@@ -93,7 +127,8 @@ class _WebserverSection extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
           child: Text(
             'The default for every project. Any project can use the other one '
-            'instead, in its own settings.',
+            'instead, in its own settings. One copy of each serves all projects; '
+            'every project gets its own config file.',
             style: muted,
           ),
         ),
@@ -107,16 +142,16 @@ class _WebserverSection extends StatelessWidget {
               for (final server in servers)
                 RadioListTile<String>(
                   value: server.name,
+                  // Enabled even when missing: its explanation must stay
+                  // readable, and it may be chosen before it is installed.
                   enabled: !webserver.switching,
-                  title: Text(server.name),
+                  title: Text(_title(server)),
                   subtitle: Text(_describe(server)),
+                  isThreeLine:
+                      !server.installed && !server.installable && server.installHint.isNotEmpty,
                   secondary: server.installed
                       ? null
-                      : IconButton(
-                          tooltip: 'Open the folder it belongs in',
-                          icon: const Icon(Icons.folder_open, size: 18),
-                          onPressed: () => openFolder(_parent(server.binary)),
-                        ),
+                      : _InstallAction(daemon: daemon, server: server),
                 ),
             ],
           ),
@@ -126,15 +161,34 @@ class _WebserverSection extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
             child: Text(
               webserver.error,
-              style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
+              style: TextStyle(color: WharfColors.of(context).failed, fontSize: 12.5),
             ),
           ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: TextButton(onPressed: daemon.rescanWebservers, child: const Text('Re-scan')),
+        ),
       ],
     );
   }
 
+  String _title(Server server) {
+    if (!server.installed || server.version.isEmpty) return server.name;
+    final where = switch (server.source) {
+      'wharf' => 'in Wharf',
+      'homebrew' => 'via Homebrew',
+      _ => 'on this machine',
+    };
+    return '${server.name} ${server.version} · $where';
+  }
+
   String _describe(Server server) {
-    if (!server.installed) return 'Not installed — expected at ${server.binary}';
+    if (server.installing) return 'Installing…';
+    if (!server.installed) {
+      final expected = 'Not installed — expected at ${server.binary}';
+      if (server.installable || server.installHint.isEmpty) return expected;
+      return '$expected\n${server.installHint}';
+    }
     final serves = server.projects.isEmpty ? null : 'serves ${server.projects.join(', ')}';
     if (server.name != webserver.active) {
       return serves == null ? 'Not used by any project' : 'Chosen per project — $serves';
@@ -142,6 +196,43 @@ class _WebserverSection extends StatelessWidget {
     if (webserver.switching) return 'switching webserver…';
     if (webserver.isRunning) return 'Running${serves == null ? '' : ' — $serves'}';
     return 'Starts with the first project${serves == null ? '' : ' — $serves'}';
+  }
+}
+
+/// What a missing webserver offers: installing it, a progress mark while it
+/// installs, or — where Wharf cannot install it — the folder it belongs in.
+class _InstallAction extends StatelessWidget {
+  const _InstallAction({required this.daemon, required this.server});
+
+  final Daemon daemon;
+  final Server server;
+
+  @override
+  Widget build(BuildContext context) {
+    if (server.installing) {
+      return Semantics(
+        label: 'Installing ${server.name}',
+        child: const SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+    if (server.installable) {
+      return Tooltip(
+        message: server.installHint,
+        child: FilledButton(
+          onPressed: daemon.state.busy ? null : () => daemon.installWebserver(server.name),
+          child: Text('Install ${server.name}'),
+        ),
+      );
+    }
+    return IconButton(
+      tooltip: 'Open the folder it belongs in',
+      icon: const Icon(Icons.folder_open, size: 18),
+      onPressed: () => openFolder(_parent(server.binary)),
+    );
   }
 }
 
@@ -346,21 +437,35 @@ class _SslSection extends StatelessWidget {
   }
 }
 
-/// How well supported a version still is — the reason to pick one over another.
+/// How well supported a version still is — the reason to pick one over
+/// another. A coloured mark beside plain text: the words carry the meaning,
+/// the colour only reinforces it, and small coloured text would fail contrast.
 class _SupportBadge extends StatelessWidget {
   const _SupportBadge(this.status);
   final String status;
 
   @override
   Widget build(BuildContext context) {
+    final c = WharfColors.of(context);
     final (label, color) = switch (status) {
-      'active' => ('active support', const Color(0xFF3F9142)),
-      'security' => ('security fixes only', const Color(0xFFB2841F)),
-      'eol' => ('end of life', Theme.of(context).colorScheme.error),
-      'unreleased' => ('not released yet', Colors.grey),
-      _ => ('unrecognised version', Colors.grey),
+      'active' => ('active support', c.running),
+      'security' => ('security fixes only', c.busy),
+      'eol' => ('end of life', c.failed),
+      'unreleased' => ('not released yet', c.idle),
+      _ => ('unrecognised version', c.idle),
     };
-    return Text(label, style: TextStyle(fontSize: 11, color: color));
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
   }
 }
 
@@ -371,6 +476,9 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-    child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+    child: Semantics(
+      header: true,
+      child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+    ),
   );
 }

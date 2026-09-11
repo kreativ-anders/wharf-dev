@@ -108,7 +108,16 @@ ThemeData wharfTheme(Brightness brightness) {
   // The platform's own system font, as getkirby.com uses: San Francisco on
   // macOS, Segoe UI on Windows, the desktop's default on Linux.
   final typography = Typography.material2021(platform: defaultTargetPlatform);
-  final base = dark ? typography.white : typography.black;
+  final base = (dark ? typography.white : typography.black).apply(
+    bodyColor: ink,
+    displayColor: ink,
+  );
+  // Every style derives from the platform's, so none loses its font family.
+  final text = base.copyWith(
+    bodySmall: base.bodySmall!.copyWith(color: colors.dimmed, fontSize: 12.5, height: 1.4),
+    titleMedium: base.titleMedium!.copyWith(fontSize: 15, fontWeight: FontWeight.w600),
+    titleSmall: base.titleSmall!.copyWith(fontSize: 13, fontWeight: FontWeight.w600),
+  );
 
   return ThemeData(
     useMaterial3: true,
@@ -120,11 +129,7 @@ ThemeData wharfTheme(Brightness brightness) {
     focusColor: colors.focus.withValues(alpha: 0.24),
     extensions: [colors],
     dividerTheme: DividerThemeData(color: colors.border, space: 1, thickness: 1),
-    textTheme: base.apply(bodyColor: ink, displayColor: ink).copyWith(
-          bodySmall: TextStyle(color: colors.dimmed, fontSize: 12.5, height: 1.4),
-          titleMedium: TextStyle(color: ink, fontSize: 15, fontWeight: FontWeight.w600),
-          titleSmall: TextStyle(color: ink, fontSize: 13, fontWeight: FontWeight.w600),
-        ),
+    textTheme: text,
     appBarTheme: AppBarTheme(
       backgroundColor: paper,
       foregroundColor: ink,
@@ -132,7 +137,7 @@ ThemeData wharfTheme(Brightness brightness) {
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
-      titleTextStyle: TextStyle(color: ink, fontSize: 16, fontWeight: FontWeight.w600),
+      titleTextStyle: text.titleMedium!.copyWith(fontSize: 16),
       iconTheme: IconThemeData(color: ink),
       actionsIconTheme: IconThemeData(color: ink),
       shape: Border(bottom: BorderSide(color: colors.border)),
@@ -176,8 +181,13 @@ ThemeData wharfTheme(Brightness brightness) {
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
     ),
+    // A control's outline needs 3:1 against the page (WCAG 1.4.11); the
+    // hairline border grey would be 1.3:1.
     switchTheme: SwitchThemeData(
-      trackOutlineColor: WidgetStatePropertyAll(colors.border),
+      trackOutlineColor: WidgetStatePropertyAll(colors.idle),
+      thumbColor: WidgetStateProperty.resolveWith(
+        (s) => s.contains(WidgetState.selected) ? paper : colors.idle,
+      ),
     ),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: SegmentedButton.styleFrom(
@@ -192,15 +202,22 @@ ThemeData wharfTheme(Brightness brightness) {
   );
 }
 
+/// How the window follows the `appearance` setting in the snapshot.
+ThemeMode themeModeFor(String appearance) => switch (appearance) {
+  'light' => ThemeMode.light,
+  'dark' => ThemeMode.dark,
+  _ => ThemeMode.system,
+};
+
 /// The words for a status, for screen readers and tooltips. Colour alone
 /// never carries it (WCAG 1.4.1).
 String statusLabel(String state) => switch (state) {
-      'running' => 'Running',
-      'starting' => 'Starting',
-      'stopping' => 'Stopping',
-      'failed' => 'Failed',
-      _ => 'Stopped',
-    };
+  'running' => 'Running',
+  'starting' => 'Starting',
+  'stopping' => 'Stopping',
+  'failed' => 'Failed',
+  _ => 'Stopped',
+};
 
 Color statusColor(BuildContext context, String state) {
   final c = WharfColors.of(context);
@@ -227,14 +244,17 @@ class StatusDot extends StatelessWidget {
       'running' => BoxDecoration(color: color, shape: BoxShape.circle),
       'failed' => BoxDecoration(color: color, borderRadius: BorderRadius.circular(1.5)),
       'starting' || 'stopping' => BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: color, width: 1.5),
-          gradient: LinearGradient(
-            colors: [color, color, Colors.transparent, Colors.transparent],
-            stops: const [0, 0.5, 0.5, 1],
-          ),
+        shape: BoxShape.circle,
+        border: Border.all(color: color, width: 1.5),
+        gradient: LinearGradient(
+          colors: [color, color, Colors.transparent, Colors.transparent],
+          stops: const [0, 0.5, 0.5, 1],
         ),
-      _ => BoxDecoration(shape: BoxShape.circle, border: Border.all(color: color, width: 1.5)),
+      ),
+      _ => BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: color, width: 1.5),
+      ),
     };
     return Tooltip(
       message: statusLabel(state),

@@ -43,11 +43,30 @@ of content).
 - No theming system.
 - No multi-window layouts — one window, one tray menu.
 
-## 4. Visual language (deferred)
+## 4. Visual language
 
-Concrete typography/colour decisions are **not** part of this concept
-package — visual design starts once the behaviour in `features/*.feature`
-is agreed. The only fixed constraint carried forward: minimal chrome, high
-whitespace-to-content ratio, no visual clutter competing with the
-file-tree-like project list — consistent with Kirby's own text-forward,
-low-ornamentation site design.
+Kirby-plain, taken from getkirby.com's own palette (`gui/lib/theme.dart`):
+
+- **Black on white, white on near-black.** Pure greys for structure
+  (borders, secondary text); primary buttons are ink-filled, not a brand
+  colour. There is no brand colour.
+- **Colour only where it means something**: a project's status, a PHP
+  version's support status. Kirby's hues (green 80°, orange 28°, red 0°,
+  blue 210°), with lightness picked for contrast rather than taste.
+- **The platform's system font**, as getkirby.com uses: San Francisco,
+  Segoe UI, the Linux desktop's default.
+- **Light, dark or system**, chosen in Settings and stored in `wharf.json`
+  like every other setting.
+
+Accessibility is part of the palette, not an afterthought
+(`gui/test/theme_test.dart` enforces it):
+
+- Text reaches WCAG AA, 4.5:1; status marks and control outlines 3:1 — in
+  both themes, on both the page and surface colours.
+- Colour never carries meaning alone: status is also a shape (filled dot,
+  ring, half ring, square) and a word for screen readers.
+- Every icon-only control has a label naming its target ("Start
+  my-kirby-site", not "Start"); a project row reads as one item; notices
+  are announced; the keyboard reaches everything (⌘, / ⌘O / ⌘N).
+- Minimal chrome, high whitespace-to-content ratio, nothing competing with
+  the file-tree-like project list.

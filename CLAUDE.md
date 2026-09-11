@@ -94,7 +94,8 @@ wharf/
 │   ├── service-management.feature   webserver switching, port conflicts
 │   ├── settings.feature             global settings surface
 │   ├── single-application.feature   one app: starts and stops its own daemon
-│   └── tray-actions.feature         tray menu behaviour
+│   ├── tray-actions.feature         tray menu behaviour
+│   └── webserver-install.feature    nginx/Apache: adopt, install, one config per project
 │
 ├── daemon/                    the Go core daemon — see daemon/README.md
     ├── go.mod                 module github.com/manuel-steinberg/wharf/daemon
@@ -117,10 +118,11 @@ wharf/
         ├── layout/            the portable root: bin/ www/ config/ data/
         ├── php/               release timeline, support status, detection, downloads
         ├── project/           folder-as-project discovery, template scaffolding
-        ├── runtime/           config → process specs; generates server configs
+        ├── runtime/           config → process specs; one generated config file per project
 │       ├── specsync/          THE SYNC GUARD (§1)
 │       ├── supervisor/        process lifecycle, port waiting, state machine
-│       └── watchdog/          daemon exits when the app that started it is gone
+│       ├── watchdog/          daemon exits when the app that started it is gone
+│       └── webserver/         find nginx/Apache (Wharf's, Homebrew's, the OS's), install them
 │
 └── gui/                       the Flutter desktop app — see gui/README.md
     ├── pubspec.yaml
@@ -131,7 +133,7 @@ wharf/
     │   ├── daemon.dart        THE APP'S STATE — one snapshot from the daemon
     │   ├── daemon_launcher.dart  finds, starts and stops wharfd: one application
     │   ├── folders.dart       opening folders and files, the "Add folder…" picker
-    │   ├── theme.dart         minimal chrome, status dot
+    │   ├── theme.dart         Kirby-plain light/dark palette, status mark (shape + colour)
     │   ├── tray.dart          the tray menu (features/tray-actions.feature)
     │   ├── ipc/
     │   │   ├── endpoint.dart  reads data/wharf.endpoint, opens the transport
@@ -140,9 +142,10 @@ wharf/
     │   └── pages/
     │       ├── projects_page.dart  THE ONE PRIMARY VIEW
     │       ├── project_sheet.dart  per-project overrides, behind a tap
-    │       └── settings_page.dart  webserver, PHP picker and downloads, SSL
+    │       └── settings_page.dart  appearance, webservers, PHP picker and downloads, SSL
     ├── test/
     │   ├── state_test.dart      snapshot parsing
+    │   ├── theme_test.dart      WCAG contrast of the palette, both themes
     │   ├── widgets_test.dart    what each view renders
     │   ├── launcher_test.dart   binary search order, missing-binary message
     │   ├── launcher_e2e_test.dart  start / attach / quit against real wharfd (--tags e2e)
@@ -170,9 +173,13 @@ means changing the document that records it.
   Someone comfortable with a text editor must be able to skip the GUI entirely.
 - **Folder = project.** A folder in `www/` is found by name; a folder anywhere
   else can be added and stays where it is, its location recorded as `path`.
-- **Wharf installs what it needs.** PHP builds and mkcert are downloaded on
-  request, never at first launch; mkcert is pinned and checksum-verified.
-  Nothing requires the user to place a binary by hand.
+- **Wharf installs what it needs.** PHP builds, webservers and mkcert are
+  installed on request, never at first launch; what is already on the
+  machine is adopted first. The source differs per platform
+  (`dev/architecture.md` §4b); the user's action does not. Nothing requires
+  placing a binary by hand.
+- **Accessible by default.** WCAG AA contrast in both themes, status never
+  by colour alone, every control labelled (`dev/design-principles.md` §4).
 - **One primary view.** Progressive disclosure for per-project settings; no
   dashboards, no charts, no onboarding carousel.
 - **The daemon owns all state.** The tray menu and the main window render the

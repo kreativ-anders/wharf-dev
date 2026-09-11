@@ -42,6 +42,7 @@ real elevation adapter for the OS it is running on.
 | `internal/certs` | mkcert: pinned download, local CA trust, per-project certificates |
 | `internal/download` | HTTPS fetch with checksum, untar/unzip — for PHP builds and mkcert |
 | `internal/php` | Release timeline, support status, detection, downloads |
+| `internal/webserver` | Finds nginx/Apache (Wharf's, Homebrew's, the OS's) and installs them |
 | `internal/ipc` | Newline-delimited JSON over `AF_UNIX`, server and client |
 | `internal/watchdog` | Shuts the daemon down when the app that started it is gone |
 | `internal/core` | The behaviour itself; the IPC layer is a thin shell over it |
@@ -89,6 +90,8 @@ wharfctl add ~/Code/client-site   # or any folder, left where it is
 wharfctl php install 8.4          # download a PHP build into bin/php/8.4
 wharfctl ssl                      # install mkcert, trust its authority
 wharfctl config my-kirby-site nginx   # path of the custom nginx directives
+wharfctl webserver install nginx  # install a webserver
+wharfctl appearance dark          # system, light or dark
 wharfctl new kirby my-kirby-site  # scaffold from the Kirby starter kit
 wharfctl set my-kirby-site --php 8.1 --ssl true
 wharfctl set legacy-app --webserver apache
@@ -108,6 +111,7 @@ Each `@v1` scenario in `features/` has a test named after it:
 | `local-ssl.feature` | `internal/core/local_ssl_test.go` |
 | `php-runtime.feature` | `internal/core/php_runtime_test.go` |
 | `project-folders.feature` | `internal/core/project_folders_test.go` |
+| `webserver-install.feature` | `internal/core/webserver_install_test.go` |
 | `pretty-urls.feature` | `internal/core/pretty_urls_test.go` |
 | `quick-app-php.feature` | `internal/core/quick_app_test.go` |
 | `settings.feature` | `internal/core/settings_test.go` |
@@ -119,8 +123,7 @@ shipped binaries or a password prompt.
 
 ## Not implemented yet
 
-- **Vendored webservers.** No nginx or apache ships with the repo, and neither
-  publishes portable builds for all three OS; the resolver reports a clear
-  "not installed, expected `<path>`" instead. PHP and mkcert are downloaded on
-  request (`dev/architecture.md` §4b).
+- **Apache on Linux** is not installed by Wharf: the distribution's package
+  is the only sane source, and Settings names the command
+  (`dev/architecture.md` §4b).
 - Everything tagged `@roadmap` — deliberately, per `dev/architecture.md` §2.

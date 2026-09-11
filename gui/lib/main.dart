@@ -108,15 +108,18 @@ class _WharfAppState extends State<WharfApp> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Wharf',
-      navigatorKey: _navigator,
-      debugShowCheckedModeBanner: false,
-      theme: wharfTheme(Brightness.light),
-      darkTheme: wharfTheme(Brightness.dark),
-      home: ListenableBuilder(
-        listenable: _daemon,
-        builder: (context, _) => ProjectsPage(daemon: _daemon),
+    // The theme follows the snapshot like everything else, so choosing Dark
+    // in Settings switches the window at once (features/settings.feature).
+    return ListenableBuilder(
+      listenable: _daemon,
+      builder: (context, _) => MaterialApp(
+        title: 'Wharf',
+        themeMode: themeModeFor(_daemon.state.appearance),
+        navigatorKey: _navigator,
+        debugShowCheckedModeBanner: false,
+        theme: wharfTheme(Brightness.light),
+        darkTheme: wharfTheme(Brightness.dark),
+        home: ProjectsPage(daemon: _daemon),
       ),
     );
   }
