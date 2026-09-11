@@ -14,6 +14,25 @@ Feature: Tray icon actions
     Then the daemon starts that project's required services
     And the tray menu updates the project's status to "running"
 
+  Scenario: Stopping a project
+    Given a project is running
+    When the user chooses "Stop" for it, in the tray menu or the project list
+    Then the daemon stops the process serving that project
+    And the project's status updates to "stopped"
+
+  Scenario: Restarting a project
+    Given a project is running, or failed to start
+    When the user chooses "Restart" for it, in the tray menu or the project list
+    Then its webserver config is generated again
+    And the process serving it is restarted with that config
+    And its PHP backend is started if it is not running
+
+  Scenario: Every project offers the actions that fit its state
+    When the user looks at a project in the project list or the tray menu
+    Then a running project offers "Stop" and "Restart"
+    And a stopped project offers "Start"
+    And a project that failed to start offers "Start" and "Restart"
+
   Scenario: Stopping all services from the tray
     Given one or more services are running
     When the user selects "Stop all" from the tray menu

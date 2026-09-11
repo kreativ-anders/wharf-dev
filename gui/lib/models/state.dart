@@ -307,6 +307,16 @@ class PhpInstall {
   );
 }
 
+/// Something the user can do to a project from its row or the tray.
+enum ProjectAction {
+  start('Start'),
+  stop('Stop'),
+  restart('Restart');
+
+  const ProjectAction(this.label);
+  final String label;
+}
+
 /// One row in the project list: name, status, URL. Nothing else is shown by
 /// default (dev/design-principles.md §2).
 class Project {
@@ -358,6 +368,17 @@ class Project {
   bool get isBusy => state == 'starting' || state == 'stopping';
   bool get hasFailed => state == 'failed';
   bool get hasOverrides => webserverOverride != null || phpOverride != null || ssl;
+
+  /// What the project offers to do next. The row and the tray submenu both
+  /// read this, so they offer the same actions (features/tray-actions.feature,
+  /// "Every project offers the actions that fit its state"). A project on its
+  /// way up or down offers nothing until it gets there.
+  List<ProjectAction> get actions {
+    if (isBusy) return const [];
+    if (isRunning) return const [ProjectAction.stop, ProjectAction.restart];
+    if (hasFailed) return const [ProjectAction.start, ProjectAction.restart];
+    return const [ProjectAction.start];
+  }
 
   factory Project.fromJson(Map<String, dynamic> json) => Project(
     name: json['name'] as String? ?? '',

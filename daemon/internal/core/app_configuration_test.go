@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/manuel-steinberg/wharf/daemon/internal/runtime"
+	"github.com/manuel-steinberg/wharf/daemon/internal/supervisor"
 )
 
 // features/app-configuration.feature — "Overriding the PHP version for one
@@ -318,5 +319,42 @@ func TestSavingACustomConfigAppliesIt(t *testing.T) {
 	}
 	if !h.sup.Running(runtimeWebserverID) {
 		t.Fatal("webserver not running after the restart")
+	}
+}
+
+// features/app-configuration.feature — "A custom config the webserver
+// refuses names the problem"
+func TestACustomConfigTheWebserverRefusesNamesTheProblem(t *testing.T) {
+	h := newHarness(t)
+	h.mustAdd("my-kirby-site")
+	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
+		t.Fatal(err)
+	}
+	path, err := h.d.CustomConfig(h.ctx(), "my-kirby-site", "nginx")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// When the user saves a change that nginx refuses to start with
+	complaint := `"server" directive is not allowed here in ` + path + `:17`
+	h.runner.Refuse[runtimeWebserverID] = "2026/09/11 10:13:20 [emerg] 71176#0: " + complaint + "\n"
+	os.WriteFile(path, []byte("server {\n  listen 8080;\n}\n"), 0o644)
+	later := time.Now().Add(2 * time.Second)
+	os.Chtimes(path, later, later)
+
+	// A minute is far longer than the test may take: only an early exit
+	// can end the wait in time.
+	h.sup.StartTimeout = time.Minute
+	began := time.Now()
+	h.d.ApplyCustomConfigs(h.ctx())
+
+	// Then "my-kirby-site" shows nginx's own error, naming the file and line
+	p := h.project("my-kirby-site")
+	if p.State != string(supervisor.StateFailed) || !strings.Contains(p.Error, complaint) {
+		t.Fatalf("project = %q %q, want failed with %q", p.State, p.Error, complaint)
+	}
+	// And the error appears as soon as nginx exits, not after a timeout
+	if waited := time.Since(began); waited > 5*time.Second {
+		t.Fatalf("the error took %s", waited)
 	}
 }

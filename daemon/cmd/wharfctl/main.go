@@ -33,6 +33,7 @@ const usage = `usage: wharfctl [--root DIR] <command> [args]
   rm <name>                  unregister a project (the folder is left alone)
   start <name>               start a project
   stop <name>                stop a project
+  restart <name>             regenerate a project's config and restart what serves it
   stop-all                   stop every service and project
   webserver <apache|nginx>   set the globally active webserver
   webserver install <name>   install nginx or Apache
@@ -118,14 +119,15 @@ func run() error {
 		printProject(p)
 		return nil
 
-	case "rm", "start", "stop":
+	case "rm", "start", "stop", "restart":
 		if len(args) < 2 {
 			return fmt.Errorf("%s needs a project name", args[0])
 		}
 		method := map[string]string{
-			"rm":    ipc.MethodProjectRemove,
-			"start": ipc.MethodProjectStart,
-			"stop":  ipc.MethodProjectStop,
+			"rm":      ipc.MethodProjectRemove,
+			"start":   ipc.MethodProjectStart,
+			"stop":    ipc.MethodProjectStop,
+			"restart": ipc.MethodProjectRestart,
 		}[args[0]]
 		return callAndShow(ctx, c, method, map[string]string{"name": args[1]})
 

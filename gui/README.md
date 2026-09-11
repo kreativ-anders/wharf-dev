@@ -77,7 +77,8 @@ From `dev/design-principles.md`:
 - **Progressive disclosure.** Per-project settings live behind a tap on the
   project or its settings button, never on the list itself.
 - **No dashboard-itis.** No charts, no telemetry, no onboarding.
-- **Tray-first.** Start, stop and open are in the tray; the window is optional.
+- **Tray-first.** Start, stop, restart and open are in the tray; the window is
+  optional. Both offer the same actions, from `Project.actions`.
 - **Kirby-plain, and accessible.** Black on white or white on near-black,
   colour only for status, WCAG AA contrast enforced by `test/theme_test.dart`
   (`dev/design-principles.md` §4).
@@ -95,6 +96,9 @@ From `dev/design-principles.md`:
   an AppIndicator extension. Documented in `dev/architecture.md` §4, not
   solved.
 - **Windows** uses the TCP transport and the `.ico` tray icon.
+- **Icons** are drawn by [`tool/draw_icons.py`](tool/draw_icons.py): a
+  template image for the macOS menu bar, the same mark on a dark tile for
+  Windows and Linux bars, and the app icon.
 
 ## Not done yet
 

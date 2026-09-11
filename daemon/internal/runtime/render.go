@@ -35,6 +35,14 @@ type vhost struct {
 	Port int
 	// Conf is the instance the vhost belongs to, for its ports and paths.
 	Conf *confData
+	// HTTPS marks the copy of the vhost rendered for the HTTPS listener.
+	HTTPS bool
+}
+
+// WithHTTPS is the vhost as its HTTPS server block renders it.
+func (v vhost) WithHTTPS() vhost {
+	v.HTTPS = true
+	return v
 }
 
 type module struct{ Name, Path string }
@@ -183,7 +191,10 @@ func apacheModules(dir string, ssl bool) []module {
 			break
 		}
 	}
-	for _, m := range []string{"authz_core", "unixd", "dir", "mime", "log_config", "rewrite", "headers", "proxy", "proxy_fcgi"} {
+	// setenvif because Kirby's .htaccess uses SetEnvIf outside any
+	// <IfModule>: without it every request is a 500 (webserver-install
+	// .feature, "A Kirby project needs no webserver configuration").
+	for _, m := range []string{"authz_core", "unixd", "dir", "mime", "log_config", "rewrite", "headers", "setenvif", "proxy", "proxy_fcgi"} {
 		add(m+"_module", "mod_"+m+".so")
 	}
 	if ssl {
@@ -253,58 +264,52 @@ http {
 {{end}}}
 `))
 
-var nginxVhostTemplate = template.Must(template.New("nginx-vhost").Parse(generatedHeader + `
+// kirbyRules is the body every nginx server block shares. It is Kirby's own
+// nginx recipe, written as the Starterkit's .htaccess states it for Apache,
+// so a Kirby project needs no custom config under either webserver
+// (webserver-install.feature, "A Kirby project needs no webserver
+// configuration"): dot-files and the content, site and kirby folders are
+// handed to Kirby, which answers with its error page, never with the file.
+const kirbyRules = `{{define "kirby"}}  root "{{.DocRoot}}";
+  index index.php index.html;
+  add_header X-Content-Type-Options nosniff;
+
+  rewrite (^|/)\.(?!well-known/) /index.php last;
+  rewrite ^/(content|site|kirby)/ /index.php last;
+
+  location / {
+    try_files $uri $uri/ /index.php$is_args$args;
+  }
+
+  location ~ \.php$ {
+    try_files $uri =404;
+    fastcgi_pass 127.0.0.1:{{.PHPPort}};
+    fastcgi_index index.php;
+    include "{{.Conf.FastCGIParams}}";
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+{{- if .HTTPS}}
+    fastcgi_param HTTPS on;
+{{- end}}
+  }
+{{if .Include}}
+  include "{{.Include}}";
+{{end}}{{end}}`
+
+var nginxVhostTemplate = template.Must(template.New("nginx-vhost").Parse(kirbyRules + generatedHeader + `
 # {{.Name}}
 
 server {
   listen {{.Conf.ListenPort}};{{if and .Port (ne .Port .Conf.ListenPort)}}
   listen {{.Port}};{{end}}
   server_name {{.Hostname}};
-  root "{{.DocRoot}}";
-  index index.php index.html;
-
-  location / {
-    try_files $uri $uri/ /index.php?$query_string;
-  }
-
-  location ~ \.php$ {
-    fastcgi_pass 127.0.0.1:{{.PHPPort}};
-    fastcgi_index index.php;
-    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-    include "{{.Conf.FastCGIParams}}";
-  }
-
-  # Kirby keeps content, site and kirby folders out of the web root's reach.
-  location ~ ^/(content|site|kirby)/ { deny all; }
-{{if .Include}}
-  include "{{.Include}}";
-{{end}}}
+{{template "kirby" .}}}
 {{if .SSL}}
 server {
   listen {{.Conf.HTTPSPort}} ssl;
   server_name {{.Hostname}};
-  root "{{.DocRoot}}";
-  index index.php index.html;
-
   ssl_certificate "{{.CertFile}}";
   ssl_certificate_key "{{.KeyFile}}";
-
-  location / {
-    try_files $uri $uri/ /index.php?$query_string;
-  }
-
-  location ~ \.php$ {
-    fastcgi_pass 127.0.0.1:{{.PHPPort}};
-    fastcgi_index index.php;
-    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-    fastcgi_param HTTPS on;
-    include "{{.Conf.FastCGIParams}}";
-  }
-
-  location ~ ^/(content|site|kirby)/ { deny all; }
-{{if .Include}}
-  include "{{.Include}}";
-{{end}}}
+{{template "kirby" .WithHTTPS}}}
 {{end}}`))
 
 var apacheTemplate = template.Must(template.New("apache").Parse(generatedHeader + `

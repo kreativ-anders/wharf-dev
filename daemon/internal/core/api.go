@@ -192,6 +192,19 @@ func (d *Daemon) Register(srv *ipc.Server) {
 		return d.State(), nil
 	})
 
+	srv.Handle(ipc.MethodProjectRestart, func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Name string `json:"name"`
+		}
+		if err := decode(raw, &p); err != nil {
+			return nil, err
+		}
+		if err := d.RestartProject(ctx, p.Name); err != nil {
+			return nil, asIPCError(err)
+		}
+		return d.State(), nil
+	})
+
 	srv.Handle(ipc.MethodProjectSettings, func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var p struct {
 			Name     string   `json:"name"`

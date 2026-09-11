@@ -127,6 +127,9 @@ func (s *Supervisor) Start(ctx context.Context, spec Spec) error {
 		return s.fail(spec.ID, gen, err)
 	}
 
+	// Only what this run writes explains a failed start; earlier runs' lines
+	// in the same log would name problems long since fixed.
+	logFrom := logSize(spec.LogPath)
 	h, err := s.runner.Start(spec)
 	if err != nil {
 		return s.fail(spec.ID, gen, err)
@@ -144,11 +147,29 @@ func (s *Supervisor) Start(ctx context.Context, spec Spec) error {
 
 	go s.watch(spec.ID, gen, h)
 
+	// A process that exits before it binds — a config it refuses, most often
+	// — ends the wait at once rather than after StartTimeout, and its own last
+	// words become the error (app-configuration.feature, "A custom config the
+	// webserver refuses names the problem").
 	bindCtx, cancelBind := context.WithTimeout(ctx, s.StartTimeout)
+	exited := make(chan struct{})
+	go func() {
+		h.Wait()
+		close(exited)
+		cancelBind()
+	}()
 	err = WaitPortBound(bindCtx, s.prober, spec.Port, s.Poll)
 	cancelBind()
 	if err != nil {
-		terminate(context.WithoutCancel(ctx), h, spec)
+		select {
+		case <-exited:
+			err = fmt.Errorf("%s exited during startup", spec.Label)
+		default:
+			terminate(context.WithoutCancel(ctx), h, spec)
+		}
+		if out := startupOutput(spec.LogPath, logFrom); out != "" {
+			return s.fail(spec.ID, gen, fmt.Errorf("%s did not start: %s", spec.Label, out))
+		}
 		return s.fail(spec.ID, gen, fmt.Errorf("%s did not start: %w", spec.Label, err))
 	}
 

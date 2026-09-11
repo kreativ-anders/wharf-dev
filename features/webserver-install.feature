@@ -45,3 +45,10 @@ Feature: Webserver installation
     Then one nginx process serves both projects
     And each project's server block is generated into its own file under "data/gen/nginx/"
     And the main nginx config includes exactly those files
+
+  Scenario: A Kirby project needs no webserver configuration
+    Given the Kirby starter kit is a project
+    When it is served by nginx or by Apache
+    Then its pages, the Panel and its media are served
+    And "content/", "site/", "kirby/" and dot-files are never served as files
+    And no custom config is needed for any of it

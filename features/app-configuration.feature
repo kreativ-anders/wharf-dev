@@ -48,3 +48,9 @@ Feature: Per-project (app-specific) configuration
     Given "my-kirby-site" is running with a custom nginx config
     When the user saves a change to that file
     Then the webserver serving "my-kirby-site" is restarted with the change
+
+  Scenario: A custom config the webserver refuses names the problem
+    Given "my-kirby-site" is running with a custom nginx config
+    When the user saves a change that nginx refuses to start with
+    Then "my-kirby-site" shows nginx's own error, naming the file and line
+    And the error appears as soon as nginx exits, not after a timeout

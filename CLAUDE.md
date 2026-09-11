@@ -127,7 +127,8 @@ wharf/
 └── gui/                       the Flutter desktop app — see gui/README.md
     ├── pubspec.yaml
     ├── dart_test.yaml          declares the e2e tag (excluded from the default run)
-    ├── assets/tray/           tray icon (png for macOS/Linux, ico for Windows)
+    ├── assets/tray/           tray icon: template_*.png (macOS), icon_*.png (Linux), icon.ico (Windows)
+    ├── tool/draw_icons.py     draws the tray and app icons from one mark
     ├── lib/
     │   ├── main.dart          window, tray wiring, close-to-tray
     │   ├── daemon.dart        THE APP'S STATE — one snapshot from the daemon

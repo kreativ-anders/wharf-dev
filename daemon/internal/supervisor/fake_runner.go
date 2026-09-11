@@ -13,15 +13,18 @@ type FakeRunner struct {
 	Started []Spec
 	// StartErr, if set for a spec ID, makes Start fail for it.
 	StartErr map[string]error
-	handles  map[string]*FakeHandle
-	Ports    *FakePorts
-	nextPID  int
+	// Refuse, if set for a spec ID, makes its process write that text to its
+	// log and exit without binding — a service rejecting its config.
+	Refuse  map[string]string
+	handles map[string]*FakeHandle
+	Ports   *FakePorts
+	nextPID int
 }
 
 // NewFakeRunner returns a runner sharing a port map with a FakePorts prober,
 // so that a started process is seen as bound and a stopped one as released.
 func NewFakeRunner(ports *FakePorts) *FakeRunner {
-	return &FakeRunner{StartErr: map[string]error{}, handles: map[string]*FakeHandle{}, Ports: ports, nextPID: 1000}
+	return &FakeRunner{StartErr: map[string]error{}, Refuse: map[string]string{}, handles: map[string]*FakeHandle{}, Ports: ports, nextPID: 1000}
 }
 
 func (r *FakeRunner) Start(s Spec) (Handle, error) {
@@ -34,7 +37,19 @@ func (r *FakeRunner) Start(s Spec) (Handle, error) {
 	h := &FakeHandle{pid: r.nextPID, done: make(chan struct{}), ports: r.Ports, port: s.Port}
 	r.Started = append(r.Started, s)
 	r.handles[s.ID] = h
+	refusal, refuse := r.Refuse[s.ID]
 	r.mu.Unlock()
+
+	if refuse {
+		if s.LogPath != "" {
+			if f, err := os.OpenFile(s.LogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644); err == nil {
+				f.WriteString(refusal)
+				f.Close()
+			}
+		}
+		h.exit(false)
+		return h, nil
+	}
 
 	if r.Ports != nil && s.Port > 0 {
 		r.Ports.Bind(s.Port)

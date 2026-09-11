@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -243,6 +244,42 @@ func TestStartFailureFromTheRunnerIsSurfaced(t *testing.T) {
 	}
 	if st, _ := s.Status("webserver"); st.State != StateFailed {
 		t.Fatalf("state = %q, want failed", st.State)
+	}
+}
+
+func TestAProcessThatExitsDuringStartupFailsAtOnceWithItsOwnError(t *testing.T) {
+	s, runner, _ := newTestSupervisor()
+	s.StartTimeout = time.Minute
+	log := filepath.Join(t.TempDir(), "nginx.log")
+	// An earlier run's complaint must not be blamed for this one.
+	os.WriteFile(log, []byte("2026/09/11 10:00:00 [emerg] 1#0: an old problem\n"), 0o644)
+	runner.Refuse["webserver"] = "2026/09/11 10:13:20 [emerg] 71176#0: \"server\" directive is not allowed here in /w/test.nginx.conf:17\n"
+
+	sp := spec("webserver", "nginx", 80)
+	sp.LogPath = log
+	began := time.Now()
+	err := s.Start(context.Background(), sp)
+	if err == nil {
+		t.Fatal("a process that exited should not be reported as running")
+	}
+	if waited := time.Since(began); waited > 5*time.Second {
+		t.Fatalf("waited %s for a process that had already exited", waited)
+	}
+	want := `nginx did not start: "server" directive is not allowed here in /w/test.nginx.conf:17`
+	if err.Error() != want {
+		t.Fatalf("error = %q\n want %q", err, want)
+	}
+	if st, _ := s.Status("webserver"); st.State != StateFailed || st.Error != want {
+		t.Fatalf("status = %+v", st)
+	}
+}
+
+func TestApacheSplitsItsStartupErrorOverTwoLines(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "apache.log")
+	os.WriteFile(log, []byte("AH00526: Syntax error on line 17 of /w/test.apache.conf:\nInvalid command 'server'\n"), 0o644)
+	want := "AH00526: Syntax error on line 17 of /w/test.apache.conf: Invalid command 'server'"
+	if got := startupOutput(log, 0); got != want {
+		t.Fatalf("got %q, want %q", got, want)
 	}
 }
 

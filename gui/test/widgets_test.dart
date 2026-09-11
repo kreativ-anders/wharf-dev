@@ -8,6 +8,7 @@ import 'package:wharf_gui/models/state.dart';
 import 'package:wharf_gui/pages/projects_page.dart';
 import 'package:wharf_gui/pages/settings_page.dart';
 import 'package:wharf_gui/theme.dart';
+import 'package:wharf_gui/tray.dart';
 
 /// A daemon that never connects, holding a snapshot the test supplies. The
 /// GUI renders whatever the daemon publishes and owns no state of its own, so
@@ -45,13 +46,51 @@ void main() {
     expect(find.text('http://my-kirby-site.wharf'), findsOneWidget);
     expect(find.byType(StatusDot), findsNWidgets(2));
 
-    // A running project offers Stop and an Open action; a stopped one offers
-    // Start. Each offers its settings. Nothing else is on the row.
+    // A running project offers Stop, Restart and an Open action; a stopped
+    // one offers Start. Each offers its settings. Nothing else is on the row.
     expect(find.byIcon(Icons.stop), findsOneWidget);
+    expect(find.byIcon(Icons.restart_alt), findsOneWidget);
     expect(find.byIcon(Icons.play_arrow), findsOneWidget);
     expect(find.byIcon(Icons.open_in_new), findsOneWidget);
     expect(find.byTooltip('Settings for my-kirby-site'), findsOneWidget);
     expect(find.byTooltip('Settings for legacy-app'), findsOneWidget);
+  });
+
+  // features/tray-actions.feature — "Every project offers the actions that fit
+  // its state"
+  testWidgets('each project offers the actions that fit its state, in the row and the tray', (
+    tester,
+  ) async {
+    Project withState(String state) => Project.fromJson({'name': 'site', 'state': state});
+    final expected = {
+      'running': [ProjectAction.stop, ProjectAction.restart],
+      'stopped': [ProjectAction.start],
+      'failed': [ProjectAction.start, ProjectAction.restart],
+      'starting': <ProjectAction>[],
+    };
+
+    for (final MapEntry(key: state, value: actions) in expected.entries) {
+      final project = withState(state);
+      expect(project.actions, actions, reason: state);
+
+      // The tray lists every action, enabling exactly the ones the row shows.
+      final enabled = projectMenuItems(project)
+          .where((i) => i.key != null && !i.key!.startsWith('open:') && !i.disabled)
+          .map((i) => i.label)
+          .toList();
+      expect(enabled, actions.map((a) => a.label).toList(), reason: 'tray, $state');
+    }
+
+    // The row shows them as labelled buttons: a failed project can be
+    // started again or restarted, and says why it failed.
+    final daemon = fixture(_twoProjects.replaceFirst('"state": "stopped"', '"state": "failed"'));
+    await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
+    expect(find.byTooltip('Stop my-kirby-site'), findsOneWidget);
+    expect(find.byTooltip('Restart my-kirby-site'), findsOneWidget);
+    expect(find.byTooltip('Start my-kirby-site'), findsNothing);
+    expect(find.byTooltip('Start legacy-app'), findsOneWidget);
+    expect(find.byTooltip('Restart legacy-app'), findsOneWidget);
+    expect(find.byTooltip('Stop legacy-app'), findsNothing);
   });
 
   // features/app-configuration.feature — "Every project row leads to its settings"

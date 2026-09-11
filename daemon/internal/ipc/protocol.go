@@ -35,6 +35,7 @@ const (
 	MethodProjectRemove   = "projects.remove"
 	MethodProjectStart    = "projects.start"
 	MethodProjectStop     = "projects.stop"
+	MethodProjectRestart  = "projects.restart"
 	MethodProjectSettings = "projects.settings"
 	MethodProjectScaffold = "projects.scaffold"
 	// MethodProjectCustomConfig creates a project's custom webserver config

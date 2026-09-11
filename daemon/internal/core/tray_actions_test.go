@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -36,6 +37,92 @@ func TestStartingAProjectFromTheTray(t *testing.T) {
 	}
 
 	// And the tray menu updates the project's status to "running"
+	if got := h.project("my-kirby-site").State; got != string(supervisor.StateRunning) {
+		t.Fatalf("project status = %q, want running", got)
+	}
+}
+
+// features/tray-actions.feature — "Stopping a project"
+func TestStoppingAProject(t *testing.T) {
+	h := newHarness(t)
+	h.mustAdd("my-kirby-site")
+	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := h.d.StopProject(h.ctx(), "my-kirby-site"); err != nil {
+		t.Fatalf("stop: %v", err)
+	}
+
+	// Then the daemon stops the process serving that project
+	if h.sup.Running(runtime.WebserverID) {
+		t.Fatal("the webserver serving the project is still running")
+	}
+	// And the project's status updates to "stopped"
+	if got := h.project("my-kirby-site").State; got != string(supervisor.StateStopped) {
+		t.Fatalf("project status = %q, want stopped", got)
+	}
+}
+
+// features/tray-actions.feature — "Restarting a project"
+func TestRestartingAProject(t *testing.T) {
+	for _, own := range []bool{false, true} {
+		name := map[bool]string{false: "on the shared webserver", true: "on its own instance"}[own]
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t)
+			h.mustAdd("my-kirby-site")
+			id := runtime.WebserverID
+			if own {
+				apache := "apache"
+				if _, err := h.d.UpdateSettings(h.ctx(), "my-kirby-site", Settings{Webserver: &apache}); err != nil {
+					t.Fatal(err)
+				}
+				id = runtime.ProjectServiceID("my-kirby-site")
+			}
+			if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
+				t.Fatal(err)
+			}
+			// The PHP backend has died since, and the generated config is gone.
+			php := runtime.PHPServiceID(h.d.Config().Services.PHP.Version)
+			if err := h.sup.Stop(h.ctx(), php); err != nil {
+				t.Fatal(err)
+			}
+			vhost := h.d.res.VhostPath(h.d.Config().WebserverFor(h.d.Config().Projects[0]), "my-kirby-site")
+			if err := os.Remove(vhost); err != nil {
+				t.Fatal(err)
+			}
+			before := h.countStarts(id)
+
+			if err := h.d.RestartProject(h.ctx(), "my-kirby-site"); err != nil {
+				t.Fatalf("restart: %v", err)
+			}
+
+			// Then its webserver config is generated again
+			if _, err := os.Stat(vhost); err != nil {
+				t.Fatalf("config not generated again: %v", err)
+			}
+			// And the process serving it is restarted with that config
+			if got := h.countStarts(id); got != before+1 || !h.sup.Running(id) {
+				t.Fatalf("%s started %d times (want %d), running=%v", id, got, before+1, h.sup.Running(id))
+			}
+			// And its PHP backend is started if it is not running
+			if !h.sup.Running(php) {
+				t.Fatal("the PHP backend was not started")
+			}
+		})
+	}
+
+	// A project that failed to start is retried by the same action.
+	h := newHarness(t)
+	h.mustAdd("my-kirby-site")
+	h.runner.Refuse[runtime.WebserverID] = "bad config\n"
+	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err == nil {
+		t.Fatal("the refused start succeeded")
+	}
+	delete(h.runner.Refuse, runtime.WebserverID)
+	if err := h.d.RestartProject(h.ctx(), "my-kirby-site"); err != nil {
+		t.Fatalf("restart after a failure: %v", err)
+	}
 	if got := h.project("my-kirby-site").State; got != string(supervisor.StateRunning) {
 		t.Fatalf("project status = %q, want running", got)
 	}

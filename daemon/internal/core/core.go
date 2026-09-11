@@ -839,6 +839,33 @@ func (d *Daemon) StopProject(ctx context.Context, name string) error {
 	return d.sup.Stop(ctx, runtimeWebserverID)
 }
 
+// RestartProject generates a project's webserver config again and restarts
+// the process serving it, starting its PHP backend if that is not running
+// (tray-actions.feature, "Restarting a project"). It is also the retry for a
+// project that failed to start: the restart of a stopped process is a start.
+func (d *Daemon) RestartProject(ctx context.Context, name string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	defer d.track()()
+
+	cfg := d.store.Get()
+	p, ok := cfg.Project(name)
+	if !ok {
+		return notFound("no project named %q", name)
+	}
+	if err := d.ensurePHP(ctx, cfg, cfg.PHPVersionFor(p)); err != nil {
+		return err
+	}
+	spec, err := d.res.WebserverSpec(cfg)
+	if p.WebserverOverride != nil {
+		spec, err = d.res.ProjectSpec(cfg, p)
+	}
+	if err != nil {
+		return err
+	}
+	return d.sup.Restart(ctx, spec)
+}
+
 // Settings are the per-project overrides. A nil field leaves that setting
 // unchanged; a pointer to the empty string clears the override and reverts to
 // the global default (app-configuration.feature).
@@ -1016,19 +1043,23 @@ func customConfigStub(name, server string) string {
 	other, block, example := "apache", "server { } block", `#   client_max_body_size 64m;
 #   location /api/ { proxy_pass http://127.0.0.1:3000; }
 #
-# Wharf already sets root, index, "location /" and the PHP location;
-# repeating those here makes nginx refuse to start.`
+# Wharf already sets listen, server_name, root, index, "location /", the PHP
+# location and Kirby's own rules — the whole recipe from Kirby's docs. A
+# server { } block or any of those directives here makes nginx refuse to
+# start.`
 	if server == "apache" {
 		other, block, example = "nginx", "<VirtualHost> section", `#   php_value upload_max_filesize 64M
 #   Header set X-Robots-Tag "noindex"
 #
-# .htaccess files in the project work as well: AllowOverride is All.`
+# .htaccess files in the project work as well: AllowOverride is All, so
+# Kirby's own .htaccess applies without anything here.`
 	}
 	return fmt.Sprintf(`# Custom %[1]s directives for %[2]s.
 #
 # Wharf includes this file inside the project's %[3]s, after its own
-# directives. It is used only while %[2]s is served by %[1]s; the %[4]s file
-# beside it is used when the project is served by %[4]s.
+# directives: write single directives, not a block of your own. It is used
+# only while %[2]s is served by %[1]s; the %[4]s file beside it is used when
+# the project is served by %[4]s.
 #
 # Saving the file restarts the webserver serving %[2]s. A mistake here keeps
 # that webserver from starting — its error appears in Wharf.

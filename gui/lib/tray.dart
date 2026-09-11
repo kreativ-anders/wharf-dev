@@ -46,9 +46,13 @@ class TrayController with TrayListener {
     await trayManager.destroy();
   }
 
-  /// macOS wants a template image so the icon follows the menu bar's theme;
-  /// Windows wants an .ico.
+  /// macOS wants a template image so the icon follows the menu bar's theme —
+  /// 64 px, because it is drawn at 18 pt and a Retina bar needs 36. Windows
+  /// and Linux bars may be light or dark and tint nothing, so there the mark
+  /// sits on its own dark tile; Windows wants that as an .ico.
+  /// (gui/tool/draw_icons.py draws them all.)
   String _iconPath() {
+    if (Platform.isMacOS) return 'assets/tray/template_64.png';
     if (Platform.isWindows) return 'assets/tray/icon.ico';
     return 'assets/tray/icon_32.png';
   }
@@ -66,22 +70,7 @@ class TrayController with TrayListener {
         items.add(
           MenuItem.submenu(
             label: '${_marker(project)}  ${project.name}',
-            submenu: Menu(
-              items: [
-                MenuItem(
-                  key: 'start:${project.name}',
-                  label: 'Start',
-                  disabled: project.isRunning || project.isBusy,
-                ),
-                MenuItem(key: 'stop:${project.name}', label: 'Stop', disabled: !project.isRunning),
-                MenuItem.separator(),
-                MenuItem(
-                  key: 'open:${project.name}',
-                  label: project.url,
-                  disabled: !project.isRunning,
-                ),
-              ],
-            ),
+            submenu: Menu(items: projectMenuItems(project)),
           ),
         );
       }
@@ -135,14 +124,26 @@ class TrayController with TrayListener {
     final parts = key.split(':');
     if (parts.length != 2) return;
     final name = parts[1];
-    switch (parts[0]) {
-      case 'start':
-        daemon.startProject(name);
-      case 'stop':
-        daemon.stopProject(name);
-      case 'open':
-        final project = daemon.state.projects.where((p) => p.name == name).firstOrNull;
-        if (project != null) launchUrlString(project.url);
+    if (parts[0] == 'open') {
+      final project = daemon.state.projects.where((p) => p.name == name).firstOrNull;
+      if (project != null) launchUrlString(project.url);
+      return;
     }
+    final action = ProjectAction.values.where((a) => a.name == parts[0]).firstOrNull;
+    if (action != null) daemon.projectAction(action, name);
   }
 }
+
+/// A project's tray submenu. Every action is listed so the menu keeps its
+/// shape; those that do not fit the project's state are disabled — the same
+/// ones its row in the window leaves out (features/tray-actions.feature).
+List<MenuItem> projectMenuItems(Project project) => [
+  for (final action in ProjectAction.values)
+    MenuItem(
+      key: '${action.name}:${project.name}',
+      label: action.label,
+      disabled: !project.actions.contains(action),
+    ),
+  MenuItem.separator(),
+  MenuItem(key: 'open:${project.name}', label: project.url, disabled: !project.isRunning),
+];

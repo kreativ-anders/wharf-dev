@@ -196,3 +196,50 @@ func TestOneWebserverOneConfigFilePerProject(t *testing.T) {
 		t.Fatalf("main config includes %v", projects)
 	}
 }
+
+// features/webserver-install.feature — "A Kirby project needs no webserver
+// configuration". What nginx and Apache then do with a real Starterkit is
+// checked by hand against real binaries; this pins the rules that make it so.
+func TestAKirbyProjectNeedsNoWebserverConfiguration(t *testing.T) {
+	h := newHarness(t)
+	h.mustAdd("my-kirby-site")
+	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
+		t.Fatal(err)
+	}
+
+	// nginx has no .htaccess, so the generated block carries Kirby's rules.
+	block := vhostBlock(t, h.readGenerated("nginx.conf"), "my-kirby-site.wharf")
+	for _, rule := range []string{
+		// Then its pages, the Panel and its media are served
+		`try_files $uri $uri/ /index.php$is_args$args;`,
+		// And "content/", "site/", "kirby/" and dot-files are never served
+		// as files
+		`rewrite (^|/)\.(?!well-known/) /index.php last;`,
+		`rewrite ^/(content|site|kirby)/ /index.php last;`,
+	} {
+		if !strings.Contains(block, rule) {
+			t.Fatalf("nginx block lacks %q:\n%s", rule, block)
+		}
+	}
+	// And no custom config is needed for any of it
+	if strings.Contains(block, filepath.ToSlash(h.root.VhostDir())) {
+		t.Fatal("the rules came from a custom config")
+	}
+
+	// Apache reads the Starterkit's own .htaccess, and denies the folders
+	// even where mod_rewrite is missing. The .htaccess needs the modules its
+	// directives come from, where the install has them.
+	modules := filepath.Join(h.root.Bin(), "apache", "modules")
+	for _, m := range []string{"rewrite", "headers", "setenvif"} {
+		stubBinary(t, filepath.Join(modules, "mod_"+m+".so"))
+	}
+	if err := h.d.SetWebserver(h.ctx(), "apache"); err != nil {
+		t.Fatal(err)
+	}
+	conf := h.readGenerated("apache.conf")
+	for _, want := range []string{"AllowOverride All", "Require all denied", "rewrite_module", "headers_module", "setenvif_module"} {
+		if !strings.Contains(conf, want) {
+			t.Fatalf("apache config lacks %q:\n%s", want, conf)
+		}
+	}
+}

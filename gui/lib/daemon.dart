@@ -25,6 +25,7 @@ class Method {
   static const projectRemove = 'projects.remove';
   static const projectStart = 'projects.start';
   static const projectStop = 'projects.stop';
+  static const projectRestart = 'projects.restart';
   static const projectSettings = 'projects.settings';
   static const projectScaffold = 'projects.scaffold';
   static const projectCustomConfig = 'projects.customConfig';
@@ -127,6 +128,14 @@ class Daemon extends ChangeNotifier {
 
   Future<void> startProject(String name) => _act(Method.projectStart, {'name': name});
   Future<void> stopProject(String name) => _act(Method.projectStop, {'name': name});
+  Future<void> restartProject(String name) => _act(Method.projectRestart, {'name': name});
+
+  /// Does [action] to a project — what its row and its tray submenu call.
+  Future<void> projectAction(ProjectAction action, String name) => switch (action) {
+    ProjectAction.start => startProject(name),
+    ProjectAction.stop => stopProject(name),
+    ProjectAction.restart => restartProject(name),
+  };
   Future<void> removeProject(String name) => _act(Method.projectRemove, {'name': name});
   Future<void> stopAll() => _act(Method.stopAll);
   Future<void> setWebserver(String name) => _act(Method.setWebserver, {'name': name});

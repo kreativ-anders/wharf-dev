@@ -181,7 +181,7 @@ class _ProjectRow extends StatelessWidget {
               icon: const Icon(Icons.tune, size: 18),
               onPressed: () => showProjectSheet(context, daemon, project),
             ),
-            _StartStop(daemon: daemon, project: project),
+            _Actions(daemon: daemon, project: project),
           ],
         ),
       ),
@@ -189,11 +189,19 @@ class _ProjectRow extends StatelessWidget {
   }
 }
 
-class _StartStop extends StatelessWidget {
-  const _StartStop({required this.daemon, required this.project});
+/// The row's start, stop and restart buttons — whichever of them fit the
+/// project's state (features/tray-actions.feature).
+class _Actions extends StatelessWidget {
+  const _Actions({required this.daemon, required this.project});
 
   final Daemon daemon;
   final Project project;
+
+  static const _icons = {
+    ProjectAction.start: Icons.play_arrow,
+    ProjectAction.stop: Icons.stop,
+    ProjectAction.restart: Icons.restart_alt,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -203,11 +211,16 @@ class _StartStop extends StatelessWidget {
         child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
       );
     }
-    return IconButton(
-      tooltip: '${project.isRunning ? 'Stop' : 'Start'} ${project.name}',
-      icon: Icon(project.isRunning ? Icons.stop : Icons.play_arrow, size: 20),
-      onPressed: () =>
-          project.isRunning ? daemon.stopProject(project.name) : daemon.startProject(project.name),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final action in project.actions)
+          IconButton(
+            tooltip: '${action.label} ${project.name}',
+            icon: Icon(_icons[action], size: 20),
+            onPressed: () => daemon.projectAction(action, project.name),
+          ),
+      ],
     );
   }
 }
