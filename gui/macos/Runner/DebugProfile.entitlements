@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The App Sandbox is off deliberately. Wharf manages the user's own
+	     projects and processes: it reads the daemon's endpoint file and
+	     connects to its unix socket under the root folder, and the folder
+	     picker points at www/. A sandboxed container can reach none of that.
+	     This is a developer tool distributed outside the App Store, like
+	     every other tool in its category. -->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+</dict>
+</plist>

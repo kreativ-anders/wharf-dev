@@ -1,0 +1,6 @@
+# Declares the e2e tag so the runner does not warn about it.
+#
+# Tests tagged e2e start the real wharfd binary, so they need `make build`
+# first and are excluded from the default run. Use `make gui-e2e`.
+tags:
+  e2e:

@@ -1,0 +1,12 @@
+.DS_Store
+/build/
+
+# Flutter
+gui/.dart_tool/
+gui/build/
+gui/.flutter-plugins-dependencies
+gui/macos/Flutter/ephemeral/
+gui/linux/flutter/ephemeral/
+gui/windows/flutter/ephemeral/
+gui/macos/Pods/
+gui/macos/Podfile.lock

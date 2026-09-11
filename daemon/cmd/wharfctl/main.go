@@ -1,0 +1,406 @@
+// Command wharfctl drives the daemon from the terminal. It exists so the
+// daemon's behaviour can be exercised and scripted without the GUI — the
+// config file and this tool together are a complete way to use Wharf.
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"text/tabwriter"
+	"time"
+
+	"github.com/manuel-steinberg/wharf/daemon/internal/core"
+	"github.com/manuel-steinberg/wharf/daemon/internal/ipc"
+	"github.com/manuel-steinberg/wharf/daemon/internal/layout"
+)
+
+func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "wharfctl:", err)
+		os.Exit(1)
+	}
+}
+
+const usage = `usage: wharfctl [--root DIR] <command> [args]
+
+  status                     show services and projects
+  add <name|path>            register a folder in www/ by name, or any folder by path
+  rm <name>                  unregister a project (the folder is left alone)
+  start <name>               start a project
+  stop <name>                stop a project
+  stop-all                   stop every service and project
+  webserver <apache|nginx>   set the globally active webserver
+  webserver install <name>   install nginx or Apache
+  webserver scan             re-scan the machine for webservers
+  appearance <mode>          system, light or dark
+  php                        list PHP versions found on this machine
+  php use <version>          set the global default PHP version
+  php add <version>          register a version without selecting it
+  php install <version>      download a version into bin/php/<version>
+  php scan                   re-scan the machine for PHP installations
+  ssl                        install mkcert and trust its certificate authority
+  config <name> <webserver>  print (creating if needed) a project's custom config path
+  set <name> [flags]         per-project overrides
+       --php V | --php ""    override or clear the PHP version
+       --webserver W | ""    override or clear the webserver
+       --ssl true|false      enable or disable SSL
+  new <template> <name>      scaffold a quick-app project
+  templates                  list quick-app templates
+  watch                      stream state changes until interrupted
+`
+
+func run() error {
+	root := flag.String("root", "", "wharf root folder")
+	socket := flag.String("socket", "", "IPC socket path")
+	flag.Usage = func() { fmt.Fprint(os.Stderr, usage) }
+	flag.Parse()
+
+	args := flag.Args()
+	if len(args) == 0 {
+		flag.Usage()
+		return fmt.Errorf("no command given")
+	}
+
+	var c *ipc.Client
+	if *socket != "" {
+		var err error
+		c, err = ipc.Dial(*socket)
+		if err != nil {
+			return fmt.Errorf("%w\nis wharfd running?", err)
+		}
+	} else {
+		r, err := layout.Resolve(*root)
+		if err != nil {
+			return err
+		}
+		c, err = ipc.DialFile(filepath.Join(r.Data(), ipc.EndpointFileName))
+		if err != nil {
+			return fmt.Errorf("%w\nis wharfd running?", err)
+		}
+	}
+	defer c.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	switch args[0] {
+	case "status":
+		var st core.State
+		if err := c.Call(ctx, ipc.MethodState, nil, &st); err != nil {
+			return err
+		}
+		printState(st)
+		return nil
+
+	case "add":
+		if len(args) < 2 {
+			return fmt.Errorf("add needs a project name or a folder path")
+		}
+		// Anything that looks like a path is a folder from anywhere; a bare
+		// name is a folder in www/ (project-folders.feature).
+		params := map[string]string{"name": args[1]}
+		if strings.ContainsAny(args[1], `/\`) || args[1] == "." {
+			abs, err := filepath.Abs(args[1])
+			if err != nil {
+				return err
+			}
+			params = map[string]string{"path": abs}
+		}
+		var p core.Project
+		if err := c.Call(ctx, ipc.MethodProjectAdd, params, &p); err != nil {
+			return err
+		}
+		printProject(p)
+		return nil
+
+	case "rm", "start", "stop":
+		if len(args) < 2 {
+			return fmt.Errorf("%s needs a project name", args[0])
+		}
+		method := map[string]string{
+			"rm":    ipc.MethodProjectRemove,
+			"start": ipc.MethodProjectStart,
+			"stop":  ipc.MethodProjectStop,
+		}[args[0]]
+		return callAndShow(ctx, c, method, map[string]string{"name": args[1]})
+
+	case "stop-all":
+		return callAndShow(ctx, c, ipc.MethodStopAll, nil)
+
+	case "webserver":
+		switch {
+		case len(args) < 2:
+			return fmt.Errorf("webserver needs a name")
+		case args[1] == "install" && len(args) > 2:
+			return callAndShow(ctx, c, ipc.MethodInstallWebserver, map[string]string{"name": args[2]})
+		case args[1] == "scan":
+			return callAndShow(ctx, c, ipc.MethodDetectWebservers, nil)
+		}
+		return callAndShow(ctx, c, ipc.MethodSetWebserver, map[string]string{"name": args[1]})
+
+	case "appearance":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: wharfctl appearance <system|light|dark>")
+		}
+		return callAndShow(ctx, c, ipc.MethodSetAppearance, map[string]string{"mode": args[1]})
+
+	case "php":
+		return runPHP(ctx, c, args[1:])
+
+	case "set":
+		return runSet(ctx, c, args[1:])
+
+	case "ssl":
+		return callAndShow(ctx, c, ipc.MethodSetupSSL, nil)
+
+	case "config":
+		if len(args) < 3 {
+			return fmt.Errorf("usage: wharfctl config <name> <apache|nginx>")
+		}
+		var out struct {
+			Path string `json:"path"`
+		}
+		if err := c.Call(ctx, ipc.MethodProjectCustomConfig, map[string]string{"name": args[1], "webserver": args[2]}, &out); err != nil {
+			return err
+		}
+		fmt.Println(out.Path)
+		return nil
+
+	case "new":
+		if len(args) < 3 {
+			return fmt.Errorf("usage: wharfctl new <template> <name>")
+		}
+		var p core.Project
+		if err := c.Call(ctx, ipc.MethodProjectScaffold, map[string]string{"template": args[1], "name": args[2]}, &p); err != nil {
+			return err
+		}
+		printProject(p)
+		return nil
+
+	case "templates":
+		var out []struct {
+			ID      string `json:"id"`
+			Name    string `json:"name"`
+			Runtime string `json:"runtime"`
+		}
+		if err := c.Call(ctx, ipc.MethodTemplates, nil, &out); err != nil {
+			return err
+		}
+		for _, t := range out {
+			fmt.Printf("%-10s %-12s %s\n", t.ID, t.Name, t.Runtime)
+		}
+		return nil
+
+	case "watch":
+		var st core.State
+		if err := c.Call(ctx, ipc.MethodState, nil, &st); err != nil {
+			return err
+		}
+		printState(st)
+		for ev := range c.Events() {
+			if ev.Event != ipc.EventState {
+				continue
+			}
+			var next core.State
+			if err := json.Unmarshal(ev.Data, &next); err != nil {
+				continue
+			}
+			fmt.Println(strings.Repeat("─", 60))
+			printState(next)
+		}
+		return nil
+	}
+
+	flag.Usage()
+	return fmt.Errorf("unknown command %q", args[0])
+}
+
+func runPHP(ctx context.Context, c *ipc.Client, args []string) error {
+	if len(args) == 0 || args[0] == "list" {
+		var st core.State
+		if err := c.Call(ctx, ipc.MethodState, nil, &st); err != nil {
+			return err
+		}
+		printPHP(st.Services.PHP)
+		return nil
+	}
+	switch args[0] {
+	case "scan":
+		if err := c.Call(ctx, ipc.MethodDetectPHP, nil, nil); err != nil {
+			return err
+		}
+		var st core.State
+		if err := c.Call(ctx, ipc.MethodState, nil, &st); err != nil {
+			return err
+		}
+		printPHP(st.Services.PHP)
+		return nil
+	case "use", "add", "install":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: wharfctl php %s <version>", args[0])
+		}
+		method := map[string]string{
+			"use":     ipc.MethodSetPHPVersion,
+			"add":     ipc.MethodAddPHPVersion,
+			"install": ipc.MethodInstallPHP,
+		}[args[0]]
+		var st core.State
+		if err := c.Call(ctx, method, map[string]string{"version": args[1]}, &st); err != nil {
+			return err
+		}
+		printPHP(st.Services.PHP)
+		return nil
+	}
+	return fmt.Errorf("usage: wharfctl php [list|use <version>|add <version>|install <version>|scan]")
+}
+
+// printPHP renders the version picker as a list: which version is selected,
+// what else is installed, and how well supported each one still is.
+func printPHP(p core.PHP) {
+	fmt.Printf("selected   %s (%s)\n", p.Version, p.Status)
+	fmt.Printf("recommended %s — newest version in active support\n", p.Recommended)
+	if len(p.Downloadable) > 0 {
+		var vs []string
+		for _, d := range p.Downloadable {
+			vs = append(vs, d.Version)
+		}
+		fmt.Printf("download   %s  (wharfctl php install <version>)\n", strings.Join(vs, ", "))
+	}
+	if len(p.Installs) == 0 {
+		fmt.Printf("\nno PHP installation found on this machine\n")
+		return
+	}
+	fmt.Println()
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "\tVERSION\tSUPPORT\tSOURCE\tLOCATION")
+	for _, in := range p.Installs {
+		marker := " "
+		if in.Version == p.Version {
+			marker = "*"
+		}
+		support := string(in.Status)
+		if !in.Servable() {
+			support += ", cli only"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", marker, in.FullVersion, support, in.Source, in.Dir)
+	}
+	w.Flush()
+}
+
+func runSet(ctx context.Context, c *ipc.Client, args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("set needs a project name")
+	}
+	name := args[0]
+	fs := flag.NewFlagSet("set", flag.ContinueOnError)
+	php := fs.String("php", "\x00", `PHP version override, or "" to clear`)
+	ws := fs.String("webserver", "\x00", `webserver override, or "" to clear`)
+	ssl := fs.String("ssl", "", "true or false")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+
+	var settings core.Settings
+	if *php != "\x00" {
+		settings.PHP = php
+	}
+	if *ws != "\x00" {
+		settings.Webserver = ws
+	}
+	if *ssl != "" {
+		v := *ssl == "true"
+		settings.SSL = &v
+	}
+
+	var p core.Project
+	err := c.Call(ctx, ipc.MethodProjectSettings, map[string]any{"name": name, "settings": settings}, &p)
+	if err != nil {
+		return err
+	}
+	printProject(p)
+	return nil
+}
+
+// printProject reports one project after an action that changed it. A project
+// with no pretty URL is called out, because that is the visible consequence of
+// a declined elevation prompt.
+func printProject(p core.Project) {
+	fmt.Printf("%s  %s  %s  php %s  %s\n", p.Name, p.State, p.URL, p.PHPVersion, p.Webserver)
+	if !p.HostsEntry {
+		fmt.Printf("  no hosts entry — reachable only at %s\n", p.FallbackURL)
+	}
+	if p.Error != "" {
+		fmt.Printf("  %s\n", p.Error)
+	}
+}
+
+func callAndShow(ctx context.Context, c *ipc.Client, method string, params any) error {
+	var st core.State
+	if err := c.Call(ctx, method, params, &st); err != nil {
+		return err
+	}
+	if st.Root != "" {
+		printState(st)
+	}
+	return nil
+}
+
+func printState(st core.State) {
+	ws := st.Services.Webserver
+	suffix := ""
+	if ws.Switching {
+		suffix = "  (switching webserver…)"
+	}
+	fmt.Printf("root       %s\n", st.Root)
+	fmt.Printf("webserver  %s [%s]%s\n", ws.Active, ws.State, suffix)
+	fmt.Printf("php        %s  installed: %s\n", st.Services.PHP.Version, strings.Join(st.Services.PHP.Available, ", "))
+	for _, srv := range ws.Servers {
+		switch {
+		case srv.Installing:
+			fmt.Printf("  %-8s installing…\n", srv.Name)
+		case srv.Installed:
+			fmt.Printf("  %-8s %s %s (%s)\n", srv.Name, srv.Version, srv.Binary, srv.Source)
+		case srv.Install.Installable:
+			fmt.Printf("  %-8s not installed — run: wharfctl webserver install %s\n", srv.Name, srv.Name)
+		default:
+			fmt.Printf("  %-8s not installed — %s\n", srv.Name, srv.Install.Hint)
+		}
+	}
+	if ws.Error != "" {
+		fmt.Printf("error      %s\n", ws.Error)
+	}
+	switch {
+	case !st.SSL.Installed:
+		fmt.Println("ssl        mkcert not installed yet — enabling SSL installs it")
+	case !st.SSL.Trusted:
+		fmt.Println("ssl        certificate authority not trusted — browsers warn; run: wharfctl ssl")
+	}
+
+	if len(st.Projects) == 0 {
+		fmt.Println("\nno projects yet — run: wharfctl add <folder>")
+	} else {
+		fmt.Println()
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "PROJECT\tSTATUS\tURL\tPHP\tSERVER")
+		for _, p := range st.Projects {
+			server := p.Webserver
+			if p.WebserverOverride != nil {
+				server += " (override)"
+			}
+			php := p.PHPVersion
+			if p.PHPOverride != nil {
+				php += " (override)"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", p.Name, p.State, p.URL, php, server)
+		}
+		w.Flush()
+	}
+	if len(st.Unregistered) > 0 {
+		fmt.Printf("\nunregistered folders in www/: %s\n", strings.Join(st.Unregistered, ", "))
+	}
+}

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wharf — local PHP development, no Docker</title>
+  <meta name="description" content="A local development environment manager. Native processes, no Docker. A folder is a project.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="wrap">
+    <p class="mark">Wharf</p>
+    <nav>
+      <a href="#how">How it works</a>
+      <a href="#status">Status</a>
+      <a href="https://github.com/manuel-steinberg/wharf">Source</a>
+    </nav>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <h1>Local PHP development.<br>Just files and folders.</h1>
+      <p class="lede">
+        Wharf runs your projects as native processes on Windows, macOS and
+        Linux. No Docker, no VM. A folder is a project — put it in
+        <code>www/</code>, or pick it wherever it already lives.
+      </p>
+      <p class="note">Early development — no downloads yet.</p>
+    </section>
+
+    <section id="how">
+      <h2>How it works</h2>
+      <ol class="steps">
+        <li>
+          <h3>Pick a folder</h3>
+          <p>Every folder in <code>www/</code> is a project, and any other
+          folder can be added where it is. No wizard, no import step.</p>
+        </li>
+        <li>
+          <h3>Start it from the tray</h3>
+          <p>Start, stop and open live in the tray menu. The window is there
+          when you need it, not for a two-second action.</p>
+        </li>
+        <li>
+          <h3>Open a real URL</h3>
+          <p>Each project gets a <code>.test</code> hostname and optional SSL.
+          Decline the password prompt and it still works on its own port.</p>
+        </li>
+      </ol>
+
+      <pre class="tree" aria-label="The Wharf folder">wharf/
+├── bin/       PHP, nginx, Apache
+├── www/       <span>your projects — one folder each</span>
+├── config/
+│   └── wharf.json   <span>one flat, hand-editable file</span>
+└── data/      generated; safe to delete</pre>
+    </section>
+
+    <section>
+      <h2>What it is not</h2>
+      <ul class="plain">
+        <li>No containers and no virtual machine — native host processes only.</li>
+        <li>No dashboard, no charts, no onboarding carousel. One list of projects.</li>
+        <li>No database. The whole state is one JSON file you can edit by hand.</li>
+        <li>No per-OS surprises. One behaviour on Windows, macOS and Linux.</li>
+      </ul>
+    </section>
+
+    <section id="status">
+      <h2>Status</h2>
+      <dl class="status">
+        <div><dt>Core daemon</dt><dd>Implemented</dd></div>
+        <div><dt>Desktop app</dt><dd>Implemented; runs on macOS today</dd></div>
+        <div><dt>Command line</dt><dd>Implemented — usable without the app</dd></div>
+        <div><dt>PHP</dt><dd>Detects and adopts installed versions</dd></div>
+        <div><dt>Node, Go, Python, databases, Mailpit</dt><dd>Roadmap</dd></div>
+        <div><dt>Installers</dt><dd>Not started</dd></div>
+      </dl>
+    </section>
+  </main>
+
+  <footer class="wrap">
+    <p>Wharf is a working title. Inspired by the minimalism of
+    <a href="https://getkirby.com">Kirby</a>.</p>
+  </footer>
+</body>
+</html>
