@@ -1,7 +1,8 @@
-// Package elevate is the entire platform-specific surface of the daemon
-// (dev/architecture.md §4). Every call site in the codebase uses only the two
-// Elevator methods; the three adapters behind them are the only code that
-// knows which OS it is running on.
+// Package elevate is where the daemon asks for administrator rights, and one
+// of its two platform-specific packages; internal/proctree is the other
+// (dev/architecture.md §4). Every call site uses only the two Elevator
+// methods; the three adapters behind them are the only code here that knows
+// which OS it is running on.
 package elevate
 
 import (

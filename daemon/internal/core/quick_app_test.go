@@ -100,6 +100,40 @@ func TestScaffoldingANewKirbyProject(t *testing.T) {
 	}
 }
 
+// features/quick-app-php.feature — "A typed name becomes a project name"
+func TestATypedNameBecomesAProjectName(t *testing.T) {
+	h := newHarness(t)
+	h.d.scaf.Fetcher = offlineFetcher{}
+
+	// And a name sent to the daemon without the GUI gets the same rewrite
+	p, err := h.d.Scaffold(h.ctx(), "empty", "Müller & Söhne", "")
+	if err != nil {
+		t.Fatalf("scaffold: %v", err)
+	}
+	if p.Name != "mueller-soehne" {
+		t.Fatalf("name = %q, want mueller-soehne", p.Name)
+	}
+	if _, err := os.Stat(h.root.ProjectDir("mueller-soehne")); err != nil {
+		t.Fatalf("www/mueller-soehne was not created: %v", err)
+	}
+	if p.URL != "http://mueller-soehne.localhost" {
+		t.Fatalf("URL = %q, want http://mueller-soehne.localhost", p.URL)
+	}
+
+	// And a name with no letter or digit in it is refused, asking for at least one
+	_, err = h.d.Scaffold(h.ctx(), "empty", "!!!", "")
+	if err == nil || !strings.Contains(err.Error(), "letter or digit") {
+		t.Fatalf("error = %v, want it to ask for a letter or digit", err)
+	}
+	entries, err := os.ReadDir(h.root.WWW())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("www/ holds %v, want only mueller-soehne", entries)
+	}
+}
+
 // features/quick-app-php.feature — "Scaffolding fails without network access"
 func TestScaffoldingFailsWithoutNetworkAccess(t *testing.T) {
 	h := newHarness(t)

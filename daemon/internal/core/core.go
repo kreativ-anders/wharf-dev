@@ -739,6 +739,9 @@ func (d *Daemon) AddFolder(ctx context.Context, path string) (Project, error) {
 	}
 
 	name := project.Slug(filepath.Base(abs))
+	if name == "" {
+		return Project{}, invalid("the folder name %q has no letter or digit to make a project name from — rename the folder", filepath.Base(abs))
+	}
 	if project.Exists(d.root, name) {
 		return Project{}, conflict("a folder named %q is already in www/ — rename one of the two folders", name)
 	}
@@ -1287,6 +1290,13 @@ func (d *Daemon) Scaffold(ctx context.Context, templateID, name, server string) 
 	tpl, ok := project.TemplateByID(templateID)
 	if !ok {
 		return Project{}, notFound("no template named %q", templateID)
+	}
+	// wharfctl and anything else on the socket get the rewrite the GUI's
+	// field applies (quick-app-php.feature, "A typed name becomes a project
+	// name").
+	typed := name
+	if name = project.Slug(typed); name == "" {
+		return Project{}, invalid("%q has no letter or digit to make a project name from — use at least one", typed)
 	}
 	// Checked before anything is downloaded, so a bad choice leaves no folder.
 	if server != "" && !containsStr(d.store.Get().Services.Webserver.Available, server) {

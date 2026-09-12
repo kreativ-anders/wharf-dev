@@ -21,12 +21,12 @@ var (
 )
 
 const (
-	createSuspended                   = 0x00000004
-	jobObjectExtendedLimitInformation = 9
-	jobObjectLimitKillOnJobClose      = 0x00002000
-	processTerminate                  = 0x0001
-	processSetQuota                   = 0x0100
-	processSuspendResume              = 0x0800
+	createSuspended              = 0x00000004
+	jobInfoClassExtendedLimit    = 9 // JobObjectExtendedLimitInformation
+	jobObjectLimitKillOnJobClose = 0x00002000
+	processTerminate             = 0x0001
+	processSetQuota              = 0x0100
+	processSuspendResume         = 0x0800
 )
 
 type jobObjectBasicLimitInformation struct {
@@ -102,7 +102,7 @@ func newJob() (syscall.Handle, error) {
 	job := syscall.Handle(r)
 	var info jobObjectExtendedLimitInformation
 	info.BasicLimitInformation.LimitFlags = jobObjectLimitKillOnJobClose
-	r, _, err = procSetInformationJobObject.Call(uintptr(job), jobObjectExtendedLimitInformation,
+	r, _, err = procSetInformationJobObject.Call(uintptr(job), jobInfoClassExtendedLimit,
 		uintptr(unsafe.Pointer(&info)), unsafe.Sizeof(info))
 	if r == 0 {
 		syscall.CloseHandle(job)

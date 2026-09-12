@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wharf_gui/daemon.dart';
 import 'package:wharf_gui/folders.dart';
@@ -305,6 +306,34 @@ void main() {
     // The address does not depend on the webserver picked.
     expect(find.text('http://blog.localhost'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Create'), findsOneWidget);
+  });
+
+  // features/quick-app-php.feature — "A typed name becomes a project name"
+  testWidgets('the name field becomes a project name once the user leaves it', (tester) async {
+    final daemon = fixture(_twoProjects);
+    daemon.templates = const [Template(id: 'empty', name: 'Empty folder', runtime: 'php')];
+    await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
+    await tester.tap(find.text('New project'));
+    await tester.pumpAndSettle();
+
+    final field = find.widgetWithText(TextField, 'Name');
+    await tester.enterText(field, 'Müller & Söhne');
+    await tester.pump();
+    // While typing, the field keeps what was typed; the address already
+    // shows the rewritten name.
+    expect(find.text('Müller & Söhne'), findsOneWidget);
+    expect(find.text('http://mueller-soehne.localhost'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(find.text('Müller & Söhne'), findsNothing);
+    expect(find.text('mueller-soehne'), findsOneWidget);
+
+    // A name with no letter or digit in it is refused, asking for at least one
+    await tester.enterText(field, '!!!');
+    await tester.pump();
+    expect(find.text('Use at least one letter or digit'), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Create')).onPressed, isNull);
   });
 
   // features/settings.feature — "Reset asks first"

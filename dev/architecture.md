@@ -39,7 +39,7 @@ Single tray-resident application; one-click service and project control.
 | Core daemon | Process orchestration, config state, hosts/elevation adapter | Go, single cross-compiled binary |
 | IPC | GUI ↔ daemon transport | Unix domain socket on macOS/Linux; loopback TCP + token on Windows (see §4a) |
 | Service registry | Which services exist, which is active, per-project overrides | Single config file (JSON/TOML) read by daemon, watched for changes |
-| Elevation adapter | The **only** platform-branching code path | 3 thin implementations behind one interface (see §4) |
+| Elevation adapter | One of the two platform-branching code paths; process trees are the other (§4) | 3 thin implementations behind one interface (see §4) |
 | Runtime binaries | PHP (v1); Nginx/Apache; mkcert; roadmap: Node, Go, Python, MySQL, PostgreSQL, Mailpit | Per-OS portable builds under `bin/` — see §4b |
 
 ## 4. Cross-OS strategy: one code path, minimal branching
@@ -56,23 +56,34 @@ Every design decision favours identical behaviour across OS over the most
   `RequestElevatedRun(program, args, env)` for trusting mkcert's local
   certificate authority, which writes to the system trust store. All call
   sites use only these. Three small adapters behind them (UAC / `osascript
-  with administrator privileges` / `pkexec`) are the entire platform-specific
-  surface of the whole codebase. The second function was added with
+  with administrator privileges` / `pkexec`) are one of the two
+  platform-specific surfaces of the codebase; process trees are the other
+  (below). The second function was added with
   `features/local-ssl.feature`: without it the authority is never trusted and
   every browser warns.
 - **IPC** — see §4a. One protocol and one client API across all three OS; the
   socket type differs on Windows only because the GUI's language cannot open a
   unix socket there.
-- **Process management** — `os/exec` behaves identically on all three OS;
-  no adaptation needed.
+- **Process management** — `os/exec` starts every service the same way on all
+  three OS. Stopping one is where they differ: nginx, Apache and php-fpm are a
+  master with workers that all hold the listening socket, so the whole tree
+  must go. `internal/proctree` is the second platform-specific surface — a
+  process group on macOS/Linux, a job object on Windows, which has no process
+  groups and does not take children down with their parent. Before it, a stop
+  on Windows killed the nginx master and left a worker holding port 80
+  (`features/service-management.feature`, "Stopping a webserver stops its
+  worker processes too").
 - **SSL** — `mkcert`, already cross-platform, used unmodified.
 - **Distribution shell** — a portable root folder (`bin/`, `www/`, `config/`)
   is the shared internal model; only the outer package format differs
   (installer / DMG / AppImage), never the content or config format.
 
 **Deliberately not unified** (documented, not solved): elevation-prompt UX
-per OS, outer package format, and Linux system-tray availability (GNOME
-requires an extension; KDE/Xfce work natively).
+per OS, outer package format, Linux system-tray availability (GNOME
+requires an extension; KDE/Xfce work natively), and what outlives a daemon that
+is killed outright. On Windows its services die with it, because the job
+holding each one closes with the daemon's handle; macOS and Linux have no
+equivalent, so a force-killed daemon can leave a webserver behind.
 
 ## 4c. The front door
 

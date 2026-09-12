@@ -318,6 +318,45 @@ type stubbornHandle struct{ *FakeHandle }
 
 func (h *stubbornHandle) Signal(os.Signal) error { return nil }
 
+// Windows cannot deliver a stop signal. Waiting out the grace period there
+// only delayed the kill, and every webserver switch took five seconds.
+func TestStopKillsAtOnceWhenTheSignalCannotBeSent(t *testing.T) {
+	ports := NewFakePorts()
+	runner := &unsignallableRunner{FakeRunner: NewFakeRunner(ports)}
+	s := New(runner, ports)
+	s.Poll = time.Millisecond
+
+	sp := spec("webserver", "nginx", 80)
+	sp.StopGrace = time.Minute
+	if err := s.Start(context.Background(), sp); err != nil {
+		t.Fatal(err)
+	}
+	begin := time.Now()
+	if err := s.Stop(context.Background(), "webserver"); err != nil {
+		t.Fatal(err)
+	}
+	if !runner.Handle("webserver").Killed {
+		t.Fatal("the process was never killed")
+	}
+	if took := time.Since(begin); took > time.Second {
+		t.Fatalf("stop took %s, waiting on a signal that was never delivered", took)
+	}
+}
+
+type unsignallableRunner struct{ *FakeRunner }
+
+func (r *unsignallableRunner) Start(s Spec) (Handle, error) {
+	h, err := r.FakeRunner.Start(s)
+	if err != nil {
+		return nil, err
+	}
+	return &unsignallableHandle{FakeHandle: h.(*FakeHandle)}, nil
+}
+
+type unsignallableHandle struct{ *FakeHandle }
+
+func (h *unsignallableHandle) Signal(os.Signal) error { return errors.New("not supported by windows") }
+
 // php-fpm listens on loopback only, the webservers on every interface; the
 // real prober must see both as taken.
 func TestNetProberSeesLoopbackAndWildcardListeners(t *testing.T) {

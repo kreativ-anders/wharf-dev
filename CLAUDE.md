@@ -123,7 +123,8 @@ wharf/
         ├── ipc/               newline-delimited JSON over AF_UNIX
         ├── layout/            the portable root: bin/ www/ config/ data/
         ├── php/               release timeline, support status, detection, downloads
-        ├── project/           folder-as-project discovery, template scaffolding
+        ├── proctree/          PLATFORM-SPECIFIC: a service and its workers, stopped as one
+        ├── project/           folder-as-project discovery, name rewriting, template scaffolding
         ├── runtime/           config → process specs; the front door, one generated file per project
 │       ├── specsync/          THE SYNC GUARD (§1)
 │       ├── supervisor/        process lifecycle, port waiting, state machine
@@ -140,6 +141,7 @@ wharf/
     │   ├── daemon.dart        THE APP'S STATE — one snapshot from the daemon
     │   ├── daemon_launcher.dart  finds, starts and stops wharfd: one application
     │   ├── folders.dart       opening folders and files, the "Add folder…" picker
+    │   ├── project_name.dart  the daemon's name rewrite, mirrored for the "New project" field
     │   ├── theme.dart         Kirby-plain light/dark palette, status mark (shape + colour)
     │   ├── tray.dart          the tray menu (features/tray-actions.feature)
     │   ├── ipc/
@@ -154,6 +156,7 @@ wharf/
     │   ├── state_test.dart      snapshot parsing
     │   ├── theme_test.dart      WCAG contrast of the palette, both themes
     │   ├── widgets_test.dart    what each view renders
+    │   ├── project_name_test.dart  the name rewrite, against the daemon's own table
     │   ├── launcher_test.dart   binary search order, missing-binary message
     │   ├── launcher_e2e_test.dart  start / attach / quit against real wharfd (--tags e2e)
     │   └── daemon_e2e_test.dart drives the real wharfd binary (--tags e2e)
@@ -171,8 +174,9 @@ means changing the document that records it.
 - **No Docker, no VM.** Native host processes only.
 - **One behaviour across Windows, macOS and Linux.** Prefer identical behaviour
   over the best per-platform solution. All platform branching lives in
-  [`internal/elevate`](daemon/internal/elevate/), plus two constants: the hosts
-  file path and the Windows `.exe` suffix. `make cross` proves it still builds
+  [`internal/elevate`](daemon/internal/elevate/) (elevation prompts) and
+  [`internal/proctree`](daemon/internal/proctree/) (process group / job object),
+  plus two constants: the hosts file path and the Windows `.exe` suffix. `make cross` proves it still builds
   everywhere.
 - **PHP only in v1.** Node, Go, Python, MySQL, PostgreSQL and Mailpit are
   `@roadmap` — specified, deliberately unimplemented.

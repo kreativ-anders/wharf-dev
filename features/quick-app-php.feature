@@ -15,6 +15,20 @@ Feature: Quick-app scaffolding (PHP / Kirby)
     And the project appears in the GUI's project list with status "starting"
     And it is reachable at "http://my-kirby-site.localhost" (see pretty-urls.feature)
 
+  Scenario: A typed name becomes a project name
+    When the user types a name for a new project and leaves the field or presses Enter
+    Then the field is rewritten into a project name that works as a folder and a hostname:
+      | typed                | project name       |
+      | My Kirby Site        | my-kirby-site      |
+      | Müller & Söhne       | mueller-soehne     |
+      | Café_Relaunch 2026   | cafe-relaunch-2026 |
+      | Straße.de            | strasse-de         |
+      | --Hello   World--    | hello-world        |
+      | x                    | x                  |
+    And its address shows the rewritten name while the user is still typing
+    And a name with no letter or digit in it is refused, asking for at least one
+    And a name sent to the daemon without the GUI gets the same rewrite
+
   Scenario: Choosing the webserver while creating a project
     Given the global active webserver is "nginx"
     When the user creates "legacy-app" and picks "apache" as its webserver

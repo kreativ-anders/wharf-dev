@@ -60,6 +60,15 @@ func TestAddingAFolderFromAnywhere(t *testing.T) {
 	if !strings.Contains(block, `root "`+filepath.ToSlash(dir)+`";`) {
 		t.Fatalf("document root is not the added folder:\n%s", block)
 	}
+
+	// And a folder named "Müller & Söhne" is registered as "mueller-soehne"
+	umlauts, err := h.d.AddFolder(h.ctx(), outsideFolder(t, "Code", "Müller & Söhne"))
+	if err != nil {
+		t.Fatalf("add folder: %v", err)
+	}
+	if umlauts.Name != "mueller-soehne" {
+		t.Fatalf("name = %q, want mueller-soehne", umlauts.Name)
+	}
 }
 
 // features/project-folders.feature — "Choosing a folder inside www/ registers

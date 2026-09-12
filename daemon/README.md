@@ -38,7 +38,8 @@ so it raises no password prompt and never touches the real `/etc/hosts`.
 |---|---|
 | `internal/layout` | Resolves the portable root folder (`bin/`, `www/`, `config/`, `data/`) |
 | `internal/config` | `wharf.json`: load, atomic write, hand-edit repair |
-| `internal/elevate` | **The only platform-specific code**: UAC / osascript / pkexec |
+| `internal/elevate` | **Platform-specific**: UAC / osascript / pkexec |
+| `internal/proctree` | **Platform-specific**: a service and its workers, stopped as one (process group / job object) |
 | `internal/hostsfile` | Removes hosts lines left from the old `<name>.wharf` scheme |
 | `internal/supervisor` | Process lifecycle, port waiting, state transitions |
 | `internal/runtime` | Config → process specs; generates nginx/apache/php-fpm config |
@@ -52,7 +53,8 @@ so it raises no password prompt and never touches the real `/etc/hosts`.
 | `internal/core` | The behaviour itself; the IPC layer is a thin shell over it |
 
 The platform-specific surface is three files in `internal/elevate`
-(~50 lines each, two functions) plus two constants: the hosts-file path and the Windows `.exe`
+(~50 lines each, two functions), two in `internal/proctree` (a process group
+on macOS/Linux, a job object on Windows), plus two constants: the hosts-file path and the Windows `.exe`
 suffix. Everything else compiles unmodified for all six targets.
 
 ## Talking to the daemon

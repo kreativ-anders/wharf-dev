@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher_string.dart';
 import '../daemon.dart';
 import '../folders.dart';
 import '../models/state.dart';
+import '../project_name.dart';
 import '../theme.dart';
 import 'project_sheet.dart';
 import 'settings_page.dart';
@@ -453,18 +454,38 @@ class _NewProjectDialog extends StatefulWidget {
 
 class _NewProjectDialogState extends State<_NewProjectDialog> {
   final _controller = TextEditingController();
+  late final _focus = FocusNode()..addListener(_rewriteOnLeave);
   late String _template = widget.templates.isEmpty ? '' : widget.templates.first.id;
   late String _webserver = widget.activeWebserver;
 
   @override
   void dispose() {
+    _focus.dispose();
     _controller.dispose();
     super.dispose();
   }
 
+  // The field becomes the project name once the user is done with it, never
+  // under the cursor while they type (features/quick-app-php.feature, "A
+  // typed name becomes a project name").
+  void _rewriteOnLeave() {
+    if (!_focus.hasFocus) _rewrite();
+  }
+
+  void _rewrite() {
+    final name = projectName(_controller.text);
+    // Input with nothing usable stays as typed, next to the error explaining it.
+    if (name.isEmpty || name == _controller.text) return;
+    _controller.value = TextEditingValue(
+      text: name,
+      selection: TextSelection.collapsed(offset: name.length),
+    );
+  }
+
   void _submit() {
-    final name = _controller.text.trim();
+    final name = projectName(_controller.text);
     if (name.isEmpty) return;
+    _rewrite();
     // The active webserver is what every project gets anyway; only the other
     // one is an override.
     final pinned = _webserver == widget.activeWebserver ? '' : _webserver;
@@ -474,7 +495,8 @@ class _NewProjectDialogState extends State<_NewProjectDialog> {
   @override
   Widget build(BuildContext context) {
     final muted = Theme.of(context).textTheme.bodySmall;
-    final name = _controller.text.trim();
+    final typed = _controller.text.trim();
+    final name = projectName(typed);
     return AlertDialog(
       title: const Text('New project'),
       content: ConstrainedBox(
@@ -485,10 +507,12 @@ class _NewProjectDialogState extends State<_NewProjectDialog> {
           children: [
             TextField(
               controller: _controller,
+              focusNode: _focus,
               autofocus: true,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Name',
-                helperText: 'Lowercase letters, digits and hyphens',
+                helperText: 'Becomes lowercase letters, digits and hyphens',
+                errorText: typed.isNotEmpty && name.isEmpty ? 'Use at least one letter or digit' : null,
               ),
               onChanged: (_) => setState(() {}),
               onSubmitted: (_) => _submit(),

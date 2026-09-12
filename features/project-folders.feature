@@ -17,6 +17,7 @@ Feature: Project folders
     And its files stay where they are
     And the project's config entry records the folder's location as "path"
     And its document root is that folder
+    And a folder named "Müller & Söhne" is registered as "mueller-soehne", the same rewrite a typed name gets
 
   Scenario: Choosing a folder inside www/ registers it by name
     Given a folder "my-kirby-site" under "www/"
