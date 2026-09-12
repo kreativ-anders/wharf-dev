@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/proctree"
 )
 
 // Spec describes one managed process.
@@ -28,8 +30,8 @@ type Spec struct {
 	Port int
 	// LogPath receives combined stdout/stderr. Empty discards output.
 	LogPath string
-	// StopSignal is sent first on stop; SIGTERM if unset. Ignored on Windows,
-	// where the process is killed directly.
+	// StopSignal is sent first on stop; SIGTERM if unset. Windows cannot
+	// deliver it, so there the process tree is killed at once.
 	StopSignal os.Signal
 	// StopGrace is how long to wait after StopSignal before killing.
 	StopGrace time.Duration
@@ -52,8 +54,9 @@ type Runner interface {
 	Start(Spec) (Handle, error)
 }
 
-// ExecRunner starts real OS processes. os/exec behaves identically on all
-// three operating systems, so there is no platform branch here
+// ExecRunner starts real OS processes, each as the root of a process tree so
+// that stopping it reaches the workers it starts. How a tree is held together
+// is the one thing that differs per OS, and it lives in proctree
 // (dev/architecture.md §4).
 type ExecRunner struct{}
 
@@ -80,17 +83,19 @@ func (ExecRunner) Start(s Spec) (Handle, error) {
 		cmd.Stdout, cmd.Stderr = f, f
 	}
 
-	if err := cmd.Start(); err != nil {
+	tree, err := proctree.Start(cmd)
+	if err != nil {
 		if logFile != nil {
 			logFile.Close()
 		}
 		return nil, fmt.Errorf("start %s: %w", s.Label, err)
 	}
-	h := &execHandle{cmd: cmd, done: make(chan struct{})}
+	h := &execHandle{cmd: cmd, tree: tree, done: make(chan struct{})}
 	// Reap in the background so Wait is safe to call from several goroutines
 	// and from none at all: os/exec requires exactly one Wait per process.
 	go func() {
 		h.err = cmd.Wait()
+		tree.Release()
 		if logFile != nil {
 			logFile.Close()
 		}
@@ -101,6 +106,7 @@ func (ExecRunner) Start(s Spec) (Handle, error) {
 
 type execHandle struct {
 	cmd  *exec.Cmd
+	tree *proctree.Tree
 	done chan struct{}
 	err  error
 }
@@ -122,16 +128,9 @@ func (h *execHandle) Signal(sig os.Signal) error {
 	return err
 }
 
-func (h *execHandle) Kill() error {
-	if h.cmd.Process == nil {
-		return errors.New("supervisor: process not started")
-	}
-	err := h.cmd.Process.Kill()
-	if errors.Is(err, os.ErrProcessDone) {
-		return nil
-	}
-	return err
-}
+// Kill terminates the process and every worker it started: killing only a
+// master leaves its workers holding the port.
+func (h *execHandle) Kill() error { return h.tree.Kill() }
 
 func (h *execHandle) PID() int {
 	if h.cmd.Process == nil {

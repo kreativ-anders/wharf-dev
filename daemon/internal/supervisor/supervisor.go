@@ -237,9 +237,10 @@ func (s *Supervisor) Stop(ctx context.Context, id string) error {
 }
 
 // terminate asks a process to exit and kills it only if it will not. Asking
-// first matters beyond politeness: php-fpm and Apache are a master with
-// workers, and killing the master outright leaves the workers running and
-// holding the port, so every later start fails.
+// first lets a webserver finish what it is serving; the kill reaches the whole
+// process tree, so even the fallback leaves no worker holding the port
+// (service-management.feature, "Stopping a webserver stops its worker
+// processes too").
 func terminate(ctx context.Context, h Handle, spec Spec) {
 	sig := spec.StopSignal
 	if sig == nil {
@@ -249,10 +250,17 @@ func terminate(ctx context.Context, h Handle, spec Spec) {
 	if grace <= 0 {
 		grace = 5 * time.Second
 	}
-	_ = h.Signal(sig)
 
 	exited := make(chan struct{})
 	go func() { h.Wait(); close(exited) }()
+
+	// Windows cannot deliver a signal at all; waiting out the grace period
+	// there would only delay a kill that is coming anyway.
+	if err := h.Signal(sig); err != nil {
+		_ = h.Kill()
+		<-exited
+		return
+	}
 
 	select {
 	case <-exited:

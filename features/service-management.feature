@@ -21,6 +21,12 @@ Feature: Webserver service management
     Then the daemon waits for the port to be released before starting "apache"
     And the GUI shows a "switching webserver" status until the new process is confirmed running
 
+  Scenario: Stopping a webserver stops its worker processes too
+    Given "nginx" is running as a master process with worker processes
+    When the daemon stops "nginx"
+    Then its worker processes stop with it
+    And none of them is left holding port 80
+
   Scenario: Per-project override takes precedence over the global default
     Given the global active webserver is "nginx"
     And project "legacy-app" has "webserver_override: apache" in its config

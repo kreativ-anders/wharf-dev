@@ -118,7 +118,7 @@ wharf/
         │   ├── watch.go       reloads wharf.json and custom configs when hand-edited
         │   └── *_test.go      one test file per feature file (see §1)
         ├── download/          HTTPS fetch, checksum, untar/unzip for PHP and mkcert
-        ├── elevate/           THE ONLY PLATFORM-SPECIFIC CODE (3 adapters)
+        ├── elevate/           PLATFORM-SPECIFIC: elevation prompts (3 adapters)
         ├── hostsfile/         removes hosts lines left from the old <name>.wharf scheme
         ├── ipc/               newline-delimited JSON over AF_UNIX
         ├── layout/            the portable root: bin/ www/ config/ data/
