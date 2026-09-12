@@ -336,6 +336,9 @@ func (d *Daemon) projectStatus(cfg *config.Config, p config.Project) (supervisor
 	// A project nobody started is stopped, whatever the shared webserver does
 	// for the others (tray-actions.feature).
 	if !d.isStarted(p.Name) {
+		if msg, ok := d.startFailure(p.Name); ok {
+			return supervisor.StateFailed, msg
+		}
 		return supervisor.StateStopped, ""
 	}
 	own := cfg.OwnInstance(p)

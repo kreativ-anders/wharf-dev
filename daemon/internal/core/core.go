@@ -86,6 +86,10 @@ type Daemon struct {
 	// it while an action holds mu.
 	startedMu sync.Mutex
 	started   map[string]bool
+	// failed holds why a project's last start failed. Such a project is taken
+	// out of started, so the next project's start does not bring it up again,
+	// but its row still shows the reason.
+	failed map[string]string
 
 	onState atomic.Pointer[func(State)]
 }
@@ -192,6 +196,7 @@ func New(opts Options) (*Daemon, error) {
 		downloading:  map[string]bool{},
 		installing:   map[string]bool{},
 		started:      map[string]bool{},
+		failed:       map[string]string{},
 		web:          webDetector,
 		webInstaller: webInstaller,
 		now:          opts.Now,
@@ -870,12 +875,18 @@ func (d *Daemon) StartProject(ctx context.Context, name string) error {
 	return d.startProjectLocked(ctx, cfg, p)
 }
 
-func (d *Daemon) startProjectLocked(ctx context.Context, cfg *config.Config, p config.Project) error {
+func (d *Daemon) startProjectLocked(ctx context.Context, cfg *config.Config, p config.Project) (err error) {
 	if st, _ := d.projectStatus(cfg, p); st == supervisor.StateRunning {
 		return nil
 	}
-	// Marked started before anything runs, so a failure shows on this project.
+	// Marked started before anything runs, so the front door takes it on and
+	// its row shows it starting.
 	d.setStarted(p.Name, true)
+	defer func() {
+		if err != nil {
+			d.startFailed(p.Name, err)
+		}
+	}()
 	if err := d.ensurePHP(ctx, cfg, cfg.PHPVersionFor(p)); err != nil {
 		return err
 	}
@@ -919,7 +930,7 @@ func (d *Daemon) StopProject(ctx context.Context, name string) error {
 // the process serving it, starting its PHP backend if that is not running
 // (tray-actions.feature, "Restarting a project"). It is also the retry for a
 // project that failed to start: the restart of a stopped process is a start.
-func (d *Daemon) RestartProject(ctx context.Context, name string) error {
+func (d *Daemon) RestartProject(ctx context.Context, name string) (err error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	defer d.track()()
@@ -933,6 +944,11 @@ func (d *Daemon) RestartProject(ctx context.Context, name string) error {
 		return err
 	}
 	d.setStarted(p.Name, true)
+	defer func() {
+		if err != nil {
+			d.startFailed(p.Name, err)
+		}
+	}()
 	if cfg.OwnInstance(p) {
 		spec, err := d.res.ProjectSpec(cfg, p)
 		if err != nil {
@@ -1469,11 +1485,31 @@ func (d *Daemon) served(cfg *config.Config) *config.Config {
 func (d *Daemon) setStarted(name string, on bool) {
 	d.startedMu.Lock()
 	defer d.startedMu.Unlock()
+	delete(d.failed, name)
 	if on {
 		d.started[name] = true
 	} else {
 		delete(d.started, name)
 	}
+}
+
+// startFailed takes a project whose start failed out of the front door's set:
+// left in, every later start of another project would try it again, and show
+// it starting alongside (tray-actions.feature, "A project that failed to start
+// is not started with the next one").
+func (d *Daemon) startFailed(name string, err error) {
+	d.startedMu.Lock()
+	defer d.startedMu.Unlock()
+	delete(d.started, name)
+	d.failed[name] = err.Error()
+}
+
+// startFailure is why a project's last start failed, if it did.
+func (d *Daemon) startFailure(name string) (string, bool) {
+	d.startedMu.Lock()
+	defer d.startedMu.Unlock()
+	msg, ok := d.failed[name]
+	return msg, ok
 }
 
 func (d *Daemon) isStarted(name string) bool {
@@ -1492,6 +1528,7 @@ func (d *Daemon) clearStarted() {
 	d.startedMu.Lock()
 	defer d.startedMu.Unlock()
 	d.started = map[string]bool{}
+	d.failed = map[string]string{}
 }
 
 // reloadGlobalWebserver regenerates the shared webserver's config and restarts

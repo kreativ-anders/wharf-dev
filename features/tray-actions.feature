@@ -15,6 +15,12 @@ Feature: Tray icon actions
     And the tray menu updates the project's status to "running"
     And no other project is started
 
+  Scenario: A project that failed to start is not started with the next one
+    Given a project failed to start
+    When the user starts another project
+    Then only that other project is started
+    And the project that failed still shows its error
+
   Scenario: Stopping a project
     Given a project is running
     When the user chooses "Stop" for it, in the tray menu or the project list

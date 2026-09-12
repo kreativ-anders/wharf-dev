@@ -61,7 +61,7 @@ func WaitPortFree(ctx context.Context, p Prober, port int, poll time.Duration) e
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("port %d still in use: %w", port, ctx.Err())
+			return fmt.Errorf("port %d is still in use by another program; quit it, then start again: %w", port, ctx.Err())
 		case <-time.After(poll):
 		}
 	}

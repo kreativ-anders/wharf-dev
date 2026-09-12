@@ -52,6 +52,36 @@ func TestStartingAProjectFromTheTray(t *testing.T) {
 	}
 }
 
+// features/tray-actions.feature — "A project that failed to start is not
+// started with the next one"
+func TestAFailedProjectIsNotStartedWithTheNextOne(t *testing.T) {
+	h := newHarness(t)
+	h.mustAdd("broken-site")
+	h.mustAdd("other-site")
+	h.runner.Refuse[runtime.WebserverID] = "address already in use\n"
+	if err := h.d.StartProject(h.ctx(), "broken-site"); err == nil {
+		t.Fatal("the refused start succeeded")
+	}
+	delete(h.runner.Refuse, runtime.WebserverID)
+
+	if err := h.d.StartProject(h.ctx(), "other-site"); err != nil {
+		t.Fatalf("start other-site: %v", err)
+	}
+
+	// Then only that other project is started
+	if got := h.project("other-site").State; got != string(supervisor.StateRunning) {
+		t.Fatalf("other-site = %q, want running", got)
+	}
+	if strings.Contains(h.readGenerated("nginx.conf"), "broken-site.localhost") {
+		t.Fatal("the webserver serves the project that failed, which nobody started again")
+	}
+	// And the project that failed still shows its error
+	p := h.project("broken-site")
+	if p.State != string(supervisor.StateFailed) || !strings.Contains(p.Error, "address already in use") {
+		t.Fatalf("broken-site = %q (%q), want failed with its error", p.State, p.Error)
+	}
+}
+
 // features/tray-actions.feature — "Stopping a project"
 func TestStoppingAProject(t *testing.T) {
 	h := newHarness(t)
