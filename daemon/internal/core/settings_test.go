@@ -235,7 +235,7 @@ func TestAWebserverThatIsNotInstalledSaysWhereItBelongs(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.d.RefreshWebservers(h.ctx())
-	binary := filepath.Join(h.root.Bin(), "apache", "bin", "httpd")
+	binary := exeName(filepath.Join(h.root.Bin(), "apache", "bin", "httpd"))
 
 	apache := h.server("apache")
 	if apache.Installed {
@@ -398,7 +398,7 @@ func TestResettingWharf(t *testing.T) {
 		t.Fatalf("first-start defaults missing: %+v", st.Services)
 	}
 	// And downloaded PHP versions and webservers are kept
-	for _, keep := range []string{filepath.Join(h.root.PHPBin("8.3"), "php-fpm"), filepath.Join(h.root.Bin(), "nginx", "nginx")} {
+	for _, keep := range []string{filepath.Join(h.root.PHPBin("8.3"), php.FastCGIName()), exeName(filepath.Join(h.root.Bin(), "nginx", "nginx"))} {
 		if _, err := os.Stat(keep); err != nil {
 			t.Fatalf("%s was deleted: %v", keep, err)
 		}

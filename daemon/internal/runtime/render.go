@@ -487,9 +487,15 @@ const apacheSite = `{{define "site"}}  DocumentRoot "{{.DocRoot}}"
     Require all granted
   </Directory>
 
+  # Apache appends the script's path to the handler URL. A Windows path starts
+  # with its drive letter, which would run into the port without the slash;
+  # the rule after it hands PHP the path as the OS spells it, "C:/..." on
+  # Windows and "/..." elsewhere (webserver-install.feature, "A Kirby project
+  # needs no webserver configuration").
   <FilesMatch \.php$>
-    SetHandler "proxy:fcgi://127.0.0.1:{{.PHPPort}}"
+    SetHandler "proxy:fcgi://127.0.0.1:{{.PHPPort}}/"
   </FilesMatch>
+  ProxyFCGISetEnvIf "reqenv('SCRIPT_FILENAME') =~ m|^proxy:fcgi://[^/]+/([A-Za-z]:)?(/.*)|" SCRIPT_FILENAME "$1$2"
 
   <DirectoryMatch "^{{.DocRootRe}}/(content|site|kirby)/">
     Require all denied

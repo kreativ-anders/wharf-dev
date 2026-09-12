@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	goruntime "runtime"
 	"strings"
 	"testing"
 	"time"
@@ -45,8 +46,8 @@ type harness struct {
 // only usable with its modules beside it, so one module is staged too.
 func stubWebservers(t *testing.T, root layout.Root) {
 	t.Helper()
-	stubBinary(t, filepath.Join(root.Bin(), "nginx", "nginx"))
-	stubBinary(t, filepath.Join(root.Bin(), "apache", "httpd"))
+	stubBinary(t, exeName(filepath.Join(root.Bin(), "nginx", "nginx")))
+	stubBinary(t, exeName(filepath.Join(root.Bin(), "apache", "httpd")))
 	stubBinary(t, filepath.Join(root.Bin(), "apache", "modules", "mod_proxy_fcgi.so"))
 }
 
@@ -79,9 +80,9 @@ func (f *fakeWebInstaller) Install(ctx context.Context, name, dest string) error
 	}
 	if name == webserver.Apache {
 		stubFile(filepath.Join(dest, "modules", "mod_proxy_fcgi.so"))
-		return stubFile(filepath.Join(dest, "bin", "httpd"))
+		return stubFile(exeName(filepath.Join(dest, "bin", "httpd")))
 	}
-	return stubFile(filepath.Join(dest, "nginx"))
+	return stubFile(exeName(filepath.Join(dest, "nginx")))
 }
 
 func stubFile(path string) error {
@@ -108,7 +109,7 @@ func (f *fakeInstaller) Install(ctx context.Context, version, dest string) (stri
 	if f.fn != nil {
 		return f.fn(ctx, version, dest)
 	}
-	for _, name := range []string{"php", "php-fpm", "php-cgi"} {
+	for _, name := range []string{php.CLIName(), php.FastCGIName(), exeName("php-cgi")} {
 		if err := os.WriteFile(filepath.Join(dest, name), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 			return "", err
 		}
@@ -129,8 +130,8 @@ func newHarness(t *testing.T, adjust ...func(*Options)) *harness {
 	// the vendored layout is stubbed out.
 	stubWebservers(t, root)
 	for _, v := range []string{"8.1", "8.2", "8.3"} {
-		stubBinary(t, filepath.Join(root.PHPBin(v), "php-fpm"))
-		stubBinary(t, filepath.Join(root.PHPBin(v), "php-cgi"))
+		stubBinary(t, filepath.Join(root.PHPBin(v), php.FastCGIName()))
+		stubBinary(t, exeName(filepath.Join(root.PHPBin(v), "php-cgi")))
 	}
 
 	hostsPath := filepath.Join(dir, "hosts")
@@ -203,6 +204,15 @@ func stubBinary(t *testing.T, path string) {
 	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// exeName names a stubbed binary the way the daemon looks for it on this OS:
+// Windows knows an executable by its .exe suffix, not by a mode bit.
+func exeName(path string) string {
+	if goruntime.GOOS == "windows" {
+		return path + ".exe"
+	}
+	return path
 }
 
 // mkProject creates a folder under www/, which is all it takes to make a
@@ -279,7 +289,12 @@ func (h *harness) hostsContent() string {
 // Go's t.TempDir() paths on macOS are long enough to exceed it on their own.
 func shortSocket(t *testing.T) string {
 	t.Helper()
-	dir, err := os.MkdirTemp("/tmp", "wh")
+	// Windows serves IPC over TCP, where the path's length does not matter.
+	base := "/tmp"
+	if goruntime.GOOS == "windows" {
+		base = ""
+	}
+	dir, err := os.MkdirTemp(base, "wh")
 	if err != nil {
 		t.Fatal(err)
 	}

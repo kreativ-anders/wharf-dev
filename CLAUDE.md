@@ -92,7 +92,7 @@ wharf/
 │   ├── local-ssl.feature            mkcert installed and trusted by the SSL switch
 │   ├── php-runtime.feature          PHP detection, first-run default, picker, download
 │   ├── php-settings.feature         config/php.ini, read by every PHP version after its own
-│   ├── pretty-urls.feature          hosts-file entries and elevation
+│   ├── pretty-urls.feature          <name>.localhost; old .wharf hosts lines removed
 │   ├── project-logs.feature         one log folder per project, opened from its settings
 │   ├── project-folders.feature      folders from anywhere, opening them
 │   ├── quick-app-php.feature        Kirby scaffolding
@@ -104,28 +104,28 @@ wharf/
 │   └── webserver-install.feature    nginx/Apache: adopt, install, one config per project
 │
 ├── daemon/                    the Go core daemon — see daemon/README.md
-    ├── go.mod                 module github.com/kreativ-anders/wharf-dev/daemon
-    ├── cmd/
-    │   ├── wharfd/            the daemon binary
-    │   └── wharfctl/          CLI client; the front end until the GUI exists
-    └── internal/
-        ├── certs/             mkcert: pinned download, local CA trust, per-project certs
-        ├── config/            wharf.json: load, atomic write, hand-edit repair
-        ├── core/              THE BEHAVIOUR — one method per user action
-        │   ├── core.go        projects, services, settings, scaffolding
-        │   ├── state.go       the snapshot the GUI renders
-        │   ├── api.go         IPC method wiring
-        │   ├── watch.go       reloads wharf.json and custom configs when hand-edited
-        │   └── *_test.go      one test file per feature file (see §1)
-        ├── download/          HTTPS fetch, checksum, untar/unzip for PHP and mkcert
-        ├── elevate/           PLATFORM-SPECIFIC: elevation prompts (3 adapters)
-        ├── hostsfile/         removes hosts lines left from the old <name>.wharf scheme
-        ├── ipc/               newline-delimited JSON over AF_UNIX
-        ├── layout/            the portable root: bin/ www/ config/ data/
-        ├── php/               release timeline, support status, detection, downloads
-        ├── proctree/          PLATFORM-SPECIFIC: a service and its workers, stopped as one
-        ├── project/           folder-as-project discovery, name rewriting, template scaffolding
-        ├── runtime/           config → process specs; the front door, one generated file per project
+│   ├── go.mod                 module github.com/kreativ-anders/wharf-dev/daemon
+│   ├── cmd/
+│   │   ├── wharfd/            the daemon binary
+│   │   └── wharfctl/          CLI client; the front end until the GUI exists
+│   └── internal/
+│       ├── certs/             mkcert: pinned download, local CA trust, per-project certs
+│       ├── config/            wharf.json: load, atomic write, hand-edit repair
+│       ├── core/              THE BEHAVIOUR — one method per user action
+│       │   ├── core.go        projects, services, settings, scaffolding
+│       │   ├── state.go       the snapshot the GUI renders
+│       │   ├── api.go         IPC method wiring
+│       │   ├── watch.go       reloads wharf.json and custom configs when hand-edited
+│       │   └── *_test.go      one test file per feature file (see §1)
+│       ├── download/          HTTPS fetch, checksum, untar/unzip for PHP and mkcert
+│       ├── elevate/           PLATFORM-SPECIFIC: elevation prompts (3 adapters)
+│       ├── hostsfile/         removes hosts lines left from the old <name>.wharf scheme
+│       ├── ipc/               newline-delimited JSON over a unix socket; loopback TCP + token on Windows
+│       ├── layout/            the portable root: bin/ www/ config/ data/
+│       ├── php/               release timeline, support status, detection, downloads
+│       ├── proctree/          PLATFORM-SPECIFIC: a service and its workers, stopped as one
+│       ├── project/           folder-as-project discovery, name rewriting, template scaffolding
+│       ├── runtime/           config → process specs; the front door, one generated file per project
 │       ├── specsync/          THE SYNC GUARD (§1)
 │       ├── supervisor/        process lifecycle, port waiting, state machine
 │       ├── watchdog/          daemon exits when the app that started it is gone
@@ -208,7 +208,8 @@ means changing the document that records it.
 - **Errors name the fix.** "PHP 8.2 is not installed (expected …/bin/php/8.2)",
   not "exec: no such file".
 - **A declined elevation prompt is a normal outcome**, never an error dialog:
-  fall back to the raw-port URL.
+  the action finishes without what the prompt would have added — SSL works
+  with a browser warning, an old hosts line stays behind.
 - **Tests fake the outside world** — processes, ports, hosts file, mkcert, the
   network — so the suite never prompts for a password, binds a real port, or
   needs a vendored binary.

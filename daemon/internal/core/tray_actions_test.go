@@ -270,6 +270,8 @@ func TestMainWindowSeesTheSameStateAsTheTray(t *testing.T) {
 
 	socket := shortSocket(t)
 	srv := ipc.NewServer(socket, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	// The transport the daemon uses on this OS: loopback TCP on Windows.
+	srv.SetTransport(ipc.DefaultTransport())
 	h.d.Register(srv)
 	if err := srv.Listen(); err != nil {
 		t.Fatal(err)
@@ -279,7 +281,7 @@ func TestMainWindowSeesTheSameStateAsTheTray(t *testing.T) {
 	go srv.Serve(ctx)
 	defer srv.Close()
 
-	c, err := ipc.DialWait(socket, 2*time.Second)
+	c, err := ipc.DialEndpoint(srv.Endpoint())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,6 +325,8 @@ func TestUnknownMethodIsReportedNotFatal(t *testing.T) {
 	h := newHarness(t)
 	socket := shortSocket(t)
 	srv := ipc.NewServer(socket, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	// The transport the daemon uses on this OS: loopback TCP on Windows.
+	srv.SetTransport(ipc.DefaultTransport())
 	h.d.Register(srv)
 	if err := srv.Listen(); err != nil {
 		t.Fatal(err)
@@ -332,7 +336,7 @@ func TestUnknownMethodIsReportedNotFatal(t *testing.T) {
 	go srv.Serve(ctx)
 	defer srv.Close()
 
-	c, err := ipc.DialWait(socket, 2*time.Second)
+	c, err := ipc.DialEndpoint(srv.Endpoint())
 	if err != nil {
 		t.Fatal(err)
 	}

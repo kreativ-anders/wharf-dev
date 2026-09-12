@@ -10,8 +10,9 @@ class DaemonError implements Exception {
   final String code;
   final String message;
 
-  /// The elevation prompt was declined. Not a failure: the project keeps
-  /// working on its raw-port URL (features/pretty-urls.feature).
+  /// The elevation prompt was declined. Not a failure: the action finished
+  /// without what the prompt would have added — SSL works with a browser
+  /// warning (features/local-ssl.feature).
   bool get isElevationDenied => code == 'elevation_denied';
 
   /// A binary the daemon needs is not installed. The message names the path.

@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -82,7 +83,8 @@ func TestTheStaticBuildIsTheNewestPatchForThisPlatform(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s missing: %v", name, err)
 		}
-		if info.Mode().Perm()&0o100 == 0 {
+		// Windows keeps no executable bit to check.
+		if runtime.GOOS != "windows" && info.Mode().Perm()&0o100 == 0 {
 			t.Fatalf("%s is not executable", name)
 		}
 	}

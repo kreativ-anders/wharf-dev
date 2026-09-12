@@ -13,9 +13,19 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+// hostExe names a stub the way this OS names executables: Windows knows one
+// by its .exe suffix, not by a mode bit.
+func hostExe(name string) string {
+	if runtime.GOOS == "windows" {
+		return name + ".exe"
+	}
+	return name
+}
 
 func stub(t *testing.T, path string) {
 	t.Helper()
@@ -32,16 +42,16 @@ func noProbe(context.Context, string) (string, error) { return "1.2.3", nil }
 func TestDetectionPrefersWharfsOwnCopy(t *testing.T) {
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "bin")
-	system := filepath.Join(dir, "usr", "sbin", "nginx")
+	system := filepath.Join(dir, "usr", "sbin", hostExe("nginx"))
 	stub(t, system)
 
-	d := &Detector{BinDir: bin, GOOS: "linux", Probe: noProbe,
+	d := &Detector{BinDir: bin, Probe: noProbe,
 		Candidates: map[string][]string{Nginx: {system}}}
 	if got := d.Detect(context.Background())[Nginx]; got.Binary != system || got.Source != "system" {
 		t.Fatalf("got %+v, want the system nginx", got)
 	}
 
-	stub(t, filepath.Join(bin, "nginx", "nginx"))
+	stub(t, filepath.Join(bin, "nginx", hostExe("nginx")))
 	got := d.Detect(context.Background())[Nginx]
 	if got.Source != "wharf" || got.Version != "1.2.3" {
 		t.Fatalf("got %+v, want Wharf's own copy", got)
@@ -50,9 +60,9 @@ func TestDetectionPrefersWharfsOwnCopy(t *testing.T) {
 
 func TestApacheWithoutModulesIsNotUsable(t *testing.T) {
 	dir := t.TempDir()
-	httpd := filepath.Join(dir, "sbin", "httpd")
+	httpd := filepath.Join(dir, "sbin", hostExe("httpd"))
 	stub(t, httpd)
-	d := &Detector{BinDir: filepath.Join(dir, "bin"), GOOS: "linux", Probe: noProbe,
+	d := &Detector{BinDir: filepath.Join(dir, "bin"), Probe: noProbe,
 		Candidates: map[string][]string{Apache: {httpd}}}
 
 	if _, ok := d.Detect(context.Background())[Apache]; ok && ModulesDir(httpd) == "" {

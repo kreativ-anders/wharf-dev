@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -138,8 +139,10 @@ func TestEndpointFileRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The file carries the token, so no other user may read it.
-	if perm := info.Mode().Perm(); perm != 0o600 {
+	// The file carries the token, so no other user may read it. Windows has
+	// no mode bits to check: there the file inherits the ACL of the root
+	// folder, which under the user's profile admits only that user.
+	if perm := info.Mode().Perm(); runtime.GOOS != "windows" && perm != 0o600 {
 		t.Fatalf("endpoint file mode = %v, want 0600", perm)
 	}
 

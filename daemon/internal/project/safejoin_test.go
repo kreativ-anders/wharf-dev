@@ -1,6 +1,9 @@
 package project
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func TestSafeJoinRejectsEscapes(t *testing.T) {
 	for _, rel := range []string{"../escaped.txt", "a/../../escaped.txt"} {
@@ -14,7 +17,7 @@ func TestSafeJoinRejectsEscapes(t *testing.T) {
 	// An absolute entry name is not an escape: joining roots it inside the
 	// destination, which is where it belongs.
 	got, err := safeJoin("/tmp/dest", "/abs/path")
-	if err != nil || got != "/tmp/dest/abs/path" {
+	if want := filepath.Join("/tmp/dest", "abs", "path"); err != nil || got != want {
 		t.Errorf("safeJoin(\"/abs/path\") = %q, %v", got, err)
 	}
 }

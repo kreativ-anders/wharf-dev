@@ -326,6 +326,10 @@ func (s *Supervisor) Statuses() []Status {
 	return out
 }
 
+// PortFree reports whether nothing listens on a port, judged by the prober the
+// supervisor itself waits on, so a test sees the ports it faked.
+func (s *Supervisor) PortFree(port int) bool { return s.prober.Free(port) }
+
 // Running reports whether the given ID is currently running.
 func (s *Supervisor) Running(id string) bool {
 	st, ok := s.Status(id)

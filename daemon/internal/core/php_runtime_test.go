@@ -359,7 +359,7 @@ func TestDownloadingAPHPVersionThatIsNotInstalled(t *testing.T) {
 
 	// Then the newest "8.4" build for this OS and CPU is downloaded into
 	// "bin/php/8.4"
-	if _, err := os.Stat(filepath.Join(h.root.PHPBin("8.4"), "php-fpm")); err != nil {
+	if _, err := os.Stat(filepath.Join(h.root.PHPBin("8.4"), php.FastCGIName())); err != nil {
 		t.Fatalf("no build in bin/php/8.4: %v", err)
 	}
 	// And it becomes selectable without any further setup

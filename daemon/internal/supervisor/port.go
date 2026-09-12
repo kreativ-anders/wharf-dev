@@ -87,14 +87,3 @@ func WaitPortBound(ctx context.Context, p Prober, port int, poll time.Duration) 
 		}
 	}
 }
-
-// FreePort asks the OS for an unused port. Used to assign a project its own
-// port when it is served by a per-project webserver override.
-func FreePort() (int, error) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return 0, err
-	}
-	defer ln.Close()
-	return ln.Addr().(*net.TCPAddr).Port, nil
-}

@@ -51,4 +51,5 @@ Feature: Webserver installation
     When it is served by nginx or by Apache
     Then its pages, the Panel and its media are served
     And "content/", "site/", "kirby/" and dot-files are never served as files
+    And PHP is handed the script's path as the OS spells it, a Windows drive letter included
     And no custom config is needed for any of it

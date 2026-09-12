@@ -242,7 +242,10 @@ them surviving a restart:
 
 - `projects[].port` — the loopback port of the project's own instance, used
   only while it is pinned to the webserver that is not active. The front
-  door forwards to it, so it must not change between runs (§4c).
+  door forwards to it, so it does not change between runs (§4c). It is the
+  first port from 8080 up that no other project records and no other program
+  listens on; if another program has taken it by the time the instance
+  starts, the project moves to the next free port and the file records it.
 - `projects[].hosts_entry` — *removed.* It recorded a hosts line from the
   `<name>.wharf` days; removing a project now cleans up whatever line the
   hosts file actually holds for it (`features/pretty-urls.feature`), and an

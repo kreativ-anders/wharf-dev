@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -28,7 +29,7 @@ func TestFirstStartAdoptsAWebserverAlreadyOnTheMachine(t *testing.T) {
 	// Apache where macOS keeps it: the binary in sbin, its modules in
 	// libexec/apache2.
 	machine := t.TempDir()
-	httpd := filepath.Join(machine, "usr", "sbin", "httpd")
+	httpd := exeName(filepath.Join(machine, "usr", "sbin", "httpd"))
 	stubBinary(t, httpd)
 	stubBinary(t, filepath.Join(machine, "usr", "libexec", "apache2", "mod_proxy_fcgi.so"))
 
@@ -70,7 +71,7 @@ func TestInstallingNginx(t *testing.T) {
 	h.web.fn = func(ctx context.Context, name, dest string) error {
 		inside <- h.server(name).Installing
 		<-release
-		return stubFile(filepath.Join(dest, "nginx"))
+		return stubFile(exeName(filepath.Join(dest, "nginx")))
 	}
 	done := make(chan error)
 	go func() { done <- h.d.InstallWebserver(h.ctx(), "nginx") }()
@@ -85,7 +86,7 @@ func TestInstallingNginx(t *testing.T) {
 	}
 	// Then the newest nginx for this OS and CPU is installed
 	nginx := h.server("nginx")
-	if !nginx.Installed || nginx.Installing || nginx.Binary != filepath.Join(h.root.Bin(), "nginx", "nginx") {
+	if !nginx.Installed || nginx.Installing || nginx.Binary != exeName(filepath.Join(h.root.Bin(), "nginx", "nginx")) {
 		t.Fatalf("nginx = %+v, want installed into bin/nginx", nginx)
 	}
 	// And every project can be served by nginx without further setup
@@ -241,5 +242,13 @@ func TestAKirbyProjectNeedsNoWebserverConfiguration(t *testing.T) {
 		if !strings.Contains(conf, want) {
 			t.Fatalf("apache config lacks %q:\n%s", want, conf)
 		}
+	}
+	// And PHP is handed the script's path as the OS spells it, a Windows
+	// drive letter included: Apache appends the path to the handler URL, and
+	// "C:/..." without the slash runs into the port ("DNS lookup failure for:
+	// 127.0.0.1:9003c:").
+	if !regexp.MustCompile(`SetHandler "proxy:fcgi://127\.0\.0\.1:\d+/"`).MatchString(conf) ||
+		!strings.Contains(conf, `ProxyFCGISetEnvIf "reqenv('SCRIPT_FILENAME') =~ m|^proxy:fcgi://[^/]+/([A-Za-z]:)?(/.*)|" SCRIPT_FILENAME "$1$2"`) {
+		t.Fatalf("apache does not hand PHP the script's own path:\n%s", conf)
 	}
 }

@@ -11,6 +11,50 @@ import (
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/supervisor"
 )
 
+// features/service-management.feature — "A project's own instance never takes
+// a port another program holds"
+func TestAProjectsOwnInstanceNeverTakesAPortAnotherProgramHolds(t *testing.T) {
+	h := newHarness(t)
+	h.mustAdd("legacy-app")
+	apache := "apache"
+	if _, err := h.d.UpdateSettings(h.ctx(), "legacy-app", Settings{Webserver: &apache}); err != nil {
+		t.Fatal(err)
+	}
+	port := func(name string) int {
+		p, _ := h.d.Config().Project(name)
+		return p.Port
+	}
+	recorded := port("legacy-app")
+	// And another program listens on the loopback port recorded for it
+	h.ports.Bind(recorded)
+
+	if err := h.d.StartProject(h.ctx(), "legacy-app"); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	// Then its own instance listens on the next free port instead, and the
+	// config records it
+	moved := port("legacy-app")
+	if moved == 0 || moved == recorded {
+		t.Fatalf("port = %d, want it moved off %d", moved, recorded)
+	}
+	own := runtime.ProjectServiceID("legacy-app")
+	if spec, _ := h.runner.LastSpec(own); spec.Port != moved || !h.sup.Running(own) {
+		t.Fatalf("own instance on port %d (running=%v), want %d", spec.Port, h.sup.Running(own), moved)
+	}
+	// And the global instance forwards "legacy-app.localhost" to that port
+	conf := h.readGenerated("nginx.conf")
+	if !strings.Contains(conf, "127.0.0.1:"+strconv.Itoa(moved)) || strings.Contains(conf, "127.0.0.1:"+strconv.Itoa(recorded)) {
+		t.Fatalf("the front door does not forward to port %d:\n%s", moved, conf)
+	}
+
+	// And a project added while a port is taken is not given that port
+	h.mustAdd("new-site")
+	if got := port("new-site"); got == recorded || got == moved {
+		t.Fatalf("new-site was given port %d, which is already held", got)
+	}
+}
+
 // features/service-management.feature — "Switching the active webserver"
 func TestSwitchingTheActiveWebserver(t *testing.T) {
 	h := newHarness(t)

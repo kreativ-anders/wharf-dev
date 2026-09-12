@@ -150,10 +150,13 @@ func PHPPort(cfg *config.Config, version string) int {
 	return phpBasePort
 }
 
-// NextProjectPort returns a port not yet claimed by another project. Ports
-// are persisted per project, so a project's own instance comes back on the
-// port the front door forwards to.
-func NextProjectPort(cfg *config.Config) int {
+// NextProjectPort returns a port not yet claimed by another project and, as
+// far as free can tell, not held by another program: a port the machine
+// already uses would only fail the project's own instance on its first start
+// (service-management.feature, "A project's own instance never takes a port
+// another program holds"). Ports are persisted per project, so a project's
+// own instance comes back on the port the front door forwards to.
+func NextProjectPort(cfg *config.Config, free func(port int) bool) int {
 	taken := map[int]bool{}
 	for _, p := range cfg.Projects {
 		if p.Port > 0 {
@@ -161,7 +164,7 @@ func NextProjectPort(cfg *config.Config) int {
 		}
 	}
 	for port := projectBasePort; port < projectBasePort+1000; port++ {
-		if !taken[port] {
+		if !taken[port] && (free == nil || free(port)) {
 			return port
 		}
 	}

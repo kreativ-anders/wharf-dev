@@ -461,6 +461,15 @@ func (d *Daemon) SetWebserver(ctx context.Context, name string) error {
 			}
 		}
 	}
+	// A started project that now runs its own instance needs a port nothing
+	// else holds before the front door is told where to forward it.
+	for _, p := range next.Projects {
+		if next.OwnInstance(p) && d.isStarted(p.Name) {
+			if next, _, err = d.ownPort(next, p); err != nil {
+				return err
+			}
+		}
+	}
 	// Restarting stops the old process, waits for port 80 to be released,
 	// and only then starts the replacement.
 	if err := d.applyFrontDoor(ctx, next); err != nil {
@@ -785,9 +794,9 @@ func (d *Daemon) addProjectLocked(ctx context.Context, name, path, server string
 		return Project{}, conflict("a project named %q already exists — rename the folder or remove that project first", name)
 	}
 
-	port := wruntime.NextProjectPort(cfg)
+	port := wruntime.NextProjectPort(cfg, d.sup.PortFree)
 	if port == 0 {
-		return Project{}, conflict("no free project port available")
+		return Project{}, conflict("%s", noProjectPort)
 	}
 
 	// No hosts entry: <name>.localhost resolves to loopback without one, so
@@ -891,6 +900,9 @@ func (d *Daemon) startProjectLocked(ctx context.Context, cfg *config.Config, p c
 		return err
 	}
 	if cfg.OwnInstance(p) {
+		if cfg, p, err = d.ownPort(cfg, p); err != nil {
+			return err
+		}
 		spec, err := d.res.ProjectSpec(cfg, p)
 		if err != nil {
 			return err
@@ -950,6 +962,9 @@ func (d *Daemon) RestartProject(ctx context.Context, name string) (err error) {
 		}
 	}()
 	if cfg.OwnInstance(p) {
+		if cfg, p, err = d.ownPort(cfg, p); err != nil {
+			return err
+		}
 		spec, err := d.res.ProjectSpec(cfg, p)
 		if err != nil {
 			return err
@@ -1079,6 +1094,10 @@ func (d *Daemon) applySettingsChange(ctx context.Context, cfg *config.Config, be
 		return err
 	}
 	if cfg.OwnInstance(after) {
+		var err error
+		if cfg, after, err = d.ownPort(cfg, after); err != nil {
+			return err
+		}
 		spec, err := d.res.ProjectSpec(cfg, after)
 		if err != nil {
 			return err
@@ -1441,6 +1460,38 @@ func (d *Daemon) ensurePHP(ctx context.Context, cfg *config.Config, version stri
 		return err
 	}
 	return d.sup.Start(ctx, spec)
+}
+
+const noProjectPort = "every project port from 8080 up is taken — quit a program listening there, or remove a project"
+
+// ownPort gives a project's own instance a port nothing else holds, before it
+// starts. The recorded port was free when the project was added, but another
+// program may have taken it since; left there, the instance would wait out
+// the stop timeout and fail. The move is recorded, and the front door,
+// rendered from the returned config, forwards to the new port
+// (service-management.feature, "A project's own instance never takes a port
+// another program holds").
+func (d *Daemon) ownPort(cfg *config.Config, p config.Project) (*config.Config, config.Project, error) {
+	if !cfg.OwnInstance(p) || d.sup.Running(projectServiceID(p.Name)) {
+		return cfg, p, nil
+	}
+	if p.Port > 0 && d.sup.PortFree(p.Port) {
+		return cfg, p, nil
+	}
+	port := wruntime.NextProjectPort(cfg, d.sup.PortFree)
+	if port == 0 {
+		return cfg, p, conflict("%s", noProjectPort)
+	}
+	d.log.Info("project port is held by another program; moving", "project", p.Name, "from", p.Port, "to", port)
+	p.Port = port
+	next, err := d.store.Update(func(c *config.Config) error {
+		c.SetProject(p)
+		return nil
+	})
+	if err != nil {
+		return cfg, p, err
+	}
+	return next, p, nil
 }
 
 // applyFrontDoor brings the front door in line with the started projects:
