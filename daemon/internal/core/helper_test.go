@@ -95,6 +95,13 @@ func stubFile(path string) error {
 // stub build, as a successful download would.
 type fakeInstaller struct {
 	fn func(ctx context.Context, version, dest string) (string, error)
+	// latest and latestErr answer a lookup of the newest releases.
+	latest    map[string]string
+	latestErr error
+}
+
+func (f *fakeInstaller) Latest(context.Context) (map[string]string, error) {
+	return f.latest, f.latestErr
 }
 
 func (f *fakeInstaller) Install(ctx context.Context, version, dest string) (string, error) {

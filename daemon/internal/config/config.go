@@ -64,14 +64,10 @@ type Project struct {
 	WebserverOverride *string `json:"webserver_override,omitempty"`
 	PHPVersion        *string `json:"php_version,omitempty"`
 	SSL               bool    `json:"ssl"`
-	// Port is the raw port the project is served on. Zero means "assign on
-	// first start"; it is persisted afterwards so the fallback URL shown when
-	// elevation is declined stays stable across restarts.
+	// Port is the loopback port the project's own webserver instance listens
+	// on, when it has one. Persisted, so the front door keeps forwarding to
+	// the same place across restarts.
 	Port int `json:"port,omitempty"`
-	// HostsEntry records whether a hosts-file line exists for this project.
-	// Persisted because removing a project must remove exactly the entry that
-	// was written (pretty-urls.feature) and elevation may have been declined.
-	HostsEntry bool `json:"hosts_entry,omitempty"`
 	// Path is the project's folder when it lives outside www/. Absent for a
 	// folder in www/, which is found by name (project-folders.feature).
 	Path string `json:"path,omitempty"`
@@ -245,6 +241,15 @@ func (c *Config) RemoveProject(name string) bool {
 // WebserverFor resolves the webserver a project is served by: its own
 // override if set, otherwise the global active one
 // (service-management.feature, "Per-project override takes precedence").
+// OwnInstance reports whether a project needs a webserver instance of its
+// own: only when it is pinned to a webserver that is not the active one. A
+// project pinned to the active webserver is served by the global instance
+// like any other (service-management.feature, "Choosing the active webserver
+// for a project starts no second instance").
+func (c *Config) OwnInstance(p Project) bool {
+	return c.WebserverFor(p) != c.Services.Webserver.Active
+}
+
 func (c *Config) WebserverFor(p Project) string {
 	if p.WebserverOverride != nil && *p.WebserverOverride != "" {
 		return *p.WebserverOverride

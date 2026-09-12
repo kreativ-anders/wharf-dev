@@ -39,6 +39,9 @@ type Daemon struct {
 	php   *php.Detector
 	log   *slog.Logger
 
+	// version is the build's own, for Settings → General.
+	version string
+
 	// mu serialises state-changing operations. Every one of them touches the
 	// config file and the process table together; interleaving two would let
 	// a webserver switch race a project start.
@@ -54,6 +57,9 @@ type Daemon struct {
 	phpInstalls atomic.Pointer[[]php.Install]
 
 	phpInstaller php.Installer
+	// phpLatest is the newest release of each PHP version the download
+	// source publishes, as last looked up; nil until then.
+	phpLatest atomic.Pointer[phpReleases]
 	// downloading holds the PHP versions being downloaded right now, and
 	// installing the webservers being installed. They have their own lock
 	// because an install runs for a while outside mu, so the rest of the
@@ -70,6 +76,16 @@ type Daemon struct {
 	// customSeen is the modification time of each custom config file the
 	// last time it was applied, keyed by path. Guarded by mu.
 	customSeen map[string]time.Time
+	// phpIniSeen is config/php.ini's modification time when it was last
+	// applied; zero while the file does not exist. Guarded by mu.
+	phpIniSeen time.Time
+
+	// started holds the projects the user has started. The front door serves
+	// those and no others, so starting one project does not start them all
+	// (tray-actions.feature). It has its own lock because the snapshot reads
+	// it while an action holds mu.
+	startedMu sync.Mutex
+	started   map[string]bool
 
 	onState atomic.Pointer[func(State)]
 }
@@ -97,6 +113,10 @@ type Options struct {
 	Log          *slog.Logger
 	// Now fixes the clock used to judge PHP support status.
 	Now func() time.Time
+	// Version is what wharfd was built as, published in the snapshot so the
+	// window and the tray name the same one (settings.feature, "General
+	// shows the version, and no update check yet").
+	Version string
 }
 
 // New builds a Daemon, filling in system implementations where none is given.
@@ -171,16 +191,19 @@ func New(opts Options) (*Daemon, error) {
 		phpInstaller: installer,
 		downloading:  map[string]bool{},
 		installing:   map[string]bool{},
+		started:      map[string]bool{},
 		web:          webDetector,
 		webInstaller: webInstaller,
 		now:          opts.Now,
 		log:          opts.Log,
+		version:      opts.Version,
 	}
 	d.res.Installs = d.WebInstalls
 	d.RefreshWebservers(context.Background())
 	// Custom configs present at start are applied by the first webserver
 	// start; only later edits should trigger a restart.
 	d.customSeen = d.customConfigTimes(store.Get())
+	d.phpIniSeen = modTime(opts.Root.PHPIni())
 	if d.now == nil {
 		d.now = time.Now
 	}
@@ -424,13 +447,33 @@ func (d *Daemon) SetWebserver(ctx context.Context, name string) error {
 		d.publish()
 		return nil
 	}
-	spec, err := d.res.WebserverSpec(next)
-	if err != nil {
+	// A project pinned to the new webserver moves onto the global instance;
+	// a started one pinned to the old webserver now runs behind the new one.
+	for _, p := range next.Projects {
+		if !next.OwnInstance(p) {
+			if err := d.sup.Stop(ctx, projectServiceID(p.Name)); err != nil {
+				return err
+			}
+		}
+	}
+	// Restarting stops the old process, waits for port 80 to be released,
+	// and only then starts the replacement.
+	if err := d.applyFrontDoor(ctx, next); err != nil {
 		return err
 	}
-	// Restart stops the old process, waits for port 80 to be released, and
-	// only then starts the replacement.
-	return d.sup.Restart(ctx, spec)
+	for _, p := range next.Projects {
+		if !next.OwnInstance(p) || !d.isStarted(p.Name) {
+			continue
+		}
+		own, err := d.res.ProjectSpec(next, p)
+		if err == nil {
+			err = d.sup.Start(ctx, own)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // AddPHPVersion makes a PHP version selectable (settings.feature, "Adding a
@@ -579,6 +622,40 @@ func (d *Daemon) InstallPHP(ctx context.Context, version string) error {
 	return d.AddPHPVersion(ctx, version)
 }
 
+type phpReleases struct {
+	at     time.Time
+	latest map[string]string
+}
+
+// CheckPHPReleases looks up the newest release of each PHP version the
+// download source publishes, so the offers to download can name it
+// (php-runtime.feature, "A download offer names the release it downloads").
+// It fetches an index, never a build, and not more than every ten minutes.
+// Without a connection it fails and the offers keep the minor version alone.
+func (d *Daemon) CheckPHPReleases(ctx context.Context) error {
+	lister, ok := d.phpInstaller.(php.Lister)
+	if !ok {
+		return nil
+	}
+	if last := d.phpLatest.Load(); last != nil && time.Since(last.at) < 10*time.Minute {
+		return nil
+	}
+	latest, err := lister.Latest(ctx)
+	if err != nil {
+		return err
+	}
+	d.phpLatest.Store(&phpReleases{at: time.Now(), latest: latest})
+	d.publish()
+	return nil
+}
+
+func (d *Daemon) latestPHP() map[string]string {
+	if p := d.phpLatest.Load(); p != nil {
+		return p.latest
+	}
+	return nil
+}
+
 // begin marks key as in progress in set, reporting false if it already was.
 func (d *Daemon) begin(set map[string]bool, key string) bool {
 	d.dlMu.Lock()
@@ -629,19 +706,17 @@ func (d *Daemon) StopAll(ctx context.Context) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	defer d.track()()
+	d.clearStarted()
 	return d.sup.StopAll(ctx)
 }
 
 // ---------------------------------------------------------------- projects
 
-// AddProject registers an existing folder under www/ as a project and asks for
-// its hosts entry. A declined elevation prompt is not a failure: the project
-// is kept and its raw-port URL is shown instead
-// (pretty-urls.feature, "Elevation is declined").
+// AddProject registers an existing folder under www/ as a project.
 func (d *Daemon) AddProject(ctx context.Context, name string) (Project, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.addProjectLocked(ctx, name, "")
+	return d.addProjectLocked(ctx, name, "", "")
 }
 
 // AddFolder registers the folder at path, wherever it is — the folder
@@ -660,7 +735,7 @@ func (d *Daemon) AddFolder(ctx context.Context, path string) (Project, error) {
 		return Project{}, notFound("no folder at %s", abs)
 	}
 	if sameDir(filepath.Dir(abs), d.root.WWW()) {
-		return d.addProjectLocked(ctx, filepath.Base(abs), "")
+		return d.addProjectLocked(ctx, filepath.Base(abs), "", "")
 	}
 
 	name := project.Slug(filepath.Base(abs))
@@ -673,7 +748,7 @@ func (d *Daemon) AddFolder(ctx context.Context, path string) (Project, error) {
 			return Project{}, conflict("%s is already the project %q", abs, p.Name)
 		}
 	}
-	return d.addProjectLocked(ctx, name, abs)
+	return d.addProjectLocked(ctx, name, abs, "")
 }
 
 // sameDir compares folders after resolving symlinks, so that /tmp and
@@ -689,8 +764,8 @@ func sameDir(a, b string) bool {
 }
 
 // addProjectLocked registers a project; path is its folder when that is not
-// www/<name>.
-func (d *Daemon) addProjectLocked(ctx context.Context, name, path string) (Project, error) {
+// www/<name>, and server the webserver it is pinned to, if any.
+func (d *Daemon) addProjectLocked(ctx context.Context, name, path, server string) (Project, error) {
 	if err := project.ValidateName(name); err != nil {
 		return Project{}, invalid("%s", err)
 	}
@@ -707,19 +782,14 @@ func (d *Daemon) addProjectLocked(ctx context.Context, name, path string) (Proje
 		return Project{}, conflict("no free project port available")
 	}
 
+	// No hosts entry: <name>.localhost resolves to loopback without one, so
+	// adding a project never asks for a password (pretty-urls.feature).
 	entry := config.Project{Name: name, Port: port, Path: path}
-
-	// The hosts write is attempted before the project is persisted only in
-	// the sense of ordering the prompt first; the project is stored either
-	// way, so a declined prompt still leaves a usable project.
-	hostsErr := d.hosts.Add(name)
-	switch {
-	case hostsErr == nil:
-		entry.HostsEntry = true
-	case errors.Is(hostsErr, elevate.ErrDeclined):
-		d.log.Info("elevation declined; project keeps its raw-port URL", "project", name)
-	default:
-		return Project{}, hostsErr
+	if server != "" {
+		if !containsStr(cfg.Services.Webserver.Available, server) {
+			return Project{}, invalid("%q is not an available webserver", server)
+		}
+		entry.WebserverOverride = &server
 	}
 
 	next, err := d.store.Update(func(c *config.Config) error {
@@ -730,17 +800,15 @@ func (d *Daemon) addProjectLocked(ctx context.Context, name, path string) (Proje
 		return Project{}, err
 	}
 
-	// A newly registered project must appear in the running webserver's
-	// config, not only after the next restart.
-	if err := d.reloadGlobalWebserver(ctx, next); err != nil {
-		d.log.Error("reload webserver after adding project", "project", name, "err", err)
-	}
+	// Nothing to reload: a new project is not started, and the front door
+	// serves started projects only.
 	d.publish()
 	return d.projectState(next, entry), nil
 }
 
-// RemoveProject unregisters a project: its services are stopped and its hosts
-// entry deleted, leaving other projects' entries untouched. The folder itself
+// RemoveProject unregisters a project: its services are stopped, and a hosts
+// entry left from when projects were <name>.wharf is deleted, leaving every
+// other line untouched (pretty-urls.feature). The folder itself
 // is left on disk — the folder is the project, and deleting a user's files is
 // not implied by removing it from the list.
 func (d *Daemon) RemoveProject(ctx context.Context, name string) error {
@@ -754,13 +822,15 @@ func (d *Daemon) RemoveProject(ctx context.Context, name string) error {
 	}
 	defer d.track()()
 
+	d.setStarted(name, false)
 	if err := d.sup.Stop(ctx, projectServiceID(name)); err != nil {
 		d.log.Error("stop project before removal", "project", name, "err", err)
 	}
-	if p.HostsEntry {
-		if err := d.hosts.Remove(name); err != nil && !errors.Is(err, elevate.ErrDeclined) {
-			return err
-		}
+	// The file decides, not the config: a project removed while the prompt
+	// was declined and then added again has a line and nothing recording it.
+	// Remove asks for nothing when the file holds no line for the project.
+	if err := d.hosts.Remove(name); err != nil && !errors.Is(err, elevate.ErrDeclined) {
+		return err
 	}
 	if p.SSL {
 		_ = d.certs.Revoke(wruntime.CertPath(d.root, name), wruntime.KeyPath(d.root, name))
@@ -775,7 +845,7 @@ func (d *Daemon) RemoveProject(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	if err := d.reloadGlobalWebserver(ctx, next); err != nil {
+	if err := d.settleFrontDoor(ctx, next); err != nil {
 		d.log.Error("reload webserver after removing project", "project", name, "err", err)
 	}
 	d.publish()
@@ -798,31 +868,31 @@ func (d *Daemon) StartProject(ctx context.Context, name string) error {
 }
 
 func (d *Daemon) startProjectLocked(ctx context.Context, cfg *config.Config, p config.Project) error {
+	if st, _ := d.projectStatus(cfg, p); st == supervisor.StateRunning {
+		return nil
+	}
+	// Marked started before anything runs, so a failure shows on this project.
+	d.setStarted(p.Name, true)
 	if err := d.ensurePHP(ctx, cfg, cfg.PHPVersionFor(p)); err != nil {
 		return err
 	}
-	if p.WebserverOverride != nil {
+	if cfg.OwnInstance(p) {
 		spec, err := d.res.ProjectSpec(cfg, p)
 		if err != nil {
 			return err
 		}
-		return d.sup.Start(ctx, spec)
+		if err := d.sup.Start(ctx, spec); err != nil {
+			return err
+		}
 	}
-	spec, err := d.res.WebserverSpec(cfg)
-	if err != nil {
-		return err
-	}
-	if d.sup.Running(runtimeWebserverID) {
-		// The shared instance is already serving; it only needs the project's
-		// vhost, which WebserverSpec has just written.
-		return d.sup.Restart(ctx, spec)
-	}
-	return d.sup.Start(ctx, spec)
+	// The front door takes the project on: serving it itself, or forwarding
+	// it to its own instance, which listens on loopback only.
+	return d.applyFrontDoor(ctx, cfg)
 }
 
-// StopProject stops the process serving a project. For a project on the shared
-// webserver this stops that webserver, which is honest: there is one process
-// serving all of them, and the GUI shows the others stopping too.
+// StopProject stops serving one project and nothing else: the front door
+// restarts without it and keeps serving every other started project, and
+// stops only once none is left (tray-actions.feature, "Stopping a project").
 func (d *Daemon) StopProject(ctx context.Context, name string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -833,10 +903,13 @@ func (d *Daemon) StopProject(ctx context.Context, name string) error {
 	if !ok {
 		return notFound("no project named %q", name)
 	}
-	if p.WebserverOverride != nil {
-		return d.sup.Stop(ctx, projectServiceID(name))
+	d.setStarted(name, false)
+	if cfg.OwnInstance(p) {
+		if err := d.sup.Stop(ctx, projectServiceID(name)); err != nil {
+			return err
+		}
 	}
-	return d.sup.Stop(ctx, runtimeWebserverID)
+	return d.settleFrontDoor(ctx, cfg)
 }
 
 // RestartProject generates a project's webserver config again and restarts
@@ -856,10 +929,18 @@ func (d *Daemon) RestartProject(ctx context.Context, name string) error {
 	if err := d.ensurePHP(ctx, cfg, cfg.PHPVersionFor(p)); err != nil {
 		return err
 	}
-	spec, err := d.res.WebserverSpec(cfg)
-	if p.WebserverOverride != nil {
-		spec, err = d.res.ProjectSpec(cfg, p)
+	d.setStarted(p.Name, true)
+	if cfg.OwnInstance(p) {
+		spec, err := d.res.ProjectSpec(cfg, p)
+		if err != nil {
+			return err
+		}
+		if err := d.sup.Restart(ctx, spec); err != nil {
+			return err
+		}
+		return d.applyFrontDoor(ctx, cfg)
 	}
+	spec, err := d.res.WebserverSpec(d.served(cfg))
 	if err != nil {
 		return err
 	}
@@ -935,7 +1016,7 @@ func (d *Daemon) UpdateSettings(ctx context.Context, name string, s Settings) (P
 	// Certificates are issued before the config is written, so a failure to
 	// issue leaves the project exactly as it was.
 	if after.SSL && !before.SSL {
-		host := hostsfile.Hostname(name)
+		host := wruntime.Hostname(name)
 		if err := d.certs.Issue(ctx, host, wruntime.CertPath(d.root, name), wruntime.KeyPath(d.root, name)); err != nil {
 			return Project{}, err
 		}
@@ -961,54 +1042,33 @@ func (d *Daemon) UpdateSettings(ctx context.Context, name string, s Settings) (P
 }
 
 // applySettingsChange restarts exactly the processes a settings change
-// invalidated, and nothing else: a project moving onto its own webserver
-// instance leaves the shared one serving everybody else, and a change made
-// while everything is stopped starts nothing.
+// invalidated, and nothing else. A project that is not started needs
+// nothing: the front door does not serve it, and its next start picks the
+// change up. For a started one, its own instance is stopped, started or
+// restarted as the change requires, and the front door restarted with it.
 func (d *Daemon) applySettingsChange(ctx context.Context, cfg *config.Config, before, after config.Project) error {
-	hadOwn := before.WebserverOverride != nil
-	hasOwn := after.WebserverOverride != nil
-
-	// Was this project actually being served a moment ago? Only then does a
-	// settings change need to restart anything.
-	wasServed := d.sup.Running(projectServiceID(after.Name))
-	if !hadOwn {
-		wasServed = d.sup.Running(runtimeWebserverID)
+	if !d.isStarted(after.Name) {
+		return nil
 	}
-
-	if hadOwn && !hasOwn {
-		// The project moves back onto the shared instance.
+	if cfg.OwnInstance(before) && !cfg.OwnInstance(after) {
+		// The project moves onto the global instance.
 		if err := d.sup.Stop(ctx, projectServiceID(after.Name)); err != nil {
 			return err
 		}
 	}
-
-	if hasOwn {
-		if !hadOwn {
-			// Drop its vhost from the shared instance first, so two servers
-			// never claim the same hostname.
-			if err := d.reloadGlobalWebserver(ctx, cfg); err != nil {
-				return err
-			}
-		}
-		if !wasServed {
-			return nil
-		}
-		if err := d.ensurePHP(ctx, cfg, cfg.PHPVersionFor(after)); err != nil {
-			return err
-		}
+	if err := d.ensurePHP(ctx, cfg, cfg.PHPVersionFor(after)); err != nil {
+		return err
+	}
+	if cfg.OwnInstance(after) {
 		spec, err := d.res.ProjectSpec(cfg, after)
 		if err != nil {
 			return err
 		}
-		return d.sup.Restart(ctx, spec)
-	}
-
-	if wasServed {
-		if err := d.ensurePHP(ctx, cfg, cfg.PHPVersionFor(after)); err != nil {
+		if err := d.sup.Restart(ctx, spec); err != nil {
 			return err
 		}
 	}
-	return d.reloadGlobalWebserver(ctx, cfg)
+	return d.applyFrontDoor(ctx, cfg)
 }
 
 // CustomConfig returns the path of a project's custom directives for one
@@ -1069,6 +1129,82 @@ func customConfigStub(name, server string) string {
 `, server, name, block, other, example)
 }
 
+// PHPSettings returns config/php.ini, creating it with a commented starting
+// point if it does not exist yet (php-settings.feature, "Editing PHP
+// settings"). Every PHP version reads it after its own php.ini; the file is
+// the user's from then on.
+func (d *Daemon) PHPSettings(ctx context.Context) (string, error) {
+	path := d.root.PHPIni()
+	if _, err := os.Stat(path); err == nil {
+		return path, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, []byte(phpIniStub), 0o644); err != nil {
+		return "", err
+	}
+	d.ApplyPHPSettings(ctx)
+	d.publish()
+	return path, nil
+}
+
+const phpIniStub = `; Your own PHP settings, for every PHP version Wharf runs.
+;
+; PHP reads this file after its own php.ini, so a value here wins. Saving it
+; restarts PHP; the next request sees the change.
+;
+; Examples — remove the ";" in front of a line to use it:
+;
+; memory_limit = 512M
+; upload_max_filesize = 64M
+; post_max_size = 64M
+; max_execution_time = 120
+; display_errors = On
+; error_reporting = E_ALL
+; date.timezone = Europe/Berlin
+; opcache.enable = 0
+`
+
+// ApplyPHPSettings restarts every running PHP backend when config/php.ini
+// was created, changed or deleted since it last looked (php-settings
+// .feature, "Saving PHP settings applies them"). Webservers are left alone:
+// they reach PHP over FastCGI on a port that does not change. The watcher
+// calls it on every tick.
+func (d *Daemon) ApplyPHPSettings(ctx context.Context) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	seen := modTime(d.root.PHPIni())
+	if seen.Equal(d.phpIniSeen) {
+		return
+	}
+	d.phpIniSeen = seen
+
+	cfg := d.store.Get()
+	for _, v := range cfg.Services.PHP.Available {
+		if !d.sup.Running(wruntime.PHPServiceID(v)) {
+			continue
+		}
+		spec, err := d.res.PHPSpec(cfg, v)
+		if err == nil {
+			err = d.sup.Restart(ctx, spec)
+		}
+		if err != nil {
+			d.log.Error("apply PHP settings", "php", v, "err", err)
+		}
+	}
+	d.publish()
+}
+
+// modTime is a file's modification time, or zero when it does not exist.
+func modTime(path string) time.Time {
+	if info, err := os.Stat(path); err == nil {
+		return info.ModTime()
+	}
+	return time.Time{}
+}
+
 // customConfigTimes records the modification time of every custom config
 // file that belongs to a registered project.
 func (d *Daemon) customConfigTimes(cfg *config.Config) map[string]time.Time {
@@ -1113,10 +1249,10 @@ func (d *Daemon) ApplyCustomConfigs(ctx context.Context) {
 	reloadGlobal := false
 	for _, p := range cfg.Projects {
 		server := cfg.WebserverFor(p)
-		if !changed[d.root.CustomConfig(p.Name, server)] {
+		if !changed[d.root.CustomConfig(p.Name, server)] || !d.isStarted(p.Name) {
 			continue
 		}
-		if p.WebserverOverride == nil {
+		if !cfg.OwnInstance(p) {
 			reloadGlobal = true
 			continue
 		}
@@ -1139,9 +1275,11 @@ func (d *Daemon) ApplyCustomConfigs(ctx context.Context) {
 	d.publish()
 }
 
-// Scaffold creates a project from a quick-app template and registers it
-// (quick-app-php.feature).
-func (d *Daemon) Scaffold(ctx context.Context, templateID, name string) (Project, error) {
+// Scaffold creates a project from a quick-app template and registers it,
+// pinned to server when one was picked; left empty, the project follows the
+// global webserver (quick-app-php.feature, "Choosing the webserver while
+// creating a project").
+func (d *Daemon) Scaffold(ctx context.Context, templateID, name, server string) (Project, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	defer d.track()()
@@ -1150,10 +1288,14 @@ func (d *Daemon) Scaffold(ctx context.Context, templateID, name string) (Project
 	if !ok {
 		return Project{}, notFound("no template named %q", templateID)
 	}
+	// Checked before anything is downloaded, so a bad choice leaves no folder.
+	if server != "" && !containsStr(d.store.Get().Services.Webserver.Available, server) {
+		return Project{}, invalid("%q is not an available webserver", server)
+	}
 	if err := d.scaf.Create(ctx, tpl, name); err != nil {
 		return Project{}, err
 	}
-	p, err := d.addProjectLocked(ctx, name, "")
+	p, err := d.addProjectLocked(ctx, name, "", server)
 	if err != nil {
 		// The folder exists but could not be registered; leaving it behind
 		// with no config entry would be a project the GUI cannot see.
@@ -1177,6 +1319,90 @@ func (d *Daemon) Scaffold(ctx context.Context, templateID, name string) (Project
 	return p, nil
 }
 
+// Reset returns Wharf to a first start (settings.feature, "Resetting Wharf"):
+// everything stopped, every folder in www/ deleted, projects added from
+// elsewhere unregistered but left where they are, everything in config/
+// deleted along with project certificates, generated files and service logs,
+// and wharf.json written again as a first start writes it. Downloaded PHP
+// versions and webservers stay: they are tools rather than projects, and
+// fetching them again takes minutes.
+func (d *Daemon) Reset(ctx context.Context) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	defer d.track()()
+
+	if err := d.sup.StopAll(ctx); err != nil {
+		return err
+	}
+	d.clearStarted()
+	cfg := d.store.Get()
+
+	// Lines left from the <name>.wharf days go too: one prompt, and a
+	// declined one leaves lines that no longer do anything.
+	if err := d.hosts.RemoveAll(); err != nil && !errors.Is(err, elevate.ErrDeclined) {
+		d.log.Warn("remove old hosts entries", "err", err)
+	}
+	entries, err := os.ReadDir(d.root.WWW())
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	for _, e := range entries {
+		if err := os.RemoveAll(filepath.Join(d.root.WWW(), e.Name())); err != nil {
+			return fmt.Errorf("delete www/%s: %w", e.Name(), err)
+		}
+	}
+	// Only the projects' own certificates: the certificate authority is in
+	// the system trust store, and a new one would need another prompt.
+	for _, p := range cfg.Projects {
+		os.Remove(wruntime.CertPath(d.root, p.Name))
+		os.Remove(wruntime.KeyPath(d.root, p.Name))
+	}
+	// config/ goes whole — wharf.json, custom webserver configs, php.ini and
+	// anything else put there — so nothing configured survives. data/gen is
+	// generated again on the next start.
+	for _, dir := range []string{d.root.Config(), filepath.Join(d.root.Data(), "gen")} {
+		if err := os.RemoveAll(dir); err != nil {
+			return err
+		}
+	}
+	if err := d.clearLogs(); err != nil {
+		return err
+	}
+	if err := d.root.Ensure(); err != nil {
+		return err
+	}
+	if _, err := d.store.Update(func(c *config.Config) error {
+		*c = *config.Default()
+		return nil
+	}); err != nil {
+		return err
+	}
+	d.customSeen = map[string]time.Time{}
+	d.phpIniSeen = time.Time{}
+	d.log.Info("reset to a first start")
+	// A first start adopts what is installed and picks the defaults again.
+	return d.FirstRunSetup(ctx)
+}
+
+// clearLogs deletes every service and project log but the daemon's own: it
+// is writing to that one, and Windows refuses to delete an open file.
+func (d *Daemon) clearLogs() error {
+	entries, err := os.ReadDir(d.root.LogDir())
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	for _, e := range entries {
+		path := filepath.Join(d.root.LogDir(), e.Name())
+		if path == d.root.DaemonLog() {
+			continue
+		}
+		if err := os.RemoveAll(path); err != nil {
+			return fmt.Errorf("delete log %s: %w", e.Name(), err)
+		}
+	}
+	return nil
+}
+
 // Templates lists the registered quick-app templates.
 func (d *Daemon) Templates() []project.Template { return project.Templates }
 
@@ -1191,6 +1417,73 @@ func (d *Daemon) ensurePHP(ctx context.Context, cfg *config.Config, version stri
 	return d.sup.Start(ctx, spec)
 }
 
+// applyFrontDoor brings the front door in line with the started projects:
+// restarted with them if it runs, started if it does not, stopped once no
+// project is left to serve.
+func (d *Daemon) applyFrontDoor(ctx context.Context, cfg *config.Config) error {
+	if !d.anyStarted() {
+		return d.sup.Stop(ctx, runtimeWebserverID)
+	}
+	spec, err := d.res.WebserverSpec(d.served(cfg))
+	if err != nil {
+		return err
+	}
+	if d.sup.Running(runtimeWebserverID) {
+		return d.sup.Restart(ctx, spec)
+	}
+	return d.sup.Start(ctx, spec)
+}
+
+// settleFrontDoor follows a project leaving the front door: a running front
+// door restarts with the projects still started, and stops once none is.
+func (d *Daemon) settleFrontDoor(ctx context.Context, cfg *config.Config) error {
+	if !d.anyStarted() {
+		return d.sup.Stop(ctx, runtimeWebserverID)
+	}
+	return d.reloadGlobalWebserver(ctx, cfg)
+}
+
+// served is cfg narrowed to the started projects: what the front door
+// serves or forwards.
+func (d *Daemon) served(cfg *config.Config) *config.Config {
+	out := *cfg
+	out.Projects = nil
+	for _, p := range cfg.Projects {
+		if d.isStarted(p.Name) {
+			out.Projects = append(out.Projects, p)
+		}
+	}
+	return &out
+}
+
+func (d *Daemon) setStarted(name string, on bool) {
+	d.startedMu.Lock()
+	defer d.startedMu.Unlock()
+	if on {
+		d.started[name] = true
+	} else {
+		delete(d.started, name)
+	}
+}
+
+func (d *Daemon) isStarted(name string) bool {
+	d.startedMu.Lock()
+	defer d.startedMu.Unlock()
+	return d.started[name]
+}
+
+func (d *Daemon) anyStarted() bool {
+	d.startedMu.Lock()
+	defer d.startedMu.Unlock()
+	return len(d.started) > 0
+}
+
+func (d *Daemon) clearStarted() {
+	d.startedMu.Lock()
+	defer d.startedMu.Unlock()
+	d.started = map[string]bool{}
+}
+
 // reloadGlobalWebserver regenerates the shared webserver's config and restarts
 // it if it is running. It is a no-op when nothing is up, so adding a project
 // while everything is stopped does not start a server.
@@ -1198,7 +1491,7 @@ func (d *Daemon) reloadGlobalWebserver(ctx context.Context, cfg *config.Config) 
 	if !d.sup.Running(runtimeWebserverID) {
 		return nil
 	}
-	spec, err := d.res.WebserverSpec(cfg)
+	spec, err := d.res.WebserverSpec(d.served(cfg))
 	if err != nil {
 		return err
 	}

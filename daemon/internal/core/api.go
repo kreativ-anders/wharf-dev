@@ -123,6 +123,21 @@ func (d *Daemon) Register(srv *ipc.Server) {
 		return d.State(), nil
 	})
 
+	srv.Handle(ipc.MethodPHPSettings, func(ctx context.Context, _ json.RawMessage) (any, error) {
+		path, err := d.PHPSettings(ctx)
+		if err != nil {
+			return nil, asIPCError(err)
+		}
+		return map[string]string{"path": path}, nil
+	})
+
+	srv.Handle(ipc.MethodPHPReleases, func(ctx context.Context, _ json.RawMessage) (any, error) {
+		if err := d.CheckPHPReleases(ctx); err != nil {
+			return nil, asIPCError(err)
+		}
+		return d.State(), nil
+	})
+
 	srv.Handle(ipc.MethodStopAll, func(ctx context.Context, _ json.RawMessage) (any, error) {
 		if err := d.StopAll(ctx); err != nil {
 			return nil, asIPCError(err)
@@ -192,6 +207,13 @@ func (d *Daemon) Register(srv *ipc.Server) {
 		return d.State(), nil
 	})
 
+	srv.Handle(ipc.MethodReset, func(ctx context.Context, _ json.RawMessage) (any, error) {
+		if err := d.Reset(ctx); err != nil {
+			return nil, asIPCError(err)
+		}
+		return d.State(), nil
+	})
+
 	srv.Handle(ipc.MethodProjectRestart, func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var p struct {
 			Name string `json:"name"`
@@ -237,13 +259,14 @@ func (d *Daemon) Register(srv *ipc.Server) {
 
 	srv.Handle(ipc.MethodProjectScaffold, func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var p struct {
-			Template string `json:"template"`
-			Name     string `json:"name"`
+			Template  string `json:"template"`
+			Name      string `json:"name"`
+			Webserver string `json:"webserver"`
 		}
 		if err := decode(raw, &p); err != nil {
 			return nil, err
 		}
-		created, err := d.Scaffold(ctx, p.Template, p.Name)
+		created, err := d.Scaffold(ctx, p.Template, p.Name, p.Webserver)
 		if err != nil {
 			return nil, asIPCError(err)
 		}

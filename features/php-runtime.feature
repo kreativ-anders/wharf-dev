@@ -63,6 +63,13 @@ Feature: PHP runtime detection and selection
     Then every PHP version still receiving security fixes that is not installed is offered for download
     And end-of-life versions are not offered
 
+  Scenario: A download offer names the release it downloads
+    Given PHP "8.5" is not installed on the machine
+    When the user opens the PHP page in Settings
+    Then Wharf looks up the newest "8.5" release its download source publishes
+    And "8.5" is offered as that release, e.g. "PHP 8.5.1"
+    And without a connection the offer names "8.5" alone
+
   Scenario: Opening where a PHP version lives
     Given PHP "8.4" is installed
     When the user chooses "Open folder" next to it in the picker

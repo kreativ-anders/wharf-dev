@@ -21,7 +21,8 @@ of content).
 ## 2. Concrete constraints this places on the GUI
 
 - **One primary view.** A list of projects (folders), each showing: name,
-  status (running/stopped), URL. Nothing else visible by default.
+  status (running/stopped), URL — and, while a project runs, the webserver
+  and PHP versions serving it. Nothing else visible by default.
 - **Progressive disclosure.** Per-project overrides (PHP version, webserver
   override, SSL) exist but are not shown until the user opens that project's
   detail — never a wall of settings up front.
@@ -51,8 +52,18 @@ Kirby-plain, taken from getkirby.com's own palette (`gui/lib/theme.dart`):
   (borders, secondary text); primary buttons are ink-filled, not a brand
   colour. There is no brand colour.
 - **Colour only where it means something**: a project's status, a PHP
-  version's support status. Kirby's hues (green 80°, orange 28°, red 0°,
-  blue 210°), with lightness picked for contrast rather than taste.
+  version's support status, and what a project action does — Start green,
+  Stop red (as is "Stop all"), Restart blue, each on a light tint of its own
+  colour. Kirby's hues (green 80°, orange 28°, red 0°, blue 210°), with
+  lightness picked for contrast rather than taste. *Changed from* status
+  only: grey action icons all looked alike, and the stop-everything control
+  read as plain text.
+- **Fixed places for actions.** A project row's actions always stand in one
+  order — Open, Restart, Settings, Start or Stop — and one a project does not
+  offer leaves its place empty, so the columns line up down the list.
+- **Settings are pages, not one long scroll**: a navigation on the left
+  (General, Webserver, PHP, SSL), one page at a time. A future service is
+  one more page there, not a longer list.
 - **The platform's system font**, as getkirby.com uses: San Francisco,
   Segoe UI, the Linux desktop's default.
 - **Light, dark or system**, chosen in Settings and stored in `wharf.json`

@@ -13,6 +13,7 @@
     <nav>
       <a href="#how">How it works</a>
       <a href="#status">Status</a>
+      <a href="#faq">FAQ</a>
       <a href="https://github.com/manuel-steinberg/wharf">Source</a>
     </nav>
   </header>
@@ -43,8 +44,9 @@
         </li>
         <li>
           <h3>Open a real URL</h3>
-          <p>Each project gets a <code>.test</code> hostname and optional SSL.
-          Decline the password prompt and it still works on its own port.</p>
+          <p>Each project gets its own address, <code>&lt;name&gt;.localhost</code>,
+          with HTTPS if you want it. Your computer finds it by itself: nothing
+          to set up, no password, no port number in the address.</p>
         </li>
       </ol>
 
@@ -76,6 +78,29 @@
         <div><dt>Node, Go, Python, databases, Mailpit</dt><dd>Roadmap</dd></div>
         <div><dt>Installers</dt><dd>Not started</dd></div>
       </dl>
+    </section>
+
+    <section id="faq">
+      <h2>FAQ</h2>
+      <div class="faq">
+        <details>
+          <summary>Can I install an older nginx or Apache for one project?</summary>
+          <p>Not yet. Wharf has one version of nginx and one of Apache. When it
+          installs one, it gets the newest version. <em>Re-scan</em> only looks
+          for what is already on your computer — it does not check for
+          updates.</p>
+          <p>Why: nginx and Apache do not offer ready-made downloads
+          themselves, so Wharf gets them from somewhere else, and those places
+          usually offer only the newest version. On a Mac, nginx comes from
+          Homebrew, which has just the current version. On Linux, Apache comes
+          from your system's package manager, which has just one version.</p>
+          <p>What works today: each project can use either nginx or Apache. So
+          a project that needs Apache can run on Apache while all others run
+          on nginx — and its address stays the same. Choosing a webserver
+          <em>version</em> per project, as you already can for PHP, is planned
+          wherever older versions are available to download.</p>
+        </details>
+      </div>
     </section>
   </main>
 

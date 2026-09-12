@@ -16,19 +16,25 @@ import (
 )
 
 // Template is a quick-app starting point (quick-app-php.feature). v1
-// registers Kirby only; the WordPress and Laravel entries in that feature
-// file are roadmap and deliberately absent here.
+// registers Kirby and an empty folder; the WordPress and Laravel entries in
+// that feature file are roadmap and deliberately absent here.
 type Template struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	// Runtime is informational in v1, where PHP is the only runtime.
 	Runtime string `json:"runtime"`
 	// ZipURL is a zip archive whose single top-level folder becomes the
-	// project folder.
+	// project folder. Empty for a template that downloads nothing.
 	ZipURL string `json:"-"`
 }
 
 // Templates is the v1 registry.
+//
+// TODO(generic-templates): Kirby was the inspiration, not the target. The
+// Kirby starter kit here and the Kirby rules hard-wired into the generated
+// nginx and Apache configs (runtime.kirbyRules, runtime.apacheSite) go once
+// templates are generic: each template brings its own document root and
+// rewrite recipe, and a folder added by hand gets a neutral default.
 var Templates = []Template{
 	{
 		ID:      "kirby",
@@ -36,7 +42,26 @@ var Templates = []Template{
 		Runtime: "php",
 		ZipURL:  "https://github.com/getkirby/starterkit/archive/refs/heads/main.zip",
 	},
+	{
+		ID:      "empty",
+		Name:    "Empty folder",
+		Runtime: "php",
+	},
 }
+
+// emptyIndex is the one file an empty project starts with: enough to see the
+// project served, and by what (quick-app-php.feature, "Creating an empty
+// project").
+const emptyIndex = `<?php
+// A new Wharf project. Replace this file with your own.
+$name = htmlspecialchars(basename(__DIR__));
+$server = htmlspecialchars($_SERVER['SERVER_SOFTWARE'] ?? 'a webserver');
+?>
+<!doctype html>
+<title><?= $name ?></title>
+<h1><?= $name ?></h1>
+<p>Served by <?= $server ?> with PHP <?= PHP_VERSION ?>.</p>
+`
 
 // TemplateByID looks up a registered template.
 func TemplateByID(id string) (Template, bool) {
@@ -149,7 +174,11 @@ func (s *Scaffolder) Create(ctx context.Context, tpl Template, name string) erro
 	if alt, ok := s.URLOverrides[tpl.ID]; ok && alt != "" {
 		url = alt
 	}
-	if err := s.Fetcher.Fetch(ctx, url, staging); err != nil {
+	if url == "" {
+		if err := os.WriteFile(filepath.Join(staging, "index.php"), []byte(emptyIndex), 0o644); err != nil {
+			return err
+		}
+	} else if err := s.Fetcher.Fetch(ctx, url, staging); err != nil {
 		return err
 	}
 	if err := os.Rename(staging, dest); err != nil {

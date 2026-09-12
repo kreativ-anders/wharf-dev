@@ -56,7 +56,7 @@ func TestAddingAFolderFromAnywhere(t *testing.T) {
 	if err := h.d.StartProject(h.ctx(), "client-site"); err != nil {
 		t.Fatal(err)
 	}
-	block := vhostBlock(t, h.readGenerated("nginx.conf"), "client-site.wharf")
+	block := vhostBlock(t, h.readGenerated("nginx.conf"), "client-site.localhost")
 	if !strings.Contains(block, `root "`+filepath.ToSlash(dir)+`";`) {
 		t.Fatalf("document root is not the added folder:\n%s", block)
 	}

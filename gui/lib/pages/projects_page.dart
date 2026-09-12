@@ -43,12 +43,45 @@ class ProjectsPage extends StatelessWidget {
 
   Widget _scaffold(BuildContext context) {
     final state = daemon.state;
+    final stop = WharfColors.of(context).stop;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Wharf'),
+        // The mark on its dark tile — the image the Windows and Linux tray
+        // shows — beside the name. It says nothing the name does not, so a
+        // screen reader skips it.
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset(
+              'assets/tray/icon_64.png',
+              width: 22,
+              height: 22,
+              filterQuality: FilterQuality.medium,
+              excludeFromSemantics: true,
+            ),
+            const SizedBox(width: 10),
+            const Text('Wharf'),
+          ],
+        ),
         actions: [
+          // A button, not a word in the bar: it stops everything
+          // (features/tray-actions.feature, "Stopping all from the main
+          // window").
           if (state.anyRunning)
-            TextButton(onPressed: daemon.stopAll, child: const Text('Stop all')),
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: OutlinedButton.icon(
+                onPressed: daemon.stopAll,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: stop,
+                  side: BorderSide(color: stop),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  visualDensity: VisualDensity.compact,
+                ),
+                icon: const Icon(Icons.stop, size: 16),
+                label: const Text('Stop all'),
+              ),
+            ),
           IconButton(
             tooltip: 'Open www folder',
             icon: const Icon(Icons.folder_open, size: 20),
@@ -101,13 +134,23 @@ class ProjectsPage extends StatelessWidget {
     );
   }
 
+  /// Name, template, webserver, then the new project's settings — where its
+  /// webserver config is one click away (features/quick-app-php.feature).
   Future<void> _newProject(BuildContext context) async {
+    final webserver = daemon.state.services.webserver;
     final result = await showDialog<_NewProject>(
       context: context,
-      builder: (_) => _NewProjectDialog(templates: daemon.templates),
+      builder: (_) => _NewProjectDialog(
+        templates: daemon.templates,
+        activeWebserver: webserver.active,
+        webservers: webserver.available,
+      ),
     );
     if (result == null) return;
-    await daemon.scaffold(result.templateId, result.name);
+    final created = await daemon.scaffold(result.templateId, result.name, webserver: result.webserver);
+    if (created != null && context.mounted) {
+      await showProjectSheet(context, daemon, created);
+    }
   }
 }
 
@@ -152,34 +195,25 @@ class _ProjectRow extends StatelessWidget {
                                       : muted,
                                 ),
                               ),
-                              if (!project.hostsEntry) ...[
-                                const SizedBox(width: 8),
-                                Tooltip(
-                                  message: 'No hosts entry — the elevation prompt was declined',
-                                  child: Icon(Icons.lock_open, size: 13, color: muted?.color),
-                                ),
-                              ],
                             ],
                           ),
+                          // Only a running project has something serving it
+                          // (features/app-configuration.feature).
+                          if (project.isRunning) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              project.servedBy,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: muted,
+                            ),
+                          ],
                         ],
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-            if (project.isRunning)
-              IconButton(
-                tooltip: 'Open ${project.url}',
-                icon: const Icon(Icons.open_in_new, size: 18),
-                onPressed: () => launchUrlString(project.url),
-              ),
-            // The row itself opens the settings too, but nothing about a row
-            // says so; this does (features/app-configuration.feature).
-            IconButton(
-              tooltip: 'Settings for ${project.name}',
-              icon: const Icon(Icons.tune, size: 18),
-              onPressed: () => showProjectSheet(context, daemon, project),
             ),
             _Actions(daemon: daemon, project: project),
           ],
@@ -189,37 +223,76 @@ class _ProjectRow extends StatelessWidget {
   }
 }
 
-/// The row's start, stop and restart buttons — whichever of them fit the
-/// project's state (features/tray-actions.feature).
+/// The row's actions, always in one order — Open, Restart, Settings, then
+/// Start or Stop — so they line up from row to row. An action the project
+/// does not offer leaves its place empty (features/tray-actions.feature,
+/// "Project actions keep their places in the list"). Which of them a project
+/// offers is [Project.actions], which the tray reads too.
 class _Actions extends StatelessWidget {
   const _Actions({required this.daemon, required this.project});
 
   final Daemon daemon;
   final Project project;
 
-  static const _icons = {
-    ProjectAction.start: Icons.play_arrow,
-    ProjectAction.stop: Icons.stop,
-    ProjectAction.restart: Icons.restart_alt,
-  };
+  /// One place in the row, the same size filled or empty.
+  static Widget _place(Widget? child) => SizedBox.square(dimension: 40, child: child);
 
   @override
   Widget build(BuildContext context) {
+    final c = WharfColors.of(context);
+    final offers = project.actions;
+
+    Widget action(ProjectAction a, IconData icon, Color color) => IconButton(
+      tooltip: '${a.label} ${project.name}',
+      color: color,
+      style: IconButton.styleFrom(
+        backgroundColor: color.withValues(alpha: WharfColors.actionTint),
+      ),
+      icon: Icon(icon, size: 20),
+      onPressed: () => daemon.projectAction(a, project.name),
+    );
+
+    final Widget? toggle;
     if (project.isBusy) {
-      return const Padding(
-        padding: EdgeInsets.all(12),
+      toggle = const Center(
         child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
       );
+    } else if (offers.contains(ProjectAction.stop)) {
+      toggle = action(ProjectAction.stop, Icons.stop, c.stop);
+    } else if (offers.contains(ProjectAction.start)) {
+      toggle = action(ProjectAction.start, Icons.play_arrow, c.start);
+    } else {
+      toggle = null;
     }
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        for (final action in project.actions)
+        _place(
+          project.isRunning
+              ? IconButton(
+                  tooltip: 'Open ${project.url}',
+                  icon: const Icon(Icons.open_in_new, size: 18),
+                  onPressed: () => launchUrlString(project.url),
+                )
+              : null,
+        ),
+        _place(
+          offers.contains(ProjectAction.restart)
+              ? action(ProjectAction.restart, Icons.restart_alt, c.restart)
+              : null,
+        ),
+        // The row itself opens the settings too, but nothing about a row
+        // says so; this does (features/app-configuration.feature).
+        _place(
           IconButton(
-            tooltip: '${action.label} ${project.name}',
-            icon: Icon(_icons[action], size: 20),
-            onPressed: () => daemon.projectAction(action, project.name),
+            tooltip: 'Settings for ${project.name}',
+            icon: const Icon(Icons.tune, size: 18),
+            onPressed: () => showProjectSheet(context, daemon, project),
           ),
+        ),
+        const SizedBox(width: 4),
+        _place(toggle),
       ],
     );
   }
@@ -355,14 +428,24 @@ class _Disconnected extends StatelessWidget {
 }
 
 class _NewProject {
-  const _NewProject(this.templateId, this.name);
+  const _NewProject(this.templateId, this.name, this.webserver);
   final String templateId;
   final String name;
+
+  /// Empty when the active webserver was picked: the project follows the
+  /// global one.
+  final String webserver;
 }
 
 class _NewProjectDialog extends StatefulWidget {
-  const _NewProjectDialog({required this.templates});
+  const _NewProjectDialog({
+    required this.templates,
+    required this.activeWebserver,
+    required this.webservers,
+  });
   final List<Template> templates;
+  final String activeWebserver;
+  final List<String> webservers;
 
   @override
   State<_NewProjectDialog> createState() => _NewProjectDialogState();
@@ -371,6 +454,7 @@ class _NewProjectDialog extends StatefulWidget {
 class _NewProjectDialogState extends State<_NewProjectDialog> {
   final _controller = TextEditingController();
   late String _template = widget.templates.isEmpty ? '' : widget.templates.first.id;
+  late String _webserver = widget.activeWebserver;
 
   @override
   void dispose() {
@@ -378,25 +462,38 @@ class _NewProjectDialogState extends State<_NewProjectDialog> {
     super.dispose();
   }
 
+  void _submit() {
+    final name = _controller.text.trim();
+    if (name.isEmpty) return;
+    // The active webserver is what every project gets anyway; only the other
+    // one is an override.
+    final pinned = _webserver == widget.activeWebserver ? '' : _webserver;
+    Navigator.pop(context, _NewProject(_template, name, pinned));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final muted = Theme.of(context).textTheme.bodySmall;
+    final name = _controller.text.trim();
     return AlertDialog(
       title: const Text('New project'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: _controller,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Name',
-              helperText: 'Lowercase letters, digits and hyphens',
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 360),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Name',
+                helperText: 'Lowercase letters, digits and hyphens',
+              ),
+              onChanged: (_) => setState(() {}),
+              onSubmitted: (_) => _submit(),
             ),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 20),
-          if (widget.templates.length > 1)
+            const SizedBox(height: 20),
             DropdownButtonFormField<String>(
               initialValue: _template,
               decoration: const InputDecoration(labelText: 'Template'),
@@ -405,22 +502,29 @@ class _NewProjectDialogState extends State<_NewProjectDialog> {
                   DropdownMenuItem(value: t.id, child: Text(t.name)),
               ],
               onChanged: (v) => setState(() => _template = v ?? _template),
-            )
-          else if (widget.templates.length == 1)
-            Text(
-              'From the ${widget.templates.first.name} starter kit',
-              style: Theme.of(context).textTheme.bodySmall,
             ),
-        ],
+            const SizedBox(height: 20),
+            DropdownButtonFormField<String>(
+              initialValue: _webserver,
+              decoration: const InputDecoration(labelText: 'Webserver'),
+              items: [
+                for (final w in widget.webservers) DropdownMenuItem(value: w, child: Text(w)),
+              ],
+              onChanged: (v) => setState(() => _webserver = v ?? _webserver),
+            ),
+            const SizedBox(height: 16),
+            // The URL is the same whichever webserver is picked: the front
+            // door forwards, so it never needs a port.
+            Text(
+              name.isEmpty ? 'Its address will be http://<name>.localhost' : 'http://$name.localhost',
+              style: muted,
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        FilledButton(
-          onPressed: _controller.text.trim().isEmpty
-              ? null
-              : () => Navigator.pop(context, _NewProject(_template, _controller.text.trim())),
-          child: const Text('Create'),
-        ),
+        FilledButton(onPressed: name.isEmpty ? null : _submit, child: const Text('Create')),
       ],
     );
   }

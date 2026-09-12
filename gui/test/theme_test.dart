@@ -49,6 +49,21 @@ void main() {
             expect(contrast(color, bg.value), greaterThanOrEqualTo(3), reason: name);
           }
         });
+
+        // The icon sits on its own tint, over the page or a hovered row.
+        test('project actions stand out on their tint over the ${bg.key}', () {
+          for (final (name, color) in [
+            ('start', c.start),
+            ('stop', c.stop),
+            ('restart', c.restart),
+          ]) {
+            final button = Color.alphaBlend(
+              color.withValues(alpha: WharfColors.actionTint),
+              bg.value,
+            );
+            expect(contrast(color, button), greaterThanOrEqualTo(3), reason: name);
+          }
+        });
       }
 
       test('filled buttons are readable', () {

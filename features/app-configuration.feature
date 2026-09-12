@@ -17,13 +17,13 @@ Feature: Per-project (app-specific) configuration
   Scenario: Enabling SSL for a single project
     Given "my-kirby-site" has "ssl: false"
     When the user enables SSL for "my-kirby-site" in the GUI
-    Then a local certificate is generated for "my-kirby-site.wharf" via mkcert
-    And "my-kirby-site" becomes reachable at "https://my-kirby-site.wharf"
+    Then a local certificate is generated for "my-kirby-site.localhost" via mkcert
+    And "my-kirby-site" becomes reachable at "https://my-kirby-site.localhost"
     And other projects' SSL settings are unaffected
 
   Scenario: Removing an override reverts to the global default
     Given "my-kirby-site" has "webserver_override: apache"
-    When the user clears the override in the GUI
+    When the user picks the globally active webserver for it in the GUI
     Then "my-kirby-site" is served by whichever webserver is globally active
     And the "webserver_override" key is removed from the project's config entry
 
@@ -31,6 +31,13 @@ Feature: Per-project (app-specific) configuration
     When the user looks at the project list
     Then each project offers a "Project settings" action
     And it opens the project's PHP version, webserver, SSL, custom config and folder
+
+  Scenario: A running project shows what serves it
+    Given "my-kirby-site" is running on nginx "1.27.3" with PHP "8.3.14"
+    When the user looks at the project list
+    Then its row shows "nginx 1.27.3 · PHP 8.3.14" beneath its URL
+    And a project with a PHP override shows the version of its own PHP build
+    And a stopped project's row shows no versions
 
   Scenario: Custom webserver directives for one project
     When the user creates a custom nginx config for "my-kirby-site"

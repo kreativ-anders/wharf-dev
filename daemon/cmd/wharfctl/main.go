@@ -35,6 +35,7 @@ const usage = `usage: wharfctl [--root DIR] <command> [args]
   stop <name>                stop a project
   restart <name>             regenerate a project's config and restart what serves it
   stop-all                   stop every service and project
+  reset --yes                delete every project in www/ and all settings (downloads are kept)
   webserver <apache|nginx>   set the globally active webserver
   webserver install <name>   install nginx or Apache
   webserver scan             re-scan the machine for webservers
@@ -50,7 +51,7 @@ const usage = `usage: wharfctl [--root DIR] <command> [args]
        --php V | --php ""    override or clear the PHP version
        --webserver W | ""    override or clear the webserver
        --ssl true|false      enable or disable SSL
-  new <template> <name>      scaffold a quick-app project
+  new <template> <name> [webserver]  scaffold a project (kirby or empty), optionally pinned to nginx or apache
   templates                  list quick-app templates
   watch                      stream state changes until interrupted
 `
@@ -131,6 +132,12 @@ func run() error {
 		}[args[0]]
 		return callAndShow(ctx, c, method, map[string]string{"name": args[1]})
 
+	case "reset":
+		if len(args) < 2 || args[1] != "--yes" {
+			return fmt.Errorf("reset deletes every folder in www/ and all settings — run: wharfctl reset --yes")
+		}
+		return callAndShow(ctx, c, ipc.MethodReset, nil)
+
 	case "stop-all":
 		return callAndShow(ctx, c, ipc.MethodStopAll, nil)
 
@@ -175,10 +182,14 @@ func run() error {
 
 	case "new":
 		if len(args) < 3 {
-			return fmt.Errorf("usage: wharfctl new <template> <name>")
+			return fmt.Errorf("usage: wharfctl new <template> <name> [webserver]")
+		}
+		params := map[string]string{"template": args[1], "name": args[2]}
+		if len(args) > 3 {
+			params["webserver"] = args[3]
 		}
 		var p core.Project
-		if err := c.Call(ctx, ipc.MethodProjectScaffold, map[string]string{"template": args[1], "name": args[2]}, &p); err != nil {
+		if err := c.Call(ctx, ipc.MethodProjectScaffold, params, &p); err != nil {
 			return err
 		}
 		printProject(p)
@@ -328,14 +339,9 @@ func runSet(ctx context.Context, c *ipc.Client, args []string) error {
 	return nil
 }
 
-// printProject reports one project after an action that changed it. A project
-// with no pretty URL is called out, because that is the visible consequence of
-// a declined elevation prompt.
+// printProject reports one project after an action that changed it.
 func printProject(p core.Project) {
 	fmt.Printf("%s  %s  %s  php %s  %s\n", p.Name, p.State, p.URL, p.PHPVersion, p.Webserver)
-	if !p.HostsEntry {
-		fmt.Printf("  no hosts entry — reachable only at %s\n", p.FallbackURL)
-	}
 	if p.Error != "" {
 		fmt.Printf("  %s\n", p.Error)
 	}

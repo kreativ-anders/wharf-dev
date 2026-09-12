@@ -1,9 +1,7 @@
-// Package hostsfile implements pretty URLs the same way on all three
-// operating systems: one hosts-file line per project, written through the
-// elevation adapter (dev/architecture.md §4, features/pretty-urls.feature).
-//
-// No /etc/resolver trick on macOS, no dnsmasq wildcard on Linux — identical
-// behaviour beats best-per-OS here, deliberately.
+// Package hostsfile removes the hosts-file lines Wharf wrote while projects
+// were published as <name>.wharf. Projects are <name>.localhost now, which
+// needs no hosts file (features/pretty-urls.feature); this package only
+// cleans up after the old scheme, through the elevation adapter.
 package hostsfile
 
 import (
@@ -15,15 +13,9 @@ import (
 	"github.com/manuel-steinberg/wharf/daemon/internal/elevate"
 )
 
-// Domain is the TLD projects are published under: <project>.wharf.
-const Domain = "wharf"
-
 // marker tags the lines this tool owns, so removing a project touches exactly
 // its own entry and nothing a user added by hand.
 const marker = "# wharf:"
-
-// Hostname is the pretty domain for a project name.
-func Hostname(project string) string { return project + "." + Domain }
 
 // Manager edits one hosts file through one elevator.
 type Manager struct {
@@ -49,30 +41,6 @@ func SystemPath() string {
 	return "/etc/hosts"
 }
 
-// Add writes "127.0.0.1 <project>.wharf # wharf:<project>", replacing any
-// existing entry for the same project. It returns elevate.ErrDeclined
-// unchanged when the user dismisses the prompt.
-func (m *Manager) Add(project string) error {
-	current, err := m.read()
-	if err != nil {
-		return err
-	}
-	line := fmt.Sprintf("127.0.0.1\t%s\t%s%s", Hostname(project), marker, project)
-
-	// Editing happens in LF and the file's own line endings are restored, so
-	// a Windows hosts file does not end up with mixed endings.
-	crlf := strings.Contains(current, "\r\n")
-	next := strings.ReplaceAll(removeEntry(current, project), "\r\n", "\n")
-	next = strings.TrimRight(next, "\n") + "\n" + line + "\n"
-	if next[0] == '\n' {
-		next = next[1:] // the file was empty; do not open it with a blank line
-	}
-	if crlf {
-		next = strings.ReplaceAll(next, "\n", "\r\n")
-	}
-	return m.Elevator.RequestElevatedWrite(m.Path, next)
-}
-
 // Remove deletes a project's entry. Removing an absent entry is a no-op and
 // does not prompt for elevation.
 func (m *Manager) Remove(project string) error {
@@ -81,6 +49,27 @@ func (m *Manager) Remove(project string) error {
 		return err
 	}
 	next := removeEntry(current, project)
+	if next == current {
+		return nil
+	}
+	return m.Elevator.RequestElevatedWrite(m.Path, next)
+}
+
+// RemoveAll deletes every line Wharf owns, whichever project it was for — what
+// a reset leaves of the <name>.wharf days. With no such line it asks nothing.
+func (m *Manager) RemoveAll() error {
+	names, err := m.Entries()
+	if err != nil || len(names) == 0 {
+		return err
+	}
+	current, err := m.read()
+	if err != nil {
+		return err
+	}
+	next := current
+	for _, n := range names {
+		next = removeEntry(next, strings.TrimSpace(n))
+	}
 	if next == current {
 		return nil
 	}

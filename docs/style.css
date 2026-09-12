@@ -162,6 +162,24 @@ p { margin: 0; }
 .status dt { font-weight: 500; }
 .status dd { margin: 0; color: var(--muted); }
 
+/* FAQ — native <details>, no script */
+
+.faq details {
+  padding-block: 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.faq details:first-child { border-top: 1px solid var(--line); }
+
+.faq summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.faq summary::marker { color: var(--muted); }
+.faq summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.faq details p { margin-top: 0.75rem; color: var(--muted); }
+
 /* Footer */
 
 footer {

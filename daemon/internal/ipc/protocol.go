@@ -24,11 +24,17 @@ const (
 	MethodDetectPHP     = "services.detectPHP"
 	MethodInstallPHP    = "services.installPHP"
 	MethodSetupSSL      = "services.setupSSL"
+	// MethodPHPSettings creates config/php.ini if needed and returns its
+	// path, for the GUI to open.
+	MethodPHPSettings = "services.phpSettings"
+	// MethodPHPReleases looks up the release each PHP download would fetch.
+	MethodPHPReleases = "services.phpReleases"
 	// MethodInstallWebserver installs nginx or Apache; MethodDetectWebservers
 	// re-scans for them.
 	MethodInstallWebserver = "services.installWebserver"
 	MethodDetectWebservers = "services.detectWebservers"
 	MethodSetAppearance    = "settings.setAppearance"
+	MethodReset            = "settings.reset"
 	MethodStopAll          = "services.stopAll"
 
 	MethodProjectAdd      = "projects.add"

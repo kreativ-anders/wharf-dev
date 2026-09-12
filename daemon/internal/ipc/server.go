@@ -223,9 +223,9 @@ func (s *Server) serveClient(ctx context.Context, c *client) {
 		c.conn.Close()
 	}()
 
-	writerDone := make(chan struct{})
+	c.gone = make(chan struct{})
 	go func() {
-		defer close(writerDone)
+		defer close(c.gone)
 		for line := range c.out {
 			if _, err := c.conn.Write(line); err != nil {
 				return
@@ -234,7 +234,7 @@ func (s *Server) serveClient(ctx context.Context, c *client) {
 	}()
 	defer func() {
 		c.closeOut()
-		<-writerDone
+		<-c.gone
 	}()
 
 	dec := bufio.NewScanner(c.conn)
@@ -318,22 +318,31 @@ type client struct {
 
 	mu     sync.Mutex
 	closed bool
+	// gone is closed when the connection's writer has stopped, and nothing
+	// queued will be written any more.
+	gone chan struct{}
 }
 
+// send queues a response, waiting for room if events have filled the queue.
+// Unlike an event, a response is never dropped: its caller is waiting for
+// that one answer, and without it the call — a click in the GUI — hangs for
+// good. It runs only on the connection's own goroutine, the one that later
+// closes the queue, so it cannot send on a closed queue.
 func (c *client) send(resp Response) {
 	line, err := json.Marshal(resp)
 	if err != nil {
 		return
 	}
 	line = append(line, '\n')
-	if !c.push(line) {
-		c.log.Warn("dropping response for slow client", "id", resp.ID)
+	select {
+	case c.out <- line:
+	case <-c.gone:
 	}
 }
 
-// push queues a line unless the client is closed or its queue is full. It is
-// the only way anything is sent to a client, so nothing can send on the queue
-// after closeOut.
+// push queues an event unless the client is closed or its queue is full. It
+// is how every goroutine but the connection's own sends to a client, so none
+// of them can send on the queue after closeOut.
 func (c *client) push(line []byte) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()

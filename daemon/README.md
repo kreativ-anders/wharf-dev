@@ -24,9 +24,10 @@ and a daemon killed by a broken pipe never gets to stop its webservers.
 The daemon logs to `<root>/data/log/wharfd.log` as well as stderr — when the
 app runs it, the file is the only place the log survives.
 
-`make run` uses `--elevator direct` and a throwaway hosts file, so it raises no
-password prompt and never touches the real `/etc/hosts`. Anything else uses the
-real elevation adapter for the OS it is running on.
+Projects are `<name>.localhost`, so nothing writes the hosts file any more; it
+is only touched to remove a line left from the old `<name>.wharf` scheme.
+`make run` uses `--elevator direct` and a throwaway hosts file even for that,
+so it raises no password prompt and never touches the real `/etc/hosts`.
 
 ## Layout
 
@@ -35,7 +36,7 @@ real elevation adapter for the OS it is running on.
 | `internal/layout` | Resolves the portable root folder (`bin/`, `www/`, `config/`, `data/`) |
 | `internal/config` | `wharf.json`: load, atomic write, hand-edit repair |
 | `internal/elevate` | **The only platform-specific code**: UAC / osascript / pkexec |
-| `internal/hostsfile` | Pretty URLs — one marked hosts line per project |
+| `internal/hostsfile` | Removes hosts lines left from the old `<name>.wharf` scheme |
 | `internal/supervisor` | Process lifecycle, port waiting, state transitions |
 | `internal/runtime` | Config → process specs; generates nginx/apache/php-fpm config |
 | `internal/project` | Folder-as-project discovery, quick-app scaffolding |

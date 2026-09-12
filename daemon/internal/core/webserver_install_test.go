@@ -176,7 +176,7 @@ func TestOneWebserverOneConfigFilePerProject(t *testing.T) {
 		if err != nil {
 			t.Fatalf("no config file for %s: %v", name, err)
 		}
-		if !strings.Contains(string(body), "server_name "+name+".wharf;") || strings.Count(string(body), "server_name") != 1 {
+		if !strings.Contains(string(body), "server_name "+name+".localhost;") || strings.Count(string(body), "server_name") != 1 {
 			t.Fatalf("%s's file is not exactly its own server block:\n%s", name, body)
 		}
 	}
@@ -208,7 +208,7 @@ func TestAKirbyProjectNeedsNoWebserverConfiguration(t *testing.T) {
 	}
 
 	// nginx has no .htaccess, so the generated block carries Kirby's rules.
-	block := vhostBlock(t, h.readGenerated("nginx.conf"), "my-kirby-site.wharf")
+	block := vhostBlock(t, h.readGenerated("nginx.conf"), "my-kirby-site.localhost")
 	for _, rule := range []string{
 		// Then its pages, the Panel and its media are served
 		`try_files $uri $uri/ /index.php$is_args$args;`,

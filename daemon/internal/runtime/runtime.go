@@ -30,18 +30,18 @@ const (
 	// phpBasePort is the first FastCGI port; each installed PHP version gets
 	// the next one.
 	phpBasePort = 9000
-	// projectBasePort is the first port handed to a project served by its own
-	// webserver instance via a per-project override.
+	// projectBasePort is the first loopback port handed to a project's own
+	// webserver instance, behind the front door.
 	projectBasePort = 8080
-	// projectSSLOffset puts a project instance's HTTPS listener beside its
-	// HTTP one — 8080 becomes 8443 — so it never competes with the global
-	// webserver for 443 (local-ssl.feature, "A project on its own webserver
-	// instance gets its own HTTPS port").
-	projectSSLOffset = 363
 )
 
-// ProjectSSLPort is the HTTPS port of a project served by its own instance.
-func ProjectSSLPort(p config.Project) int { return p.Port + projectSSLOffset }
+// Domain is what projects are published under: <project>.localhost. The name
+// is reserved for loopback, and macOS, Linux and every browser resolve it
+// themselves, so no hosts file is involved (pretty-urls.feature).
+const Domain = "localhost"
+
+// Hostname is a project's name on the web.
+func Hostname(project string) string { return project + "." + Domain }
 
 // ProjectDir is where a project's files are: its recorded path if it was
 // added from outside www/, its folder in www/ otherwise
@@ -150,15 +150,14 @@ func PHPPort(cfg *config.Config, version string) int {
 	return phpBasePort
 }
 
-// NextProjectPort returns a port not yet claimed by another project. Ports are
-// persisted per project so the fallback URL stays stable across restarts
-// (pretty-urls.feature, "Elevation is declined").
+// NextProjectPort returns a port not yet claimed by another project. Ports
+// are persisted per project, so a project's own instance comes back on the
+// port the front door forwards to.
 func NextProjectPort(cfg *config.Config) int {
 	taken := map[int]bool{}
 	for _, p := range cfg.Projects {
 		if p.Port > 0 {
 			taken[p.Port] = true
-			taken[ProjectSSLPort(p)] = true
 		}
 	}
 	for port := projectBasePort; port < projectBasePort+1000; port++ {
@@ -189,7 +188,18 @@ func (r *Resolver) PHPSpec(cfg *config.Config, version string) (supervisor.Spec,
 		Port:    port,
 		Dir:     r.Root.Dir,
 		LogPath: filepath.Join(r.Root.LogDir(), fmt.Sprintf("php-%s.log", version)),
+		// PHP reads the user's config/php.ini after its own php.ini, so its
+		// values win (php-settings.feature). The empty first entry keeps the
+		// scan directory PHP was built with: a Homebrew PHP loads its
+		// extensions from there.
+		Env: []string{"PHP_INI_SCAN_DIR=" + string(os.PathListSeparator) + r.Root.Config()},
 	}
+	// TODO(xdebug): offer Xdebug, per project rather than per PHP version —
+	// it slows every request down while loaded. A likely shape: a project
+	// switch that serves the project from a second FastCGI backend of its
+	// PHP version, started with zend_extension=xdebug, xdebug.mode=debug and
+	// xdebug.start_with_request=trigger. Needs an Xdebug build matching each
+	// PHP build Wharf runs, adopted or downloaded.
 	if runtime.GOOS == "windows" {
 		// php-cgi has no config file of its own; it is told where to listen,
 		// and where its extension DLLs are — relative to the binary, which
@@ -204,8 +214,9 @@ func (r *Resolver) PHPSpec(cfg *config.Config, version string) (supervisor.Spec,
 	return spec, nil
 }
 
-// WebserverSpec builds the globally active webserver, serving every project
-// that does not override it.
+// WebserverSpec builds the globally active webserver: the front door on ports
+// 80 and 443. It serves every project on its own webserver and forwards the
+// others to their own instance (service-management.feature).
 func (r *Resolver) WebserverSpec(cfg *config.Config) (supervisor.Spec, error) {
 	name := cfg.Services.Webserver.Active
 	in, err := r.Webserver(name)
@@ -213,15 +224,17 @@ func (r *Resolver) WebserverSpec(cfg *config.Config) (supervisor.Spec, error) {
 		return supervisor.Spec{}, err
 	}
 
-	var projects []config.Project
+	var served, forwarded []config.Project
 	for _, p := range cfg.Projects {
-		if p.WebserverOverride == nil {
-			projects = append(projects, p)
+		if cfg.OwnInstance(p) {
+			forwarded = append(forwarded, p)
+		} else {
+			served = append(served, p)
 		}
 	}
 
 	confPath := filepath.Join(r.genDir(), name+".conf")
-	conf, err := r.renderWebserverConf(cfg, in, "global-"+name, projects, HTTPPort, HTTPSPort)
+	conf, err := r.renderWebserverConf(cfg, in, "global-"+name, true, served, forwarded)
 	if err != nil {
 		return supervisor.Spec{}, err
 	}
@@ -240,14 +253,15 @@ func (r *Resolver) WebserverSpec(cfg *config.Config) (supervisor.Spec, error) {
 	}, nil
 }
 
-// ProjectSpec builds a dedicated webserver instance for a project that
-// overrides the global webserver, on its own port so the global instance is
-// unaffected (service-management.feature).
+// ProjectSpec builds the own instance of a project pinned to the webserver
+// that is not active. It listens on the project's loopback port, behind the
+// front door, so the global instance is unaffected (service-management
+// .feature).
 func (r *Resolver) ProjectSpec(cfg *config.Config, p config.Project) (supervisor.Spec, error) {
-	if p.WebserverOverride == nil {
-		return supervisor.Spec{}, fmt.Errorf("project %q has no webserver override", p.Name)
+	if !cfg.OwnInstance(p) {
+		return supervisor.Spec{}, fmt.Errorf("project %q is served by the global webserver", p.Name)
 	}
-	name := *p.WebserverOverride
+	name := cfg.WebserverFor(p)
 	in, err := r.Webserver(name)
 	if err != nil {
 		return supervisor.Spec{}, err
@@ -257,7 +271,7 @@ func (r *Resolver) ProjectSpec(cfg *config.Config, p config.Project) (supervisor
 	}
 
 	confPath := filepath.Join(r.genDir(), "project-"+p.Name+"-"+name+".conf")
-	conf, err := r.renderWebserverConf(cfg, in, "project-"+p.Name, []config.Project{p}, p.Port, ProjectSSLPort(p))
+	conf, err := r.renderWebserverConf(cfg, in, "project-"+p.Name, false, []config.Project{p}, nil)
 	if err != nil {
 		return supervisor.Spec{}, err
 	}
@@ -266,13 +280,15 @@ func (r *Resolver) ProjectSpec(cfg *config.Config, p config.Project) (supervisor
 	}
 
 	return supervisor.Spec{
-		ID:      ProjectServiceID(p.Name),
-		Label:   fmt.Sprintf("%s (%s)", p.Name, name),
-		Path:    in.Binary,
-		Args:    webserverArgs(name, confPath, r.Root),
-		Dir:     r.Root.Dir,
-		Port:    p.Port,
-		LogPath: filepath.Join(r.Root.LogDir(), "project-"+p.Name+".log"),
+		ID:    ProjectServiceID(p.Name),
+		Label: fmt.Sprintf("%s (%s)", p.Name, name),
+		Path:  in.Binary,
+		Args:  webserverArgs(name, confPath, r.Root),
+		Dir:   r.Root.Dir,
+		Port:  p.Port,
+		// Its own instance's output — startup errors above all — belongs with
+		// the project's other logs (project-logs.feature).
+		LogPath: filepath.Join(r.Root.ProjectLogDir(p.Name), name+".log"),
 	}, nil
 }
 

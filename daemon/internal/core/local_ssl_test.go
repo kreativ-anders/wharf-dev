@@ -111,7 +111,7 @@ func TestEnablingSSLWhenMkcertIsNotInstalled(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(h.root.MkcertBin(), "mkcert")); err != nil {
 		t.Fatalf("mkcert not in bin/mkcert/: %v", err)
 	}
-	// And a certificate for "my-kirby-site.wharf" is issued
+	// And a certificate for "my-kirby-site.localhost" is issued
 	if _, err := os.Stat(runtime.CertPath(h.root, "my-kirby-site")); err != nil {
 		t.Fatalf("no certificate issued: %v", err)
 	}
@@ -226,15 +226,12 @@ func TestMkcertCannotBeDownloaded(t *testing.T) {
 	}
 }
 
-// features/local-ssl.feature — "A project on its own webserver instance gets
-// its own HTTPS port"
-func TestAProjectOnItsOwnInstanceGetsItsOwnHTTPSPort(t *testing.T) {
+// features/local-ssl.feature — "HTTPS for a project on the other webserver
+// ends at the front door"
+func TestHTTPSForAProjectOnTheOtherWebserverEndsAtTheFrontDoor(t *testing.T) {
 	h := newHarness(t)
 	h.mustAdd("my-kirby-site")
 	h.mustAdd("legacy-app")
-	if p := h.project("legacy-app"); p.Port != 8081 {
-		t.Fatalf("legacy-app port = %d, want 8081", p.Port)
-	}
 	apache := "apache"
 	if _, err := h.d.UpdateSettings(h.ctx(), "legacy-app", Settings{Webserver: &apache}); err != nil {
 		t.Fatal(err)
@@ -248,17 +245,27 @@ func TestAProjectOnItsOwnInstanceGetsItsOwnHTTPSPort(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Then "legacy-app" is served over HTTPS on port 8444
-	conf := h.readGenerated("project-legacy-app-apache.conf")
-	if !strings.Contains(conf, "Listen 8444") || !strings.Contains(conf, "<VirtualHost *:8444>") {
-		t.Fatalf("no HTTPS listener on 8444:\n%s", conf)
+	// Then the global nginx serves "legacy-app.localhost" on port 443 with its
+	// certificate
+	front := h.readGenerated("nginx.conf")
+	cert := filepath.ToSlash(runtime.CertPath(h.root, "legacy-app"))
+	if !strings.Contains(front, "listen 443 ssl;") || !strings.Contains(front, cert) {
+		t.Fatalf("nginx does not terminate HTTPS for legacy-app:\n%s", front)
 	}
-	// And its URL is "https://legacy-app.wharf:8444"
-	if updated.URL != "https://legacy-app.wharf:8444" {
-		t.Fatalf("URL = %q, want https://legacy-app.wharf:8444", updated.URL)
+	// And forwards each request to "legacy-app"'s own apache, which tells PHP
+	// it was HTTPS on port 443
+	if !strings.Contains(front, "proxy_set_header X-Forwarded-Proto $scheme;") {
+		t.Fatalf("nginx does not forward the scheme:\n%s", front)
 	}
-	// And it does not compete with the global webserver for port 443
-	if strings.Contains(conf, "Listen 443\n") || strings.Contains(conf, "*:443>") {
-		t.Fatalf("the project instance binds 443:\n%s", conf)
+	own := h.readGenerated("project-legacy-app-apache.conf")
+	if strings.Contains(own, "SSLEngine") || strings.Contains(own, "Listen 443") || strings.Contains(own, ":443>") {
+		t.Fatalf("legacy-app's own apache handles TLS itself:\n%s", own)
+	}
+	if !strings.Contains(own, `ProxyFCGISetEnvIf "%{HTTP:X-Forwarded-Proto} == 'https'" HTTPS "on"`) {
+		t.Fatalf("PHP is not told the request was HTTPS:\n%s", own)
+	}
+	// And its URL is "https://legacy-app.localhost"
+	if updated.URL != "https://legacy-app.localhost" {
+		t.Fatalf("URL = %q, want https://legacy-app.localhost", updated.URL)
 	}
 }

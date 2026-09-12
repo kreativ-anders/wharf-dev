@@ -13,7 +13,7 @@ import (
 //	wharf/
 //	├── bin/     php/<version>, nginx/, apache/, mkcert/
 //	├── www/     one folder per project
-//	├── config/  wharf.json, vhosts/ (custom webserver directives)
+//	├── config/  wharf.json, php.ini, vhosts/ (custom webserver directives)
 //	└── data/    runtime state, sockets, logs
 type Root struct{ Dir string }
 
@@ -45,6 +45,20 @@ func (r Root) Data() string       { return filepath.Join(r.Dir, "data") }
 func (r Root) ConfigFile() string { return filepath.Join(r.Config(), "wharf.json") }
 func (r Root) LogDir() string     { return filepath.Join(r.Data(), "log") }
 func (r Root) CertDir() string    { return filepath.Join(r.Data(), "certs") }
+
+// DaemonLog is wharfd's own log. It sits among the service logs but is
+// never cleared with them: the daemon is writing to it.
+func (r Root) DaemonLog() string { return filepath.Join(r.LogDir(), "wharfd.log") }
+
+// ProjectLogDir holds one project's own logs: the requests and errors of the
+// webserver serving it (project-logs.feature).
+func (r Root) ProjectLogDir(name string) string {
+	return filepath.Join(r.LogDir(), "projects", name)
+}
+
+// PHPIni is the user's own PHP settings, read by every PHP version after its
+// own php.ini (php-settings.feature).
+func (r Root) PHPIni() string { return filepath.Join(r.Config(), "php.ini") }
 
 // Socket is the IPC endpoint. It lives inside the root rather than in a
 // system runtime directory so that AF_UNIX works unchanged on Windows,

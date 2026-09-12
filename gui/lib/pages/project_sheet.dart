@@ -76,14 +76,6 @@ class _ProjectSheet extends StatelessWidget {
                 style: muted?.copyWith(decoration: TextDecoration.underline),
               ),
             ),
-            if (!project.hostsEntry) ...[
-              const SizedBox(height: 8),
-              Text(
-                'No hosts entry: the elevation prompt was declined, so only the '
-                'raw-port URL works.',
-                style: muted,
-              ),
-            ],
             const SizedBox(height: 8),
             // Where the files are, one tap from the file manager
             // (features/project-folders.feature).
@@ -109,27 +101,35 @@ class _ProjectSheet extends StatelessWidget {
             _Row(
               label: 'PHP version',
               child: DropdownButton<String>(
-                value: php.available.contains(project.phpOverride) ? project.phpOverride : '',
+                value: php.available.contains(project.phpVersion) ? project.phpVersion : null,
                 underline: const SizedBox.shrink(),
                 items: [
-                  DropdownMenuItem(value: '', child: Text('Default (PHP ${php.version})')),
                   for (final v in php.available) DropdownMenuItem(value: v, child: Text('PHP $v')),
                 ],
-                onChanged: (v) => daemon.updateSettings(project.name, phpOverride: v ?? ''),
+                // The global version is no override: picking it clears one,
+                // and the project follows the global setting again
+                // (features/app-configuration.feature).
+                onChanged: (v) => daemon.updateSettings(
+                  project.name,
+                  phpOverride: v == null || v == php.version ? '' : v,
+                ),
               ),
             ),
             _Row(
               label: 'Webserver',
               child: DropdownButton<String>(
-                value: webserver.available.contains(project.webserverOverride)
-                    ? project.webserverOverride
-                    : '',
+                value: webserver.available.contains(project.webserver) ? project.webserver : null,
                 underline: const SizedBox.shrink(),
                 items: [
-                  DropdownMenuItem(value: '', child: Text('Default (${webserver.active})')),
                   for (final w in webserver.available) DropdownMenuItem(value: w, child: Text(w)),
                 ],
-                onChanged: (v) => daemon.updateSettings(project.name, webserverOverride: v ?? ''),
+                // Picking the active webserver clears the override: the
+                // project is served by the front door itself and follows the
+                // global setting (features/app-configuration.feature).
+                onChanged: (v) => daemon.updateSettings(
+                  project.name,
+                  webserverOverride: v == null || v == webserver.active ? '' : v,
+                ),
               ),
             ),
             _Row(
@@ -170,7 +170,13 @@ class _ProjectSheet extends StatelessWidget {
               'Each webserver has its own file; saving it applies the change.',
               style: muted,
             ),
-            for (final custom in project.customConfigs)
+            // The file in use comes first: a project just created on a chosen
+            // webserver opens here, one click from that webserver's config
+            // (features/quick-app-php.feature).
+            for (final custom in [
+              ...project.customConfigs.where((c) => c.active),
+              ...project.customConfigs.where((c) => !c.active),
+            ])
               _Row(
                 label: custom.active ? '${custom.webserver} · in use' : custom.webserver,
                 child: TextButton(
@@ -179,6 +185,30 @@ class _ProjectSheet extends StatelessWidget {
                   child: Text(custom.exists ? 'Edit' : 'Create'),
                 ),
               ),
+
+            const SizedBox(height: 20),
+            Text('Logs', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 4),
+            // This project's requests and errors alone, PHP's warnings
+            // included (features/project-logs.feature).
+            Text('Requests and errors of this project, PHP\'s included.', style: muted),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    project.logDir,
+                    style: muted,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: project.logDir.isEmpty ? null : () => openFolder(project.logDir),
+                  icon: const Icon(Icons.article_outlined, size: 16),
+                  label: const Text('Open logs'),
+                ),
+              ],
+            ),
 
             const SizedBox(height: 24),
             Row(
@@ -233,7 +263,7 @@ class _Row extends StatelessWidget {
   final Widget child;
 
   @override
-  // Merged, so a screen reader says "PHP version, Default (PHP 8.4), pop-up
+  // Merged, so a screen reader says "PHP version, PHP 8.4, pop-up
   // button" instead of announcing a control with no name.
   Widget build(BuildContext context) => MergeSemantics(
     child: Padding(

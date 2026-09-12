@@ -17,9 +17,12 @@ class Method {
   static const detectPhp = 'services.detectPHP';
   static const installPhp = 'services.installPHP';
   static const setupSsl = 'services.setupSSL';
+  static const phpSettings = 'services.phpSettings';
+  static const phpReleases = 'services.phpReleases';
   static const installWebserver = 'services.installWebserver';
   static const detectWebservers = 'services.detectWebservers';
   static const setAppearance = 'settings.setAppearance';
+  static const reset = 'settings.reset';
   static const stopAll = 'services.stopAll';
   static const projectAdd = 'projects.add';
   static const projectRemove = 'projects.remove';
@@ -138,6 +141,10 @@ class Daemon extends ChangeNotifier {
   };
   Future<void> removeProject(String name) => _act(Method.projectRemove, {'name': name});
   Future<void> stopAll() => _act(Method.stopAll);
+
+  /// Back to a first start: every folder in www/ and every setting deleted
+  /// (features/settings.feature, "Resetting Wharf").
+  Future<void> reset() => _act(Method.reset);
   Future<void> setWebserver(String name) => _act(Method.setWebserver, {'name': name});
   Future<void> setPhpVersion(String version) => _act(Method.setPhpVersion, {'version': version});
 
@@ -186,14 +193,33 @@ class Daemon extends ChangeNotifier {
     });
   }
 
+  /// Opens config/php.ini, creating it first if needed
+  /// (features/php-settings.feature).
+  Future<void> editPhpSettings(Future<void> Function(String) open) async {
+    await _guard(() async {
+      final result = await _require().call(Method.phpSettings);
+      await refresh();
+      final path = result['path'] as String?;
+      if (path != null) await open(path);
+    });
+  }
+
+  /// Looks up the release each PHP download would fetch, so the offers can
+  /// name it. Quiet: offline, the offers keep their minor version, which is
+  /// no reason for a notice (features/php-runtime.feature).
+  Future<void> checkPhpReleases() async {
+    try {
+      final result = await _require().call(Method.phpReleases);
+      _set(() => state = WharfState.fromJson(result));
+    } catch (_) {}
+  }
+
   Future<void> rescanPhp() async {
     await _require().callList(Method.detectPhp);
     await refresh();
   }
 
   /// Registers an existing folder. A declined elevation prompt is reported as
-  /// a notice, not an error: the project is added either way and falls back to
-  /// its raw-port URL (features/pretty-urls.feature).
   Future<void> addProject(String name) => _add({'name': name});
 
   /// Registers a folder from anywhere; one outside www/ stays where it is
@@ -202,20 +228,26 @@ class Daemon extends ChangeNotifier {
 
   Future<void> _add(Map<String, dynamic> params) async {
     await _guard(() async {
-      final result = await _require().call(Method.projectAdd, params);
-      final project = Project.fromJson(result);
-      if (!project.hostsEntry) {
-        notice = 'No hosts entry for ${project.name} — it is reachable at ${project.fallbackUrl}';
-      }
+      await _require().call(Method.projectAdd, params);
       await refresh();
     });
   }
 
-  Future<void> scaffold(String templateId, String name) async {
+  /// Creates a project from a template, pinned to [webserver] unless that is
+  /// empty, and returns it — or null if the daemon refused
+  /// (features/quick-app-php.feature).
+  Future<Project?> scaffold(String templateId, String name, {String webserver = ''}) async {
+    Project? created;
     await _guard(() async {
-      await _require().call(Method.projectScaffold, {'template': templateId, 'name': name});
+      final result = await _require().call(Method.projectScaffold, {
+        'template': templateId,
+        'name': name,
+        if (webserver.isNotEmpty) 'webserver': webserver,
+      });
+      created = Project.fromJson(result);
       await refresh();
     });
+    return created;
   }
 
   /// Applies per-project overrides. A null field leaves a setting alone; an
@@ -267,7 +299,15 @@ class Daemon extends ChangeNotifier {
       await action();
       _set(() {});
     } on DaemonError catch (e) {
-      _set(() => notice = e.message);
+      // An older daemon still running after an update — or, in development,
+      // after a hot reload, which rebuilds the app but not wharfd — cannot
+      // do what this window asks. Say what fixes it, not "unknown method".
+      _set(
+        () => notice = e.isUnknownMethod
+            ? 'Wharf\'s background service is older than this window. '
+                  'Quit Wharf from the tray and open it again.'
+            : e.message,
+      );
     } catch (e) {
       _set(() => notice = '$e');
     }

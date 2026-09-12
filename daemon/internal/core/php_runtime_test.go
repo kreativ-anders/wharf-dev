@@ -272,7 +272,7 @@ func TestChoosingADifferentPHPVersionGlobally(t *testing.T) {
 	}
 	cfg := f.d.Config()
 	want := "fastcgi_pass 127.0.0.1:" + itoa(runtime.PHPPort(cfg, "8.3")) + ";"
-	if !strings.Contains(vhostBlock(t, string(conf), "plain.wharf"), want) {
+	if !strings.Contains(vhostBlock(t, string(conf), "plain.localhost"), want) {
 		t.Fatalf("plain is not routed to the new backend:\n%s", conf)
 	}
 }
@@ -419,6 +419,40 @@ func TestOnlySupportedVersionsAreOfferedForDownload(t *testing.T) {
 	// …and never an end-of-life one, installed or not.
 	if slices.Contains(php.Downloadable(testNow), "8.1") {
 		t.Fatal("end-of-life 8.1 is offered for download")
+	}
+}
+
+// features/php-runtime.feature — "A download offer names the release it
+// downloads"
+func TestADownloadOfferNamesTheReleaseItDownloads(t *testing.T) {
+	h := newHarness(t) // 8.4 and 8.5 are not installed
+
+	fullVersions := func() map[string]string {
+		out := map[string]string{}
+		for _, d := range h.d.State().Services.PHP.Downloadable {
+			out[d.Version] = d.FullVersion
+		}
+		return out
+	}
+
+	// And without a connection the offer names "8.5" alone
+	h.php.latestErr = php.ErrDownload
+	if err := h.d.CheckPHPReleases(h.ctx()); !errors.Is(err, php.ErrDownload) {
+		t.Fatalf("err = %v, want ErrDownload", err)
+	}
+	if got := fullVersions(); got["8.5"] != "" {
+		t.Fatalf("offline, 8.5 is offered as %q", got["8.5"])
+	}
+
+	// When the user opens the PHP page, Wharf looks up the newest releases
+	h.php.latestErr = nil
+	h.php.latest = map[string]string{"8.5": "8.5.1", "8.4": "8.4.12", "8.1": "8.1.34"}
+	if err := h.d.CheckPHPReleases(h.ctx()); err != nil {
+		t.Fatal(err)
+	}
+	// Then "8.5" is offered as that release
+	if got := fullVersions(); got["8.5"] != "8.5.1" || got["8.4"] != "8.4.12" {
+		t.Fatalf("offers = %v, want 8.5.1 and 8.4.12", got)
 	}
 }
 

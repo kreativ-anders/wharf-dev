@@ -84,31 +84,93 @@ func (d *Downloader) Install(ctx context.Context, version, destDir string) (stri
 	return full, err
 }
 
-// installStatic fetches the php-fpm and php CLI tarballs for one platform.
-func (d *Downloader) installStatic(ctx context.Context, goos, goarch, version, destDir, tmp string) (string, error) {
+// Lister reports the newest release of each minor version a build source
+// publishes for this platform, keyed by minor version: "8.4" → "8.4.12". An
+// offer to download can then name the release it would fetch
+// (php-runtime.feature, "A download offer names the release it downloads").
+type Lister interface {
+	Latest(ctx context.Context) (map[string]string, error)
+}
+
+// Latest reads the same index Install does; it fetches no build.
+func (d *Downloader) Latest(ctx context.Context) (map[string]string, error) {
+	goos, goarch := d.platform()
+	out := map[string]string{}
+	var err error
+	if goos == "windows" {
+		var index map[string]windowsRelease
+		if err = download.JSON(ctx, d.Client, d.WindowsBase+"/releases.json", &index); err == nil {
+			for minor, rel := range index {
+				if full, _ := rel["version"].(string); full != "" {
+					out[minor] = full
+				}
+			}
+		}
+	} else {
+		osName, archName, perr := staticPlatform(goos, goarch)
+		if perr != nil {
+			return nil, perr
+		}
+		var patches map[string]int
+		patches, err = d.staticPatches(ctx, osName, archName)
+		for minor, patch := range patches {
+			out[minor] = fmt.Sprintf("%s.%d", minor, patch)
+		}
+	}
+	if errors.Is(err, download.ErrUnreachable) {
+		return nil, fmt.Errorf("%w (%v)", ErrDownload, err)
+	}
+	return out, err
+}
+
+// staticPlatform names this platform the way static-php-cli's files do.
+func staticPlatform(goos, goarch string) (string, string, error) {
 	osName := map[string]string{"darwin": "macos", "linux": "linux"}[goos]
 	archName := map[string]string{"arm64": "aarch64", "amd64": "x86_64"}[goarch]
 	if osName == "" || archName == "" {
-		return "", fmt.Errorf("no prebuilt PHP is published for %s/%s — install PHP %s yourself, then re-scan", goos, goarch, version)
+		return "", "", fmt.Errorf("no prebuilt PHP is published for %s/%s — install PHP yourself, then re-scan", goos, goarch)
 	}
+	return osName, archName, nil
+}
 
+var staticFPM = regexp.MustCompile(`^php-(\d+\.\d+)\.(\d+)-fpm-([a-z]+)-([a-z0-9_]+)\.tar\.gz$`)
+
+// staticPatches reads static-php-cli's index: the newest patch of every
+// minor version with an FPM build for one platform. FPM, because a build
+// without it cannot serve requests.
+func (d *Downloader) staticPatches(ctx context.Context, osName, archName string) (map[string]int, error) {
 	var index []struct {
 		Name string `json:"name"`
 	}
 	if err := download.JSON(ctx, d.Client, d.StaticBase+"/?format=json", &index); err != nil {
-		return "", err
+		return nil, err
 	}
-
-	re := regexp.MustCompile(`^php-` + regexp.QuoteMeta(version) + `\.(\d+)-fpm-` + osName + `-` + archName + `\.tar\.gz$`)
-	patch := -1
+	out := map[string]int{}
 	for _, e := range index {
-		if m := re.FindStringSubmatch(e.Name); m != nil {
-			if n, _ := strconv.Atoi(m[1]); n > patch {
-				patch = n
-			}
+		m := staticFPM.FindStringSubmatch(e.Name)
+		if m == nil || m[3] != osName || m[4] != archName {
+			continue
+		}
+		n, _ := strconv.Atoi(m[2])
+		if p, ok := out[m[1]]; !ok || n > p {
+			out[m[1]] = n
 		}
 	}
-	if patch < 0 {
+	return out, nil
+}
+
+// installStatic fetches the php-fpm and php CLI tarballs for one platform.
+func (d *Downloader) installStatic(ctx context.Context, goos, goarch, version, destDir, tmp string) (string, error) {
+	osName, archName, err := staticPlatform(goos, goarch)
+	if err != nil {
+		return "", err
+	}
+	patches, err := d.staticPatches(ctx, osName, archName)
+	if err != nil {
+		return "", err
+	}
+	patch, ok := patches[version]
+	if !ok {
 		return "", fmt.Errorf("no PHP %s build is published for %s-%s", version, osName, archName)
 	}
 	full := fmt.Sprintf("%s.%d", version, patch)

@@ -6,7 +6,6 @@
 package core
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -14,7 +13,6 @@ import (
 	"github.com/manuel-steinberg/wharf/daemon/internal/certs"
 
 	"github.com/manuel-steinberg/wharf/daemon/internal/config"
-	"github.com/manuel-steinberg/wharf/daemon/internal/hostsfile"
 	"github.com/manuel-steinberg/wharf/daemon/internal/php"
 	wruntime "github.com/manuel-steinberg/wharf/daemon/internal/runtime"
 	"github.com/manuel-steinberg/wharf/daemon/internal/supervisor"
@@ -22,10 +20,13 @@ import (
 )
 
 // State is the full snapshot the GUI renders. One primary view — a list of
-// projects with name, status and URL — is all that is shown by default
+// projects with name, status, URL and, while running, what serves them — is
+// all that is shown by default
 // (dev/design-principles.md §2), so this is deliberately small.
 type State struct {
 	Root string `json:"root"`
+	// Version is the running Wharf's, "dev" for an unstamped build.
+	Version string `json:"version"`
 	// Appearance is "system", "light" or "dark".
 	Appearance string `json:"appearance"`
 	// WWW is the folder projects are put in by default, which the GUI offers
@@ -107,6 +108,10 @@ type PHP struct {
 	// download"); Downloading those being fetched right now.
 	Downloadable []Download `json:"downloadable"`
 	Downloading  []string   `json:"downloading"`
+	// Settings is config/php.ini, the user's own PHP settings, and
+	// SettingsExist whether it has been created yet (php-settings.feature).
+	Settings      string `json:"settings"`
+	SettingsExist bool   `json:"settings_exist"`
 }
 
 // Download is a version the picker offers to download, with its support
@@ -114,30 +119,40 @@ type PHP struct {
 type Download struct {
 	Version string     `json:"version"`
 	Status  php.Status `json:"status"`
+	// FullVersion is the release a download would fetch, e.g. "8.5.1";
+	// empty until it has been looked up (php-runtime.feature, "A download
+	// offer names the release it downloads").
+	FullVersion string `json:"full_version,omitempty"`
 }
 
 // Project is one row in the project list.
 type Project struct {
 	Name  string `json:"name"`
 	State string `json:"state"`
-	// URL is what the GUI shows and the "Open" action follows: the pretty URL
-	// when a hosts entry exists, the raw-port URL otherwise.
-	URL         string `json:"url"`
-	PrettyURL   string `json:"pretty_url,omitempty"`
-	FallbackURL string `json:"fallback_url"`
-	HostsEntry  bool   `json:"hosts_entry"`
+	// URL is what the GUI shows and the "Open" action follows:
+	// <name>.localhost, with no port whichever webserver serves the project
+	// (pretty-urls.feature).
+	URL string `json:"url"`
 
 	Webserver         string  `json:"webserver"`
 	WebserverOverride *string `json:"webserver_override,omitempty"`
 	PHPVersion        string  `json:"php_version"`
 	PHPOverride       *string `json:"php_override,omitempty"`
-	SSL               bool    `json:"ssl"`
-	Port              int     `json:"port"`
+	// WebserverVersion and PHPFullVersion are what the serving binaries
+	// reported, e.g. "1.27.3" and "8.3.14"; empty when one did not say
+	// (app-configuration.feature, "A running project shows what serves it").
+	WebserverVersion string `json:"webserver_version,omitempty"`
+	PHPFullVersion   string `json:"php_full_version,omitempty"`
+	SSL              bool   `json:"ssl"`
+	Port             int    `json:"port"`
 
 	// Dir is the project's folder; Linked is true when that folder is not in
 	// www/ (project-folders.feature).
 	Dir    string `json:"dir"`
 	Linked bool   `json:"linked"`
+	// LogDir is the project's own log folder, which the GUI offers to open
+	// (project-logs.feature).
+	LogDir string `json:"log_dir"`
 	// CustomConfigs has one entry per available webserver
 	// (app-configuration.feature, "Each webserver keeps its own custom
 	// config").
@@ -159,10 +174,11 @@ type CustomConfig struct {
 func (d *Daemon) snapshot(cfg *config.Config) State {
 	st := State{
 		Root:         d.root.Dir,
+		Version:      d.version,
 		Appearance:   appearance(cfg.Appearance),
 		WWW:          d.root.WWW(),
 		Config:       d.root.Config(),
-		Domain:       hostsfile.Domain,
+		Domain:       wruntime.Domain,
 		Unregistered: d.unregistered(cfg),
 		SSL:          d.certs.Status(),
 		Busy:         d.busy.Load() > 0,
@@ -194,8 +210,12 @@ func (d *Daemon) snapshot(cfg *config.Config) State {
 		Recommended:  php.Recommended(d.now()),
 		Status:       php.StatusAt(cfg.Services.PHP.Version, d.now()),
 		Dir:          filepath.Join(d.root.Bin(), "php"),
-		Downloadable: downloadable(installs, d.now()),
+		Downloadable: downloadable(installs, d.now(), d.latestPHP()),
 		Downloading:  d.downloadingVersions(),
+		Settings:     d.root.PHPIni(),
+	}
+	if _, err := os.Stat(d.root.PHPIni()); err == nil {
+		st.Services.PHP.SettingsExist = true
 	}
 
 	for _, p := range cfg.Projects {
@@ -212,7 +232,7 @@ func (d *Daemon) projectState(cfg *config.Config, p config.Project) Project {
 	if p.SSL {
 		scheme = "https"
 	}
-	host := hostsfile.Hostname(p.Name)
+	host := wruntime.Hostname(p.Name)
 
 	out := Project{
 		Name:              p.Name,
@@ -222,11 +242,12 @@ func (d *Daemon) projectState(cfg *config.Config, p config.Project) Project {
 		PHPOverride:       p.PHPVersion,
 		SSL:               p.SSL,
 		Port:              p.Port,
-		HostsEntry:        p.HostsEntry,
-		FallbackURL:       fmt.Sprintf("http://127.0.0.1:%d", p.Port),
 		Dir:               wruntime.ProjectDir(d.root, p),
 		Linked:            p.Path != "",
+		LogDir:            d.root.ProjectLogDir(p.Name),
 	}
+	out.WebserverVersion = d.WebInstalls()[out.Webserver].Version
+	out.PHPFullVersion = d.phpFullVersion(out.PHPVersion)
 	for _, server := range cfg.Services.Webserver.Available {
 		path := d.root.CustomConfig(p.Name, server)
 		_, err := os.Stat(path)
@@ -238,27 +259,11 @@ func (d *Daemon) projectState(cfg *config.Config, p config.Project) Project {
 		})
 	}
 
-	// A project served by its own webserver instance is only reachable on its
-	// own ports, so its pretty URL carries the port too — the HTTPS one when
-	// SSL is on (local-ssl.feature).
-	if p.WebserverOverride != nil {
-		port := p.Port
-		if p.SSL {
-			port = wruntime.ProjectSSLPort(p)
-		}
-		if p.HostsEntry {
-			out.PrettyURL = fmt.Sprintf("%s://%s:%d", scheme, host, port)
-		}
-	} else if p.HostsEntry {
-		out.PrettyURL = scheme + "://" + host
-	}
+	// The front door serves every project on ports 80 and 443, forwarding
+	// those on the other webserver, so no URL carries a port.
+	out.URL = scheme + "://" + host
 
-	out.URL = out.FallbackURL
-	if out.PrettyURL != "" {
-		out.URL = out.PrettyURL
-	}
-
-	st, err := d.projectStatus(p)
+	st, err := d.projectStatus(cfg, p)
 	out.State = string(st)
 	if err != "" {
 		out.Error = err
@@ -287,9 +292,28 @@ func (d *Daemon) servers(cfg *config.Config) []Server {
 	return out
 }
 
+// phpFullVersion is the build a version resolves to, picked the way locatePHP
+// picks it — Wharf's own copy before one adopted from the machine — so the
+// row names the binary that actually serves.
+func (d *Daemon) phpFullVersion(version string) string {
+	full := ""
+	for _, in := range d.PHPInstalls() {
+		if in.Version != version || !in.Servable() {
+			continue
+		}
+		if in.Source == "vendored" {
+			return in.FullVersion
+		}
+		if full == "" {
+			full = in.FullVersion
+		}
+	}
+	return full
+}
+
 // downloadable is every supported version that is not already installed and
-// able to serve.
-func downloadable(installs []php.Install, now time.Time) []Download {
+// able to serve, named by the release it would fetch where that is known.
+func downloadable(installs []php.Install, now time.Time, latest map[string]string) []Download {
 	have := map[string]bool{}
 	for _, in := range installs {
 		if in.Servable() {
@@ -299,7 +323,7 @@ func downloadable(installs []php.Install, now time.Time) []Download {
 	out := []Download{}
 	for _, v := range php.Downloadable(now) {
 		if !have[v] {
-			out = append(out, Download{Version: v, Status: php.StatusAt(v, now)})
+			out = append(out, Download{Version: v, Status: php.StatusAt(v, now), FullVersion: latest[v]})
 		}
 	}
 	return out
@@ -308,13 +332,27 @@ func downloadable(installs []php.Install, now time.Time) []Download {
 // projectStatus derives a project's status from the process actually serving
 // it: its own instance when it overrides the webserver, the global one
 // otherwise.
-func (d *Daemon) projectStatus(p config.Project) (supervisor.State, string) {
+func (d *Daemon) projectStatus(cfg *config.Config, p config.Project) (supervisor.State, string) {
+	// A project nobody started is stopped, whatever the shared webserver does
+	// for the others (tray-actions.feature).
+	if !d.isStarted(p.Name) {
+		return supervisor.StateStopped, ""
+	}
+	own := cfg.OwnInstance(p)
 	id := runtimeWebserverID
-	if p.WebserverOverride != nil {
+	if own {
 		id = projectServiceID(p.Name)
 	}
 	s, ok := d.sup.Status(id)
 	if !ok {
+		return supervisor.StateStopped, ""
+	}
+	// An own instance is reachable only through the front door: while that is
+	// down, the project is not being served, whatever its instance does.
+	if own && s.State == supervisor.StateRunning && !d.sup.Running(runtimeWebserverID) {
+		if front, ok := d.sup.Status(runtimeWebserverID); ok && front.State == supervisor.StateFailed {
+			return supervisor.StateFailed, front.Error
+		}
 		return supervisor.StateStopped, ""
 	}
 	return s.State, s.Error

@@ -65,11 +65,11 @@ func run() error {
 		return err
 	}
 
-	log, closeLog := newLogger(*levelFlag, root.LogDir())
+	log, closeLog := newLogger(*levelFlag, root.DaemonLog())
 	defer closeLog()
 	slog.SetDefault(log)
 
-	opts := core.Options{Root: root, HostsPath: *hostsFlag, Log: log}
+	opts := core.Options{Root: root, HostsPath: *hostsFlag, Log: log, Version: version}
 	switch *elevateFlag {
 	case "system", "":
 	case "direct":
@@ -152,14 +152,14 @@ func run() error {
 // the daemon, stderr is a pipe nobody reads, so the file is the only place its
 // log survives. The file comes first: io.MultiWriter stops at the first
 // failing writer, and after the app is gone that is stderr.
-func newLogger(level, logDir string) (*slog.Logger, func()) {
+func newLogger(level, path string) (*slog.Logger, func()) {
 	var lv slog.Level
 	if err := lv.UnmarshalText([]byte(level)); err != nil {
 		lv = slog.LevelInfo
 	}
 	opts := &slog.HandlerOptions{Level: lv}
 
-	f, err := os.OpenFile(filepath.Join(logDir, "wharfd.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return slog.New(slog.NewTextHandler(os.Stderr, opts)), func() {}
 	}

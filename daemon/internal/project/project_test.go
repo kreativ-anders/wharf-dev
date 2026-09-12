@@ -65,7 +65,7 @@ func TestScaffoldStripsTheArchiveRootFolder(t *testing.T) {
 		"starterkit-main/site/config.php": "<?php",
 	})}
 
-	if err := s.Create(context.Background(), Template{ID: "kirby"}, "site"); err != nil {
+	if err := s.Create(context.Background(), Template{ID: "kirby", ZipURL: "https://example.invalid/kit.zip"}, "site"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(root.ProjectDir("site"), "index.php")); err != nil {
@@ -88,7 +88,7 @@ func TestScaffoldRefusesPathTraversalInAnArchive(t *testing.T) {
 		"kit/../../escaped.txt": "pwned",
 	})}
 
-	err := s.Create(context.Background(), Template{ID: "kirby"}, "site")
+	err := s.Create(context.Background(), Template{ID: "kirby", ZipURL: "https://example.invalid/kit.zip"}, "site")
 	if err == nil {
 		t.Fatal("an archive escaping its destination should be refused")
 	}
@@ -108,7 +108,7 @@ func TestScaffoldRefusesAnExistingFolder(t *testing.T) {
 	if err := os.MkdirAll(root.ProjectDir("site"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := s(root).Create(context.Background(), Template{ID: "kirby"}, "site"); err == nil {
+	if err := s(root).Create(context.Background(), Template{ID: "kirby", ZipURL: "https://example.invalid/kit.zip"}, "site"); err == nil {
 		t.Fatal("scaffolding over an existing folder should be refused")
 	}
 }

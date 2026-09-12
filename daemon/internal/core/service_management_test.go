@@ -1,6 +1,7 @@
 package core
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -124,34 +125,116 @@ func TestPerProjectOverrideTakesPrecedence(t *testing.T) {
 	if err := h.d.StartProject(h.ctx(), "legacy-app"); err != nil {
 		t.Fatalf("start overridden project: %v", err)
 	}
+	port := strconv.Itoa(legacy.Port)
 
-	// Then "legacy-app" is served by "apache" on its own port
+	// Then "legacy-app" is served by its own "apache" instance, listening
+	// only on loopback
 	spec := findSpec(h, runtime.ProjectServiceID("legacy-app"))
-	if spec == nil {
-		t.Fatal("legacy-app has no webserver instance of its own")
+	if spec == nil || !strings.Contains(spec.Path, "httpd") {
+		t.Fatalf("legacy-app has no apache instance of its own: %+v", spec)
 	}
-	if !strings.Contains(spec.Path, "httpd") {
-		t.Fatalf("legacy-app served by %q, want apache", spec.Path)
-	}
-	if spec.Port != legacy.Port || spec.Port == runtime.HTTPPort {
-		t.Fatalf("legacy-app on port %d, want its own port %d", spec.Port, legacy.Port)
+	own := h.readGenerated("project-legacy-app-apache.conf")
+	if !strings.Contains(own, "Listen 127.0.0.1:"+port+"\n") || strings.Contains(own, "Listen 80") {
+		t.Fatalf("legacy-app's apache does not listen on loopback only:\n%s", own)
 	}
 
-	// And the global "nginx" instance is unaffected
+	// And the global "nginx" instance forwards "legacy-app.localhost" to it
+	front := h.readGenerated("nginx.conf")
+	if !strings.Contains(vhostBlock(t, front, "legacy-app.localhost"), "proxy_pass http://127.0.0.1:"+port+";") {
+		t.Fatalf("nginx does not forward legacy-app to its instance:\n%s", front)
+	}
+
+	// And "legacy-app" is reachable at "http://legacy-app.localhost", without
+	// a port
+	if got := h.project("legacy-app"); got.URL != "http://legacy-app.localhost" || got.State != string(supervisor.StateRunning) {
+		t.Fatalf("legacy-app = %q %q, want running at http://legacy-app.localhost", got.State, got.URL)
+	}
+
+	// And PHP in "legacy-app" sees port 80, so Kirby builds its links without
+	// a port: the front door sends the port the browser used, and the
+	// instance hands that to PHP.
+	if !strings.Contains(front, "proxy_set_header X-Forwarded-Port $server_port;") ||
+		!strings.Contains(own, `ProxyFCGISetEnvIf "-n %{HTTP:X-Forwarded-Port}" SERVER_PORT "%{HTTP:X-Forwarded-Port}"`) {
+		t.Fatalf("the browser's port does not reach PHP:\n%s\n%s", front, own)
+	}
+
+	// The global instance still serves everybody else itself.
 	global := findSpec(h, runtime.WebserverID)
-	if global == nil || global.Label != "nginx" {
-		t.Fatalf("global webserver = %+v, want nginx", global)
+	if global == nil || global.Label != "nginx" || !h.sup.Running(runtime.WebserverID) {
+		t.Fatalf("global webserver = %+v, want nginx running", global)
 	}
+	if !strings.Contains(vhostBlock(t, front, "my-kirby-site.localhost"), "fastcgi_pass") {
+		t.Fatal("the shared project is not served by the global nginx itself")
+	}
+}
+
+// features/service-management.feature — "Choosing the active webserver for a
+// project starts no second instance"
+func TestChoosingTheActiveWebserverForAProjectStartsNoSecondInstance(t *testing.T) {
+	h := newHarness(t)
+	h.mustAdd("my-kirby-site")
+	nginx := "nginx"
+	if _, err := h.d.UpdateSettings(h.ctx(), "my-kirby-site", Settings{Webserver: &nginx}); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Then "my-kirby-site" is served by the global "nginx" instance
 	if !h.sup.Running(runtime.WebserverID) {
-		t.Fatal("global nginx is not running")
+		t.Fatal("the global nginx is not running")
 	}
-	// The shared instance must not have been given the overridden project.
+	if !strings.Contains(vhostBlock(t, h.readGenerated("nginx.conf"), "my-kirby-site.localhost"), "fastcgi_pass") {
+		t.Fatal("the global nginx does not serve the project")
+	}
+	// And no second webserver process is started for it
+	if spec := findSpec(h, runtime.ProjectServiceID("my-kirby-site")); spec != nil {
+		t.Fatalf("a second instance was started: %+v", spec)
+	}
+	if got := h.project("my-kirby-site"); got.State != string(supervisor.StateRunning) || got.URL != "http://my-kirby-site.localhost" {
+		t.Fatalf("project = %q %q", got.State, got.URL)
+	}
+}
+
+// features/service-management.feature — "The front door answers on port 80
+// without projects of its own"
+func TestTheFrontDoorAnswersOnPort80WithoutProjectsOfItsOwn(t *testing.T) {
+	h := newHarness(t)
+	h.mustAdd("legacy-app")
+	apache := "apache"
+	if _, err := h.d.UpdateSettings(h.ctx(), "legacy-app", Settings{Webserver: &apache}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := h.d.StartProject(h.ctx(), "legacy-app"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Then the global webserver starts on port 80 and forwards to it
+	front := findSpec(h, runtime.WebserverID)
+	if front == nil || front.Port != runtime.HTTPPort || !h.sup.Running(runtime.WebserverID) {
+		t.Fatalf("front door = %+v, want running on port 80", front)
+	}
 	conf := h.readGenerated("nginx.conf")
-	if strings.Contains(conf, "legacy-app.wharf") {
-		t.Fatal("overridden project still appears in the shared nginx config")
+	if !strings.Contains(vhostBlock(t, conf, "legacy-app.localhost"), "proxy_pass") {
+		t.Fatalf("the front door does not forward legacy-app:\n%s", conf)
 	}
-	if !strings.Contains(conf, "my-kirby-site.wharf") {
-		t.Fatal("shared project is missing from the nginx config")
+	// And a request for a name no project has is refused, not answered by
+	// another project
+	if !strings.Contains(conf, "listen 80 default_server;") || !strings.Contains(conf, "return 404;") {
+		t.Fatalf("no default server refuses unknown names:\n%s", conf)
+	}
+
+	// The project is only as reachable as its front door.
+	if got := h.project("legacy-app").State; got != string(supervisor.StateRunning) {
+		t.Fatalf("legacy-app = %q, want running", got)
+	}
+	if err := h.sup.Stop(h.ctx(), runtime.WebserverID); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.project("legacy-app").State; got == string(supervisor.StateRunning) {
+		t.Fatal("legacy-app is shown running while its front door is down")
 	}
 }
 

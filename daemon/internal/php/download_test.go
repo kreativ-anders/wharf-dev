@@ -88,6 +88,42 @@ func TestTheStaticBuildIsTheNewestPatchForThisPlatform(t *testing.T) {
 	}
 }
 
+func TestLatestNamesTheNewestReleaseOfEachVersion(t *testing.T) {
+	index, _ := json.Marshal([]map[string]string{
+		{"name": "php-8.4.9-fpm-macos-aarch64.tar.gz"},
+		{"name": "php-8.4.12-fpm-macos-aarch64.tar.gz"},
+		{"name": "php-8.4.30-fpm-linux-x86_64.tar.gz"}, // another platform
+		{"name": "php-8.5.1-fpm-macos-aarch64.tar.gz"},
+		{"name": "php-8.5.2-cli-macos-aarch64.tar.gz"}, // no FPM: cannot serve
+	})
+	releases, _ := json.Marshal(map[string]any{
+		"8.4": map[string]any{"version": "8.4.25"},
+		"8.5": map[string]any{"version": "8.5.3"},
+	})
+	ts := httptest.NewServer(&files{body: map[string][]byte{
+		"/?format=json":  index,
+		"/releases.json": releases,
+	}})
+	defer ts.Close()
+
+	for _, c := range []struct {
+		goos, goarch string
+		want         map[string]string
+	}{
+		{"darwin", "arm64", map[string]string{"8.4": "8.4.12", "8.5": "8.5.1"}},
+		{"windows", "amd64", map[string]string{"8.4": "8.4.25", "8.5": "8.5.3"}},
+	} {
+		d := &Downloader{StaticBase: ts.URL, WindowsBase: ts.URL, GOOS: c.goos, GOARCH: c.goarch}
+		got, err := d.Latest(context.Background())
+		if err != nil {
+			t.Fatalf("%s: %v", c.goos, err)
+		}
+		if len(got) != len(c.want) || got["8.4"] != c.want["8.4"] || got["8.5"] != c.want["8.5"] {
+			t.Fatalf("%s: latest = %v, want %v", c.goos, got, c.want)
+		}
+	}
+}
+
 func TestAnOfflineDownloadIsReportedAsSuch(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "nope", http.StatusServiceUnavailable)

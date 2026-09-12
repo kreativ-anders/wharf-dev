@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 func TestStartingAProjectFromTheTray(t *testing.T) {
 	h := newHarness(t)
 	h.mustAdd("my-kirby-site")
+	h.mustAdd("other-site")
 	if got := h.project("my-kirby-site").State; got != string(supervisor.StateStopped) {
 		t.Fatalf("project starts as %q, want stopped", got)
 	}
@@ -40,27 +42,49 @@ func TestStartingAProjectFromTheTray(t *testing.T) {
 	if got := h.project("my-kirby-site").State; got != string(supervisor.StateRunning) {
 		t.Fatalf("project status = %q, want running", got)
 	}
+
+	// And no other project is started
+	if got := h.project("other-site").State; got != string(supervisor.StateStopped) {
+		t.Fatalf("other-site = %q, want stopped", got)
+	}
+	if strings.Contains(h.readGenerated("nginx.conf"), "other-site.localhost") {
+		t.Fatal("the webserver serves a project nobody started")
+	}
 }
 
 // features/tray-actions.feature — "Stopping a project"
 func TestStoppingAProject(t *testing.T) {
 	h := newHarness(t)
-	h.mustAdd("my-kirby-site")
-	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"my-kirby-site", "other-site"} {
+		h.mustAdd(name)
+		if err := h.d.StartProject(h.ctx(), name); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	if err := h.d.StopProject(h.ctx(), "my-kirby-site"); err != nil {
 		t.Fatalf("stop: %v", err)
 	}
 
-	// Then the daemon stops the process serving that project
-	if h.sup.Running(runtime.WebserverID) {
-		t.Fatal("the webserver serving the project is still running")
+	// Then the daemon stops serving that project
+	if strings.Contains(h.readGenerated("nginx.conf"), "my-kirby-site.localhost") {
+		t.Fatal("the webserver still serves the stopped project")
 	}
 	// And the project's status updates to "stopped"
 	if got := h.project("my-kirby-site").State; got != string(supervisor.StateStopped) {
 		t.Fatalf("project status = %q, want stopped", got)
+	}
+	// And every other started project keeps running
+	if got := h.project("other-site").State; got != string(supervisor.StateRunning) || !h.sup.Running(runtime.WebserverID) {
+		t.Fatalf("other-site = %q, want it still running", got)
+	}
+
+	// Stopping the last one stops the webserver itself.
+	if err := h.d.StopProject(h.ctx(), "other-site"); err != nil {
+		t.Fatal(err)
+	}
+	if h.sup.Running(runtime.WebserverID) {
+		t.Fatal("the webserver runs with no project started")
 	}
 }
 
@@ -129,6 +153,7 @@ func TestRestartingAProject(t *testing.T) {
 }
 
 // features/tray-actions.feature — "Stopping all services from the tray"
+// features/tray-actions.feature — "Stopping all from the main window"
 func TestStoppingAllServicesFromTheTray(t *testing.T) {
 	h := newHarness(t)
 	h.mustAdd("my-kirby-site")

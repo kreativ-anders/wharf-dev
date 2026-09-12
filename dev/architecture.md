@@ -14,17 +14,22 @@ Single tray-resident application; one-click service and project control.
   non-abstractable platform APIs — deferred, tray menu covers the same use
   case for v1).
 - No multi-runtime support beyond PHP (Node/Go/Python are `@roadmap`).
-- No wildcard DNS resolver (`*.wharf.test`) — v1 uses hosts-file entries per
-  project, identical logic on all three OS. Wildcard resolution is a
-  possible v2 addition, not a v1 dependency.
-- No chained webservers (nginx as a reverse proxy in front of Apache). The
-  pattern survives on shared hosting — Plesk and cPanel use it so `.htaccess`
-  keeps working behind nginx — but its reasons are production ones: offloading
-  static files and connections from Apache's process model. Locally there is
-  no load to offload, and with PHP-FPM both servers talk to PHP directly. The
-  one case it serves, a project that needs `.htaccess`, is covered by choosing
-  Apache for that project (per-project webserver override), which costs no
-  second process and no second config to keep in step.
+- No DNS resolver of its own (dnsmasq, `/etc/resolver`). Projects are
+  `<name>.localhost`, which the OS and every browser resolve to loopback
+  themselves (RFC 6761) — a wildcard with nothing to install. *Changed from
+  the first plan*, which wrote one hosts-file line per project under a
+  made-up `.wharf` TLD: on macOS 26 the system resolver (mDNSResponder)
+  answers made-up TLDs with a cached "No Such Record" and lost track of the
+  hosts file after Wharf wrote to it, so Safari could not find projects that
+  curl reached. `.test` fails the same way; `.localhost` does not depend on
+  the hosts file at all, and adding a project no longer asks for a password.
+- Chained webservers only as a front door, never for load. *Changed from the
+  first plan*, which ruled chaining out and gave a project on the other
+  webserver its own port — so its URL carried one (`legacy-app.wharf:8081`),
+  unlike every other project's. Now the active webserver owns ports 80 and
+  443 and forwards such a project, by name, to its own instance on a loopback
+  port (§4c). The production reasons for chaining still do not apply; the
+  reason here is one URL shape for every project.
 
 ## 3. Components
 
@@ -42,10 +47,10 @@ Single tray-resident application; one-click service and project control.
 Every design decision favours identical behaviour across OS over the most
 "elegant" per-platform solution:
 
-- **Pretty URLs** — hosts-file entry (`C:\Windows\System32\drivers\etc\hosts`
-  vs `/etc/hosts`), same logic, different path constant only. No macOS
-  `/etc/resolver` trick, no Linux `dnsmasq` wildcard — deliberately, to keep
-  behaviour identical rather than "best per OS."
+- **Pretty URLs** — `<name>.localhost` everywhere, resolved to loopback by
+  the OS or the browser itself; nothing is written anywhere. The hosts file is
+  only touched to remove a line left from the `.wharf` days (path constant
+  per OS, as before).
 - **Elevation** — one interface with two functions:
   `RequestElevatedWrite(path, content)` for the hosts file, and
   `RequestElevatedRun(program, args, env)` for trusting mkcert's local
@@ -68,6 +73,35 @@ Every design decision favours identical behaviour across OS over the most
 **Deliberately not unified** (documented, not solved): elevation-prompt UX
 per OS, outer package format, and Linux system-tray availability (GNOME
 requires an extension; KDE/Xfce work natively).
+
+## 4c. The front door
+
+One webserver process serves every project on ports 80 and 443 — the active
+one. A project pinned to the *other* webserver gets its own instance, which
+listens on `127.0.0.1:<port>` only; the front door forwards its name there:
+
+```
+browser ──► nginx :80/:443 (active) ──► my-kirby-site   served directly
+                                   └──► legacy-app      proxied to apache on 127.0.0.1:8081
+```
+
+- The front door listens on IPv4 and IPv6: macOS resolves `*.localhost` to
+  `::1` first, and Safari uses it.
+- TLS ends at the front door, with the project's certificate. The instance
+  behind it speaks plain HTTP on loopback.
+- The instance behind trusts the scheme and port the front door forwards —
+  it is reachable from nowhere else — and hands them to PHP as `HTTPS` and
+  `SERVER_PORT`. Kirby reads those, not forwarded headers, so without this
+  every link it builds would carry `:8081`.
+- Pinning a project to the active webserver is not an override in effect: it
+  is served by the front door like any other, with no second process.
+- A name no project has is refused by a default server, never answered by
+  whichever project comes first.
+- It serves the *started* projects only. Starting one project adds it and
+  restarts the front door; stopping one removes it and leaves every other
+  started project running; the front door stops once none is left. Which
+  projects are started is daemon state, not config: everything stops when
+  Wharf quits, so there is nothing to remember across runs.
 
 ## 4a. IPC transport: the one place the plan did not survive contact
 
@@ -116,6 +150,16 @@ Each download is staged beside its destination and renamed into place only
 when complete, so a failure leaves no half-installed folder. The newest patch
 of a PHP minor version is found from each source's index, not hard-coded.
 
+Wharf itself is not updated from inside the app yet. Settings → General shows
+the version `wharfd` was built as (`-X main.version`, from `git describe`) —
+the daemon publishes it, so the window and the tray cannot name different
+ones — and a "Check for updates" button that stays disabled until there are
+releases to check against. When it is built (`features/settings.feature`,
+"Checking for updates on request", `@roadmap`), the rule above holds for it
+too: it looks only when the user asks, never at start or in the background;
+a download is saved only once it matches the release's checksums; and Wharf
+never runs what it downloaded.
+
 Neither nginx.org nor apache.org publishes portable builds, so webservers
 come from the best source each platform has, and a copy already on the
 machine is always adopted first — a Mac's own Apache means the first project
@@ -144,6 +188,8 @@ wharf/
 ├── www/                # user projects live here (Kirby-style: folder = project)
 ├── config/
 │   ├── wharf.json      # single flat config file — see §6
+│   ├── php.ini         # the user's own PHP settings, read by every PHP
+│   │                   #   version after its own php.ini
 │   └── vhosts/         # per-project custom webserver directives, e.g.
 │                       #   my-site.nginx.conf, my-site.apache.conf
 └── data/
@@ -153,7 +199,8 @@ wharf/
     ├── gen/            # generated configs (overwritten on start): nginx.conf and
     │                   #   apache.conf include nginx/<project>.conf and
     │                   #   apache/<project>.conf; run/ holds pid files
-    ├── log/            # per-service logs
+    ├── log/            # per-service logs; projects/<name>/ holds one project's
+    │                   #   access.log and error.log, PHP's errors included
     ├── certs/          # mkcert output, one pair per SSL project
     └── mailpit/        # roadmap
 ```
@@ -170,7 +217,7 @@ regenerates it. `config/` and `www/` are the parts worth backing up.
     "php": { "version": "8.3", "available": ["8.1", "8.2", "8.3"] }
   },
   "projects": [
-    { "name": "my-kirby-site", "ssl": true, "port": 8080, "hosts_entry": true }
+    { "name": "my-kirby-site", "ssl": true, "port": 8080 }
   ]
 }
 ```
@@ -182,12 +229,13 @@ what actually deviates from the defaults.
 Two keys were added during implementation, both because behaviour depends on
 them surviving a restart:
 
-- `projects[].port` — the project's own raw port. It is what the fallback URL
-  points at when the elevation prompt is declined, so it must not change
-  between runs (`features/pretty-urls.feature`).
-- `projects[].hosts_entry` — whether a hosts line exists. Removing a project
-  must delete exactly the entry that was written, and elevation may have been
-  declined when it was added.
+- `projects[].port` — the loopback port of the project's own instance, used
+  only while it is pinned to the webserver that is not active. The front
+  door forwards to it, so it must not change between runs (§4c).
+- `projects[].hosts_entry` — *removed.* It recorded a hosts line from the
+  `<name>.wharf` days; removing a project now cleans up whatever line the
+  hosts file actually holds for it (`features/pretty-urls.feature`), and an
+  old file loses the key on its next write.
 - `appearance` — `"light"` or `"dark"`; absent means follow the system.
 - `projects[].path` — appears only for a project whose folder is not in
   `www/`: the folder is added where it is (`features/project-folders.feature`).
@@ -201,11 +249,39 @@ highlights, not in a JSON string. They live in `config/vhosts/`, are included
 into the project's server block only while that webserver serves it, and are
 picked up on save (`features/app-configuration.feature`).
 
+PHP's own settings follow the same rule: `config/php.ini` is a php.ini, not a
+JSON object. Every PHP process is started with `PHP_INI_SCAN_DIR` naming
+`config/` after an empty entry, which keeps the scan directory PHP was built
+with — so the file is read *after* PHP's own php.ini and its values win,
+while an adopted Homebrew PHP still loads the extensions its own `conf.d`
+enables (`features/php-settings.feature`).
+
+Reset deletes `config/` whole, not file by file: whatever the user put
+there, the next start begins from nothing.
+
 Roadmap keys (`database`, `mail`, `runtimes.node/go/python`) are specified
 in `features/roadmap-services.feature` but intentionally absent from this
 v1 shape.
 
-## 7. Design-principle cross-reference
+## 7. How a roadmap service is added later
+
+A database, Mailpit or another runtime must be an addition, never a change
+to what v1 files and clients already rely on. The seams are there now:
+
+| Layer | What a new service adds | Why nothing breaks |
+|---|---|---|
+| `wharf.json` | one key under `services` (`"database": {…}`), and an optional per-project key (`"database": "postgres"`) | both `omitempty`; a v1 file has neither, and `normalise()` fills defaults in |
+| `internal/<service>` | detection and installing, like `internal/php` and `internal/webserver` | a package of its own |
+| `internal/runtime` | one `…Spec` builder: binary, args, port, log path | the supervisor runs any spec; it knows no service by name |
+| `core` | the user actions, one method each, and a field in the `Services` snapshot | the GUI parses every key with a default, so an older GUI ignores it |
+| GUI | one `SettingsSection` entry and its page; a row in the project sheet | the navigation lists what the enum holds |
+
+A project that *uses* a service — "this app needs PostgreSQL" — is a
+per-project key like `php_version`, started by `StartProject` beside the
+PHP backend. Nothing in the front door changes: a database is not served
+by name.
+
+## 8. Design-principle cross-reference
 
 See `dev/design-principles.md` for how the Kirby "just files and folders"
 philosophy constrains the above (flat config over database, folder-as-project,

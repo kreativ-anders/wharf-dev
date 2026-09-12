@@ -16,7 +16,7 @@ Feature: Local SSL certificates
     Given mkcert is neither in "bin/mkcert/" nor on the PATH
     When the user enables SSL for "my-kirby-site"
     Then mkcert is downloaded into "bin/mkcert/" and its checksum verified
-    And a certificate for "my-kirby-site.wharf" is issued
+    And a certificate for "my-kirby-site.localhost" is issued
 
   Scenario: Trusting the local certificate authority
     Given the local certificate authority is not trusted yet
@@ -38,9 +38,10 @@ Feature: Local SSL certificates
     Then SSL stays off for "my-kirby-site"
     And the GUI reports that mkcert could not be fetched
 
-  Scenario: A project on its own webserver instance gets its own HTTPS port
-    Given "legacy-app" has "webserver_override: apache" and port 8081
+  Scenario: HTTPS for a project on the other webserver ends at the front door
+    Given the global active webserver is "nginx"
+    And "legacy-app" has "webserver_override: apache"
     When the user enables SSL for "legacy-app"
-    Then "legacy-app" is served over HTTPS on port 8444
-    And its URL is "https://legacy-app.wharf:8444"
-    And it does not compete with the global webserver for port 443
+    Then the global nginx serves "legacy-app.localhost" on port 443 with its certificate
+    And forwards each request to "legacy-app"'s own apache, which tells PHP it was HTTPS on port 443
+    And its URL is "https://legacy-app.localhost"

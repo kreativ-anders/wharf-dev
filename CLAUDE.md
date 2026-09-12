@@ -87,7 +87,9 @@ wharf/
 │   ├── app-configuration.feature    per-project overrides, custom webserver config
 │   ├── local-ssl.feature            mkcert installed and trusted by the SSL switch
 │   ├── php-runtime.feature          PHP detection, first-run default, picker, download
+│   ├── php-settings.feature         config/php.ini, read by every PHP version after its own
 │   ├── pretty-urls.feature          hosts-file entries and elevation
+│   ├── project-logs.feature         one log folder per project, opened from its settings
 │   ├── project-folders.feature      folders from anywhere, opening them
 │   ├── quick-app-php.feature        Kirby scaffolding
 │   ├── roadmap-services.feature     @roadmap only — do not implement
@@ -113,12 +115,12 @@ wharf/
         │   └── *_test.go      one test file per feature file (see §1)
         ├── download/          HTTPS fetch, checksum, untar/unzip for PHP and mkcert
         ├── elevate/           THE ONLY PLATFORM-SPECIFIC CODE (3 adapters)
-        ├── hostsfile/         one marked hosts line per project
+        ├── hostsfile/         removes hosts lines left from the old <name>.wharf scheme
         ├── ipc/               newline-delimited JSON over AF_UNIX
         ├── layout/            the portable root: bin/ www/ config/ data/
         ├── php/               release timeline, support status, detection, downloads
         ├── project/           folder-as-project discovery, template scaffolding
-        ├── runtime/           config → process specs; one generated config file per project
+        ├── runtime/           config → process specs; the front door, one generated file per project
 │       ├── specsync/          THE SYNC GUARD (§1)
 │       ├── supervisor/        process lifecycle, port waiting, state machine
 │       ├── watchdog/          daemon exits when the app that started it is gone
@@ -142,8 +144,8 @@ wharf/
     │   ├── models/state.dart  the snapshot shape — a contract with core/state.go
     │   └── pages/
     │       ├── projects_page.dart  THE ONE PRIMARY VIEW
-    │       ├── project_sheet.dart  per-project overrides, behind a tap
-    │       └── settings_page.dart  appearance, webservers, PHP picker and downloads, SSL
+    │       ├── project_sheet.dart  per-project overrides and logs, behind a tap
+    │       └── settings_page.dart  side navigation: General, Webserver, PHP (picker, php.ini), SSL
     ├── test/
     │   ├── state_test.dart      snapshot parsing
     │   ├── theme_test.dart      WCAG contrast of the palette, both themes

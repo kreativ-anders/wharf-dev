@@ -32,6 +32,17 @@ class WharfColors extends ThemeExtension<WharfColors> {
   /// Keyboard focus and links.
   final Color focus;
 
+  /// Project actions: Start green, Stop red, Restart blue — the status hues,
+  /// so Start looks like what it leads to. Each action also has its own icon
+  /// and label (features/tray-actions.feature, "Project actions keep their
+  /// places in the list").
+  Color get start => running;
+  Color get stop => failed;
+  Color get restart => focus;
+
+  /// How much of its colour an action's button is tinted with.
+  static const actionTint = 0.12;
+
   static const light = WharfColors(
     dimmed: Color(0xFF666666), // 5.7:1 on white
     border: Color(0xFFE0E0E0),

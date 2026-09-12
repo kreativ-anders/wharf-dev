@@ -25,5 +25,19 @@ Feature: Webserver service management
     Given the global active webserver is "nginx"
     And project "legacy-app" has "webserver_override: apache" in its config
     When "legacy-app" is started
-    Then "legacy-app" is served by "apache" on its own port
-    And the global "nginx" instance is unaffected
+    Then "legacy-app" is served by its own "apache" instance, listening only on loopback
+    And the global "nginx" instance forwards "legacy-app.localhost" to it
+    And "legacy-app" is reachable at "http://legacy-app.localhost", without a port
+    And PHP in "legacy-app" sees port 80, so Kirby builds its links without a port
+
+  Scenario: Choosing the active webserver for a project starts no second instance
+    Given the global active webserver is "nginx"
+    When the user sets "my-kirby-site" to "nginx"
+    Then "my-kirby-site" is served by the global "nginx" instance
+    And no second webserver process is started for it
+
+  Scenario: The front door answers on port 80 without projects of its own
+    Given every project is served by the other webserver
+    When one of them is started
+    Then the global webserver starts on port 80 and forwards to it
+    And a request for a name no project has is refused, not answered by another project

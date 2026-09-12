@@ -13,12 +13,14 @@ Feature: Tray icon actions
     And chooses "Start"
     Then the daemon starts that project's required services
     And the tray menu updates the project's status to "running"
+    And no other project is started
 
   Scenario: Stopping a project
     Given a project is running
     When the user chooses "Stop" for it, in the tray menu or the project list
-    Then the daemon stops the process serving that project
+    Then the daemon stops serving that project
     And the project's status updates to "stopped"
+    And every other started project keeps running
 
   Scenario: Restarting a project
     Given a project is running, or failed to start
@@ -32,6 +34,18 @@ Feature: Tray icon actions
     Then a running project offers "Stop" and "Restart"
     And a stopped project offers "Start"
     And a project that failed to start offers "Start" and "Restart"
+
+  Scenario: Project actions keep their places in the list
+    When the user looks at the project list
+    Then each row's actions stand in one order: "Open", "Restart", "Settings", then "Start" or "Stop"
+    And an action a project does not offer leaves its place empty, so the columns line up
+    And "Start" is green, "Stop" red and "Restart" blue, each also told by its icon and label
+
+  Scenario: Stopping all from the main window
+    Given one or more projects are running
+    When the user looks at the main window
+    Then "Stop all" is shown as a button, not as plain text
+    And choosing it stops every running service and project
 
   Scenario: Stopping all services from the tray
     Given one or more services are running

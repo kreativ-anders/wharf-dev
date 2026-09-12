@@ -13,6 +13,7 @@ import (
 
 	"github.com/manuel-steinberg/wharf/daemon/internal/config"
 	"github.com/manuel-steinberg/wharf/daemon/internal/php"
+	"github.com/manuel-steinberg/wharf/daemon/internal/runtime"
 )
 
 // features/settings.feature — "Changing the global active webserver"
@@ -279,5 +280,131 @@ func TestChoosingLightOrDarkAppearance(t *testing.T) {
 	var invalid *InvalidError
 	if err := h.d.SetAppearance("sepia"); !errors.As(err, &invalid) {
 		t.Fatalf("err = %v, want invalid", err)
+	}
+}
+
+// features/settings.feature — "General shows the version, and no update check
+// yet"
+func TestGeneralShowsTheVersion(t *testing.T) {
+	h := newHarness(t, func(o *Options) { o.Version = "v1.2.3" })
+
+	// Then the version of the running Wharf is shown, as the daemon reports it
+	if got := h.d.State().Version; got != "v1.2.3" {
+		t.Fatalf("version = %q, want v1.2.3", got)
+	}
+	// Under the key the GUI reads (gui/lib/models/state.dart).
+	raw, err := json.Marshal(h.d.State())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"version":"v1.2.3"`) {
+		t.Fatalf("snapshot does not publish the version:\n%s", raw)
+	}
+}
+
+// features/settings.feature — "Resetting Wharf"
+func TestResettingWharf(t *testing.T) {
+	h := newHarness(t)
+	h.mustAdd("my-kirby-site")
+	h.mkProject("dropped-in")
+	elsewhere := filepath.Join(t.TempDir(), "client-site")
+	if err := os.MkdirAll(elsewhere, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.d.AddFolder(h.ctx(), elsewhere); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.d.CustomConfig(h.ctx(), "my-kirby-site", "nginx"); err != nil {
+		t.Fatal(err)
+	}
+	cert := runtime.CertPath(h.root, "my-kirby-site")
+	if err := os.WriteFile(cert, []byte("cert"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.d.SetAppearance("dark"); err != nil {
+		t.Fatal(err)
+	}
+	phpIni, err := h.d.PHPSettings(h.ctx())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Anything else put in config/ goes as well.
+	stray := filepath.Join(h.root.Config(), "notes.txt")
+	if err := os.WriteFile(stray, []byte("mine"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
+		t.Fatal(err)
+	}
+	serviceLog := filepath.Join(h.root.LogDir(), "nginx-access.log")
+	daemonLog := h.root.DaemonLog()
+	for _, log := range []string{serviceLog, daemonLog} {
+		if err := os.WriteFile(log, []byte("a line\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	addedUnderTheOldDomain(h, "my-kirby-site")
+
+	if err := h.d.Reset(h.ctx()); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+
+	// Then every service is stopped
+	if h.sup.AnyRunning() {
+		t.Fatal("something still runs after the reset")
+	}
+	// And every folder in "www/" is deleted
+	if entries, _ := os.ReadDir(h.root.WWW()); len(entries) != 0 {
+		t.Fatalf("www/ still holds %v", entries)
+	}
+	// And a folder added from elsewhere is unregistered but left where it is
+	if _, err := os.Stat(elsewhere); err != nil {
+		t.Fatalf("a folder outside www/ was deleted: %v", err)
+	}
+	if n := len(h.d.Config().Projects); n != 0 {
+		t.Fatalf("%d projects still registered", n)
+	}
+	// And everything in "config/" is deleted: settings, custom webserver
+	// configs and PHP settings
+	for _, gone := range []string{h.root.CustomConfig("my-kirby-site", "nginx"), phpIni, stray} {
+		if _, err := os.Stat(gone); !os.IsNotExist(err) {
+			t.Fatalf("%s survived the reset", gone)
+		}
+	}
+	// And project certificates, generated configs and service logs are deleted
+	for _, gone := range []string{
+		cert,
+		filepath.Join(h.root.Data(), "gen", "nginx.conf"),
+		serviceLog,
+		h.root.ProjectLogDir("my-kirby-site"),
+	} {
+		if _, err := os.Stat(gone); !os.IsNotExist(err) {
+			t.Fatalf("%s survived the reset", gone)
+		}
+	}
+	// The daemon's own log stays: it is still writing to it.
+	if _, err := os.Stat(daemonLog); err != nil {
+		t.Fatalf("the daemon's log was deleted: %v", err)
+	}
+	// And wharf.json is back to what a first start writes
+	if _, err := os.Stat(h.root.ConfigFile()); err != nil {
+		t.Fatalf("wharf.json was not written again: %v", err)
+	}
+	st := h.d.State()
+	if st.Appearance != "system" {
+		t.Fatalf("appearance = %q, want system", st.Appearance)
+	}
+	if st.Services.PHP.Version == "" || st.Services.Webserver.Active == "" {
+		t.Fatalf("first-start defaults missing: %+v", st.Services)
+	}
+	// And downloaded PHP versions and webservers are kept
+	for _, keep := range []string{filepath.Join(h.root.PHPBin("8.3"), "php-fpm"), filepath.Join(h.root.Bin(), "nginx", "nginx")} {
+		if _, err := os.Stat(keep); err != nil {
+			t.Fatalf("%s was deleted: %v", keep, err)
+		}
+	}
+	// Nothing of Wharf's is left in the hosts file.
+	if strings.Contains(h.hostsContent(), "# wharf:") {
+		t.Fatalf("old hosts entries survived:\n%s", h.hostsContent())
 	}
 }

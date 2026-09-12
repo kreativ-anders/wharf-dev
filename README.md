@@ -34,6 +34,7 @@ one is renamed, deleted or left unimplemented. See [CLAUDE.md](CLAUDE.md) §1.
 | SSL | mkcert is downloaded (pinned, checksum-verified) and its authority trusted when a project first turns SSL on. |
 | Webservers | Adopted where installed (a Mac's own Apache is used out of the box), or installed from Settings: nginx on Linux/Windows by download, on macOS via Homebrew; Apache on Windows by download. |
 | Appearance | Kirby-plain light and dark themes, or follow the system. |
+| Updates | Settings → General shows the running version. "Check for updates" is there but disabled until releases exist; its behaviour is specified as `@roadmap`. |
 | Packaging (DMG / MSI / AppImage) | Not started. |
 
 ## Running it
@@ -64,8 +65,9 @@ self-contained. Building needs Go installed (`brew install go`).
 
 Then add a project: pick any folder with "Add folder…" — it stays where it is —
 or put one in `~/Wharf/www/` and it appears in the app, ready to add.
-Adding writes a real `/etc/hosts` entry, so it asks for your password once;
-declining is fine — the project still works on its raw-port URL.
+Adding a project writes nothing outside the Wharf folder and asks for no
+password: every project is `http://<name>.localhost`, which the OS resolves by
+itself.
 
 Quitting from the tray stops everything Wharf started. If the app is force-quit
 or crashes, the daemon notices within a couple of seconds and stops itself.

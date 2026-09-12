@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,9 +11,53 @@ import (
 	"testing"
 	"time"
 
+	"github.com/manuel-steinberg/wharf/daemon/internal/php"
 	"github.com/manuel-steinberg/wharf/daemon/internal/runtime"
 	"github.com/manuel-steinberg/wharf/daemon/internal/supervisor"
 )
+
+// features/app-configuration.feature — "A running project shows what serves it"
+func TestARunningProjectShowsWhatServesIt(t *testing.T) {
+	h := newHarness(t, func(o *Options) {
+		// Only a build with its CLI beside it reports a full version.
+		for _, v := range []string{"8.1", "8.2", "8.3"} {
+			stubBinary(t, filepath.Join(o.Root.PHPBin(v), php.CLIName()))
+		}
+		full := map[string]string{"8.1": "8.1.29", "8.2": "8.2.27", "8.3": "8.3.14"}
+		o.Detector.Probe = func(_ context.Context, bin string) (string, error) {
+			return full[filepath.Base(filepath.Dir(bin))], nil
+		}
+		o.WebDetector.Probe = func(_ context.Context, bin string) (string, error) {
+			if strings.Contains(bin, "nginx") {
+				return "1.27.3", nil
+			}
+			return "2.4.62", nil
+		}
+	})
+	h.mustAdd("my-kirby-site")
+	h.mustAdd("legacy-app")
+	v81 := "8.1"
+	if _, err := h.d.UpdateSettings(h.ctx(), "legacy-app", Settings{PHP: &v81}); err != nil {
+		t.Fatalf("set PHP override: %v", err)
+	}
+	for _, name := range []string{"my-kirby-site", "legacy-app"} {
+		if err := h.d.StartProject(h.ctx(), name); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Then its row shows "nginx 1.27.3 · PHP 8.3.14"
+	p := h.project("my-kirby-site")
+	if p.Webserver != "nginx" || p.WebserverVersion != "1.27.3" || p.PHPFullVersion != "8.3.14" {
+		t.Fatalf("served by %s %q, PHP %q; want nginx 1.27.3, PHP 8.3.14",
+			p.Webserver, p.WebserverVersion, p.PHPFullVersion)
+	}
+
+	// And a project with a PHP override shows the version of its own PHP build
+	if got := h.project("legacy-app").PHPFullVersion; got != "8.1.29" {
+		t.Fatalf("overridden project reports PHP %q, want 8.1.29", got)
+	}
+}
 
 // features/app-configuration.feature — "Overriding the PHP version for one
 // project"
@@ -23,8 +68,11 @@ func TestOverridingPHPVersionForOneProject(t *testing.T) {
 	if got := h.d.Config().Services.PHP.Version; got != "8.3" {
 		t.Fatalf("global PHP default = %q, want 8.3", got)
 	}
-	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
-		t.Fatal(err)
+	// Both started: the webserver serves started projects only.
+	for _, name := range []string{"my-kirby-site", "other-site"} {
+		if err := h.d.StartProject(h.ctx(), name); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	v81 := "8.1"
@@ -38,7 +86,7 @@ func TestOverridingPHPVersionForOneProject(t *testing.T) {
 	want81 := fmt.Sprintf("fastcgi_pass 127.0.0.1:%d;", runtime.PHPPort(cfg, "8.1"))
 	want83 := fmt.Sprintf("fastcgi_pass 127.0.0.1:%d;", runtime.PHPPort(cfg, "8.3"))
 
-	mine := vhostBlock(t, conf, "my-kirby-site.wharf")
+	mine := vhostBlock(t, conf, "my-kirby-site.localhost")
 	if !strings.Contains(mine, want81) {
 		t.Fatalf("my-kirby-site is not routed to PHP 8.1:\n%s", mine)
 	}
@@ -47,7 +95,7 @@ func TestOverridingPHPVersionForOneProject(t *testing.T) {
 	}
 
 	// And all other projects continue to use PHP "8.3"
-	other := vhostBlock(t, conf, "other-site.wharf")
+	other := vhostBlock(t, conf, "other-site.localhost")
 	if !strings.Contains(other, want83) {
 		t.Fatalf("other-site is not routed to PHP 8.3:\n%s", other)
 	}
@@ -74,17 +122,17 @@ func TestEnablingSSLForASingleProject(t *testing.T) {
 		t.Fatalf("enable ssl: %v", err)
 	}
 
-	// Then a local certificate is generated for "my-kirby-site.wharf" via mkcert
-	if _, ok := h.certs.Issued["my-kirby-site.wharf"]; !ok {
+	// Then a local certificate is generated for "my-kirby-site.localhost" via mkcert
+	if _, ok := h.certs.Issued["my-kirby-site.localhost"]; !ok {
 		t.Fatalf("no certificate issued; issued = %v", h.certs.Issued)
 	}
 	if _, err := os.Stat(runtime.CertPath(h.root, "my-kirby-site")); err != nil {
 		t.Fatalf("certificate file missing: %v", err)
 	}
 
-	// And "my-kirby-site" becomes reachable at "https://my-kirby-site.wharf"
-	if updated.URL != "https://my-kirby-site.wharf" {
-		t.Fatalf("URL = %q, want https://my-kirby-site.wharf", updated.URL)
+	// And "my-kirby-site" becomes reachable at "https://my-kirby-site.localhost"
+	if updated.URL != "https://my-kirby-site.localhost" {
+		t.Fatalf("URL = %q, want https://my-kirby-site.localhost", updated.URL)
 	}
 	conf := h.readGenerated("nginx.conf")
 	if !strings.Contains(conf, "listen 443 ssl;") {
@@ -99,7 +147,7 @@ func TestEnablingSSLForASingleProject(t *testing.T) {
 	if strings.HasPrefix(other.URL, "https://") {
 		t.Fatalf("other-site URL = %q, want http", other.URL)
 	}
-	if _, ok := h.certs.Issued["other-site.wharf"]; ok {
+	if _, ok := h.certs.Issued["other-site.localhost"]; ok {
 		t.Fatal("a certificate was issued for other-site")
 	}
 }
@@ -224,16 +272,18 @@ func TestCustomWebserverDirectivesForOneProject(t *testing.T) {
 	}
 
 	// And its contents are included in "my-kirby-site"'s nginx server block
-	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"my-kirby-site", "other-site"} {
+		if err := h.d.StartProject(h.ctx(), name); err != nil {
+			t.Fatal(err)
+		}
 	}
 	conf := h.readGenerated("nginx.conf")
 	include := `include "` + filepath.ToSlash(path) + `";`
-	if !strings.Contains(vhostBlock(t, conf, "my-kirby-site.wharf"), include) {
+	if !strings.Contains(vhostBlock(t, conf, "my-kirby-site.localhost"), include) {
 		t.Fatalf("custom config not included:\n%s", conf)
 	}
 	// And no other project's server block includes it
-	if strings.Contains(vhostBlock(t, conf, "other-site.wharf"), "include \""+filepath.ToSlash(h.root.VhostDir())) {
+	if strings.Contains(vhostBlock(t, conf, "other-site.localhost"), "include \""+filepath.ToSlash(h.root.VhostDir())) {
 		t.Fatal("other-site includes a custom config")
 	}
 
@@ -280,7 +330,7 @@ func TestEachWebserverKeepsItsOwnCustomConfig(t *testing.T) {
 	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
 		t.Fatal(err)
 	}
-	block := vhostBlock(t, h.readGenerated("nginx.conf"), "my-kirby-site.wharf")
+	block := vhostBlock(t, h.readGenerated("nginx.conf"), "my-kirby-site.localhost")
 	if !strings.Contains(block, filepath.ToSlash(nginxFile)) || strings.Contains(block, filepath.ToSlash(apacheFile)) {
 		t.Fatalf("want only the nginx file included:\n%s", block)
 	}

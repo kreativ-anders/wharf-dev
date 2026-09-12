@@ -64,6 +64,18 @@ func (r *FakeRunner) Handle(id string) *FakeHandle {
 	return r.handles[id]
 }
 
+// LastSpec returns the spec an ID was most recently started with.
+func (r *FakeRunner) LastSpec(id string) (Spec, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := len(r.Started) - 1; i >= 0; i-- {
+		if r.Started[i].ID == id {
+			return r.Started[i], true
+		}
+	}
+	return Spec{}, false
+}
+
 // StartedIDs lists started spec IDs in order.
 func (r *FakeRunner) StartedIDs() []string {
 	r.mu.Lock()

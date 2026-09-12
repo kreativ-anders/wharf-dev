@@ -84,8 +84,8 @@ void main() {
     }
   });
 
-  // features/pretty-urls.feature — "Creating a project registers a hosts entry"
-  test('adding a folder from the GUI registers it and writes a hosts entry', () async {
+  // features/pretty-urls.feature — "Adding a project never asks for a password"
+  test('adding a folder from the GUI registers it without touching the hosts file', () async {
     await _waitForFile(endpointPathFor(root.path));
     final gui = Daemon(root: root.path);
     addTearDown(gui.dispose);
@@ -96,12 +96,11 @@ void main() {
     await gui.addProject('my-kirby-site');
 
     final project = gui.state.projects.firstWhere((p) => p.name == 'my-kirby-site');
-    expect(project.hostsEntry, isTrue);
-    expect(project.url, 'http://my-kirby-site.wharf');
+    expect(project.url, 'http://my-kirby-site.localhost');
     expect(gui.state.unregistered, isNot(contains('my-kirby-site')));
 
     final hosts = await File(hostsPath).readAsString();
-    expect(hosts, contains('my-kirby-site.wharf'));
+    expect(hosts, isNot(contains('my-kirby-site')), reason: '.localhost needs no hosts entry');
     expect(hosts, contains('localhost'), reason: 'the rest of the file must survive');
 
     // The config the daemon wrote stays readable by hand.

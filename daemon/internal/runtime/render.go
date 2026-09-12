@@ -9,12 +9,11 @@ import (
 	"text/template"
 
 	"github.com/manuel-steinberg/wharf/daemon/internal/config"
-	"github.com/manuel-steinberg/wharf/daemon/internal/hostsfile"
 	"github.com/manuel-steinberg/wharf/daemon/internal/layout"
 	"github.com/manuel-steinberg/wharf/daemon/internal/webserver"
 )
 
-// vhost is one project as the config templates see it.
+// vhost is one project an instance serves itself: its files and its PHP.
 type vhost struct {
 	Name     string
 	Hostname string
@@ -24,33 +23,50 @@ type vhost struct {
 	DocRootRe string
 	// Include is the project's custom directives for this webserver, or ""
 	// when it has none (app-configuration.feature).
-	Include  string
+	Include string
+	// LogDir is the project's own log folder (project-logs.feature).
+	LogDir   string
 	SSL      bool
 	CertFile string
 	KeyFile  string
 	PHPPort  int
-	// Port is the project's own raw port. The vhost listens on it as well as
-	// on the shared HTTP port, so the project stays reachable when no hosts
-	// entry exists (pretty-urls.feature, "Elevation is declined").
+	// Port is the loopback port of a project's own instance; unused by the
+	// front door, which serves every project on the shared ports.
 	Port int
 	// Conf is the instance the vhost belongs to, for its ports and paths.
 	Conf *confData
-	// HTTPS marks the copy of the vhost rendered for the HTTPS listener.
-	HTTPS bool
 }
 
-// WithHTTPS is the vhost as its HTTPS server block renders it.
-func (v vhost) WithHTTPS() vhost {
-	v.HTTPS = true
-	return v
+// forward is a project the front door hands on to the project's own
+// instance, so that its URL needs no port whichever webserver serves it
+// (service-management.feature, "Per-project override takes precedence over
+// the global default").
+type forward struct {
+	Name     string
+	Hostname string
+	// Server is the webserver behind the front door, for the comment.
+	Server string
+	// LogDir is the project's own log folder: a request the front door cannot
+	// hand on is the project's error too.
+	LogDir   string
+	Port     int
+	SSL      bool
+	CertFile string
+	KeyFile  string
+	Conf     *confData
 }
 
 type module struct{ Name, Path string }
 
 type confData struct {
-	ListenPort int
-	HTTPSPort  int
-	LogDir     string
+	// Front is true for the global instance, the front door: it owns ports
+	// 80 and 443 on IPv4 and IPv6, serves the projects on its own webserver
+	// and forwards the others. False for a project's own instance, which
+	// listens on loopback only behind it.
+	Front     bool
+	HTTPPort  int
+	HTTPSPort int
+	LogDir    string
 	// RunDir holds this instance's pid file and scratch files. The global
 	// webserver and a project's own instance run side by side, so each needs
 	// its own: Apache refuses to start over a pid file whose process lives.
@@ -58,11 +74,12 @@ type confData struct {
 	MimeTypes     string
 	FastCGIParams string
 	Modules       []module
-	// Includes are the per-project vhost files the main config pulls in
+	// Includes are the per-project files the main config pulls in
 	// (webserver-install.feature, "One webserver, one config file per
 	// project").
 	Includes []string
 	Vhosts   []vhost
+	Forwards []forward
 	AnySSL   bool
 }
 
@@ -72,40 +89,49 @@ type rendered struct {
 	Main   string
 	RunDir string
 	Vhosts map[string]string // path → content
+	// LogDirs are the projects' log folders, which neither webserver creates.
+	LogDirs []string
 }
 
-// VhostPath is where a project's generated server block for one webserver
-// lives. Only one instance serves a project at a time, so one file suffices.
+// VhostPath is where a project's generated block for one webserver lives.
+// A webserver either serves a project, forwards it, or runs as its own
+// instance — never two of those at once — so one file per pair suffices.
 func (r *Resolver) VhostPath(server, project string) string {
 	return filepath.Join(r.genDir(), server, project+".conf")
 }
 
-// renderWebserverConf generates an instance's configuration: one vhost file
-// per project, each with its document root and PHP routed to the FastCGI
-// backend for that project's resolved PHP version, and a main file that
-// includes them.
-func (r *Resolver) renderWebserverConf(cfg *config.Config, in webserver.Install, instance string, projects []config.Project, listenPort, httpsPort int) (rendered, error) {
+// renderWebserverConf generates an instance's configuration: one file per
+// project, each either serving the project — its document root, PHP routed to
+// the FastCGI backend for its PHP version — or, on the front door, forwarding
+// it to its own instance; and a main file that includes them.
+func (r *Resolver) renderWebserverConf(cfg *config.Config, in webserver.Install, instance string, front bool, served, forwarded []config.Project) (rendered, error) {
 	data := &confData{
-		ListenPort:    listenPort,
-		HTTPSPort:     httpsPort,
+		Front:         front,
+		HTTPPort:      HTTPPort,
+		HTTPSPort:     HTTPSPort,
 		LogDir:        forwardSlash(r.Root.LogDir()),
 		RunDir:        forwardSlash(filepath.Join(r.genDir(), "run", instance)),
 		FastCGIParams: forwardSlash(filepath.Join(r.genDir(), "fastcgi_params")),
 		MimeTypes:     forwardSlash(filepath.Join(r.genDir(), in.Name+"-mime.types")),
 	}
-	for _, p := range projects {
+	var logDirs []string
+	for _, p := range served {
 		docRoot := forwardSlash(ProjectDir(r.Root, p))
+		logDirs = append(logDirs, r.Root.ProjectLogDir(p.Name))
 		v := vhost{
 			Name:      p.Name,
-			Hostname:  hostsfile.Hostname(p.Name),
+			Hostname:  Hostname(p.Name),
 			DocRoot:   docRoot,
 			DocRootRe: regexp.QuoteMeta(docRoot),
-			SSL:       p.SSL,
-			CertFile:  forwardSlash(CertPath(r.Root, p.Name)),
-			KeyFile:   forwardSlash(KeyPath(r.Root, p.Name)),
-			PHPPort:   PHPPort(cfg, cfg.PHPVersionFor(p)),
-			Port:      p.Port,
-			Conf:      data,
+			LogDir:    forwardSlash(r.Root.ProjectLogDir(p.Name)),
+			// TLS ends at the front door; the instance behind it speaks
+			// plain HTTP on loopback.
+			SSL:      p.SSL && front,
+			CertFile: forwardSlash(CertPath(r.Root, p.Name)),
+			KeyFile:  forwardSlash(KeyPath(r.Root, p.Name)),
+			PHPPort:  PHPPort(cfg, cfg.PHPVersionFor(p)),
+			Port:     p.Port,
+			Conf:     data,
 		}
 		// Only the file for the webserver actually serving the project is
 		// included; the other one waits until the project switches.
@@ -117,27 +143,56 @@ func (r *Resolver) renderWebserverConf(cfg *config.Config, in webserver.Install,
 		}
 		data.Vhosts = append(data.Vhosts, v)
 	}
+	for _, p := range forwarded {
+		logDirs = append(logDirs, r.Root.ProjectLogDir(p.Name))
+		f := forward{
+			Name:     p.Name,
+			Hostname: Hostname(p.Name),
+			Server:   cfg.WebserverFor(p),
+			LogDir:   forwardSlash(r.Root.ProjectLogDir(p.Name)),
+			Port:     p.Port,
+			SSL:      p.SSL,
+			CertFile: forwardSlash(CertPath(r.Root, p.Name)),
+			KeyFile:  forwardSlash(KeyPath(r.Root, p.Name)),
+			Conf:     data,
+		}
+		if f.SSL {
+			data.AnySSL = true
+		}
+		data.Forwards = append(data.Forwards, f)
+	}
 
-	var main, host *template.Template
+	var main, host, fwd *template.Template
 	switch in.Name {
 	case webserver.Nginx:
-		main, host = nginxTemplate, nginxVhostTemplate
+		main, host, fwd = nginxTemplate, nginxVhostTemplate, nginxForwardTemplate
 	case webserver.Apache:
-		main, host = apacheTemplate, apacheVhostTemplate
+		main, host, fwd = apacheTemplate, apacheVhostTemplate, apacheForwardTemplate
 		data.Modules = apacheModules(in.Modules, data.AnySSL)
 	default:
 		return rendered{}, fmt.Errorf("unknown webserver %q", in.Name)
 	}
 
-	out := rendered{Vhosts: map[string]string{}, RunDir: filepath.FromSlash(data.RunDir)}
-	for _, v := range data.Vhosts {
+	out := rendered{Vhosts: map[string]string{}, RunDir: filepath.FromSlash(data.RunDir), LogDirs: logDirs}
+	add := func(name string, tpl *template.Template, v any) error {
 		var sb strings.Builder
-		if err := host.Execute(&sb, v); err != nil {
-			return rendered{}, err
+		if err := tpl.Execute(&sb, v); err != nil {
+			return err
 		}
-		path := r.VhostPath(in.Name, v.Name)
+		path := r.VhostPath(in.Name, name)
 		out.Vhosts[path] = sb.String()
 		data.Includes = append(data.Includes, forwardSlash(path))
+		return nil
+	}
+	for _, v := range data.Vhosts {
+		if err := add(v.Name, host, v); err != nil {
+			return rendered{}, err
+		}
+	}
+	for _, f := range data.Forwards {
+		if err := add(f.Name, fwd, f); err != nil {
+			return rendered{}, err
+		}
 	}
 	var sb strings.Builder
 	if err := main.Execute(&sb, data); err != nil {
@@ -163,8 +218,10 @@ func (r *Resolver) write(mainPath string, conf rendered, in webserver.Install) e
 	}
 	// Apache's ServerRoot and nginx's temp paths live here, and neither
 	// creates it.
-	if err := os.MkdirAll(conf.RunDir, 0o755); err != nil {
-		return err
+	for _, dir := range append([]string{conf.RunDir}, conf.LogDirs...) {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
 	}
 	for path, body := range conf.Vhosts {
 		if err := writeFile(path, body); err != nil {
@@ -194,7 +251,8 @@ func apacheModules(dir string, ssl bool) []module {
 	// setenvif because Kirby's .htaccess uses SetEnvIf outside any
 	// <IfModule>: without it every request is a 500 (webserver-install
 	// .feature, "A Kirby project needs no webserver configuration").
-	for _, m := range []string{"authz_core", "unixd", "dir", "mime", "log_config", "rewrite", "headers", "setenvif", "proxy", "proxy_fcgi"} {
+	// proxy_http because Apache as the front door forwards to nginx.
+	for _, m := range []string{"authz_core", "unixd", "dir", "mime", "log_config", "rewrite", "headers", "setenvif", "proxy", "proxy_fcgi", "proxy_http"} {
 		add(m+"_module", "mod_"+m+".so")
 	}
 	if ssl {
@@ -211,11 +269,11 @@ func fileExists(path string) bool {
 
 // CertPath and KeyPath are where mkcert output for a project is stored.
 func CertPath(root layout.Root, project string) string {
-	return filepath.Join(root.CertDir(), hostsfile.Hostname(project)+".pem")
+	return filepath.Join(root.CertDir(), Hostname(project)+".pem")
 }
 
 func KeyPath(root layout.Root, project string) string {
-	return filepath.Join(root.CertDir(), hostsfile.Hostname(project)+"-key.pem")
+	return filepath.Join(root.CertDir(), Hostname(project)+"-key.pem")
 }
 
 // renderPHPFPMConf writes a pool config listening on a TCP port. TCP rather
@@ -258,7 +316,31 @@ http {
   uwsgi_temp_path "{{.RunDir}}/uwsgi";
   scgi_temp_path "{{.RunDir}}/scgi";
   sendfile on;
-
+  # PHP enforces its own upload limit; nginx's 1 MB default would refuse a
+  # Kirby Panel upload before PHP ever saw it.
+  client_max_body_size 0;
+{{if .Front}}
+  # A name no project has is refused here, rather than answered by whichever
+  # project happens to come first.
+  server {
+    listen {{.HTTPPort}} default_server;
+    listen [::]:{{.HTTPPort}} default_server;
+    return 404;
+  }
+{{else}}
+  # This instance sits behind Wharf's front door and listens on loopback
+  # only, so the scheme and port the front door forwards can be trusted. PHP
+  # must see the port the browser used, or Kirby writes this instance's own
+  # port into every link.
+  map $http_x_forwarded_proto $wharf_https {
+    https on;
+    default "";
+  }
+  map $http_x_forwarded_port $wharf_port {
+    "" $server_port;
+    default $http_x_forwarded_port;
+  }
+{{end}}
   # One file per project.
 {{range .Includes}}  include "{{.}}";
 {{end}}}
@@ -270,9 +352,21 @@ http {
 // (webserver-install.feature, "A Kirby project needs no webserver
 // configuration"): dot-files and the content, site and kirby folders are
 // handed to Kirby, which answers with its error page, never with the file.
+//
+// TODO(generic-templates): these rules, and the content/site/kirby
+// DirectoryMatch in apacheSite, are Kirby's and are applied to every project.
+// Kirby was the inspiration, not the target: they move to the Kirby template
+// once templates carry their own rewrite recipe (see project.Templates).
+//
+// Each server block logs to the project's own folder. PHP's warnings and
+// errors arrive there too: PHP-FPM sends them to the webserver over FastCGI,
+// which logs them for the server block that made the request
+// (project-logs.feature).
 const kirbyRules = `{{define "kirby"}}  root "{{.DocRoot}}";
   index index.php index.html;
   add_header X-Content-Type-Options nosniff;
+  access_log "{{.LogDir}}/access.log";
+  error_log "{{.LogDir}}/error.log";
 
   rewrite (^|/)\.(?!well-known/) /index.php last;
   rewrite ^/(content|site|kirby)/ /index.php last;
@@ -287,8 +381,12 @@ const kirbyRules = `{{define "kirby"}}  root "{{.DocRoot}}";
     fastcgi_index index.php;
     include "{{.Conf.FastCGIParams}}";
     fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-{{- if .HTTPS}}
-    fastcgi_param HTTPS on;
+{{- if .Conf.Front}}
+    fastcgi_param SERVER_PORT $server_port;
+    fastcgi_param HTTPS $https if_not_empty;
+{{- else}}
+    fastcgi_param SERVER_PORT $wharf_port;
+    fastcgi_param HTTPS $wharf_https if_not_empty;
 {{- end}}
   }
 {{if .Include}}
@@ -297,19 +395,56 @@ const kirbyRules = `{{define "kirby"}}  root "{{.DocRoot}}";
 
 var nginxVhostTemplate = template.Must(template.New("nginx-vhost").Parse(kirbyRules + generatedHeader + `
 # {{.Name}}
-
+{{if .Conf.Front}}
 server {
-  listen {{.Conf.ListenPort}};{{if and .Port (ne .Port .Conf.ListenPort)}}
-  listen {{.Port}};{{end}}
+  listen {{.Conf.HTTPPort}};
+  listen [::]:{{.Conf.HTTPPort}};
   server_name {{.Hostname}};
 {{template "kirby" .}}}
 {{if .SSL}}
 server {
   listen {{.Conf.HTTPSPort}} ssl;
+  listen [::]:{{.Conf.HTTPSPort}} ssl;
   server_name {{.Hostname}};
   ssl_certificate "{{.CertFile}}";
   ssl_certificate_key "{{.KeyFile}}";
-{{template "kirby" .WithHTTPS}}}
+{{template "kirby" .}}}
+{{end}}{{else}}
+# Behind Wharf's front door, on loopback only.
+server {
+  listen 127.0.0.1:{{.Port}};
+  server_name {{.Hostname}};
+{{template "kirby" .}}}
+{{end}}`))
+
+const nginxForward = `{{define "forward"}}  error_log "{{.LogDir}}/error.log";
+  location / {
+    proxy_pass http://127.0.0.1:{{.Port}};
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Port $server_port;
+  }
+{{end}}`
+
+var nginxForwardTemplate = template.Must(template.New("nginx-forward").Parse(nginxForward + generatedHeader + `
+# {{.Name}} is served by its own {{.Server}} on 127.0.0.1:{{.Port}}. This is its
+# front door, so its URL needs no port.
+
+server {
+  listen {{.Conf.HTTPPort}};
+  listen [::]:{{.Conf.HTTPPort}};
+  server_name {{.Hostname}};
+{{template "forward" .}}}
+{{if .SSL}}
+server {
+  listen {{.Conf.HTTPSPort}} ssl;
+  listen [::]:{{.Conf.HTTPSPort}} ssl;
+  server_name {{.Hostname}};
+  ssl_certificate "{{.CertFile}}";
+  ssl_certificate_key "{{.KeyFile}}";
+{{template "forward" .}}}
 {{end}}`))
 
 var apacheTemplate = template.Must(template.New("apache").Parse(generatedHeader + `
@@ -317,10 +452,10 @@ ServerRoot "{{.RunDir}}"
 DefaultRuntimeDir "{{.RunDir}}"
 PidFile "{{.RunDir}}/httpd.pid"
 ServerName localhost
-Listen {{.ListenPort}}
-{{range .Vhosts}}{{if and .Port (ne .Port $.ListenPort)}}Listen {{.Port}}
-{{end}}{{end}}{{if .AnySSL}}Listen {{.HTTPSPort}}
-{{end}}
+{{if .Front}}Listen {{.HTTPPort}}
+{{if .AnySSL}}Listen {{.HTTPSPort}}
+{{end}}{{else}}{{range .Vhosts}}Listen 127.0.0.1:{{.Port}}
+{{end}}{{end}}
 {{range .Modules}}LoadModule {{.Name}} "{{.Path}}"
 {{end}}
 TypesConfig "{{.MimeTypes}}"
@@ -328,17 +463,23 @@ ErrorLog "{{.LogDir}}/apache-error.log"
 LogFormat "%h %l %u %t \"%r\" %>s %b" common
 CustomLog "{{.LogDir}}/apache-access.log" common
 DirectoryIndex index.php index.html
-
+{{if .Front}}
+# A name no project has is refused here, rather than answered by whichever
+# project happens to come first: Apache's first virtual host is its default.
+<VirtualHost *:{{.HTTPPort}}>
+  ServerName localhost
+  <Location "/">
+    Require all denied
+  </Location>
+</VirtualHost>
+{{end}}
 # One file per project.
 {{range .Includes}}Include "{{.}}"
 {{end}}`))
 
-var apacheVhostTemplate = template.Must(template.New("apache-vhost").Parse(generatedHeader + `
-# {{.Name}}
-
-<VirtualHost *:{{.Conf.ListenPort}}{{if and .Port (ne .Port .Conf.ListenPort)}} *:{{.Port}}{{end}}>
-  ServerName {{.Hostname}}
-  DocumentRoot "{{.DocRoot}}"
+const apacheSite = `{{define "site"}}  DocumentRoot "{{.DocRoot}}"
+  ErrorLog "{{.LogDir}}/error.log"
+  CustomLog "{{.LogDir}}/access.log" common
 
   <Directory "{{.DocRoot}}">
     Options Indexes FollowSymLinks
@@ -355,26 +496,53 @@ var apacheVhostTemplate = template.Must(template.New("apache-vhost").Parse(gener
   </DirectoryMatch>
 {{if .Include}}
   Include "{{.Include}}"
-{{end}}</VirtualHost>
+{{end}}{{end}}`
+
+var apacheVhostTemplate = template.Must(template.New("apache-vhost").Parse(apacheSite + generatedHeader + `
+# {{.Name}}
+{{if .Conf.Front}}
+<VirtualHost *:{{.Conf.HTTPPort}}>
+  ServerName {{.Hostname}}
+{{template "site" .}}</VirtualHost>
 {{if .SSL}}
 <VirtualHost *:{{.Conf.HTTPSPort}}>
   ServerName {{.Hostname}}
-  DocumentRoot "{{.DocRoot}}"
-
   SSLEngine on
   SSLCertificateFile "{{.CertFile}}"
   SSLCertificateKeyFile "{{.KeyFile}}"
+{{template "site" .}}</VirtualHost>
+{{end}}{{else}}
+# Behind Wharf's front door, on loopback only. PHP is told the scheme and port
+# the browser used, or Kirby writes this instance's own port into every link.
+<VirtualHost 127.0.0.1:{{.Port}}>
+  ServerName {{.Hostname}}
+  ProxyFCGISetEnvIf "-n %{HTTP:X-Forwarded-Port}" SERVER_PORT "%{HTTP:X-Forwarded-Port}"
+  ProxyFCGISetEnvIf "%{HTTP:X-Forwarded-Proto} == 'https'" HTTPS "on"
+{{template "site" .}}</VirtualHost>
+{{end}}`))
 
-  <Directory "{{.DocRoot}}">
-    Options Indexes FollowSymLinks
-    AllowOverride All
-    Require all granted
-  </Directory>
+var apacheForwardTemplate = template.Must(template.New("apache-forward").Parse(generatedHeader + `
+# {{.Name}} is served by its own {{.Server}} on 127.0.0.1:{{.Port}}. This is its
+# front door, so its URL needs no port.
 
-  <FilesMatch \.php$>
-    SetHandler "proxy:fcgi://127.0.0.1:{{.PHPPort}}"
-  </FilesMatch>
-{{if .Include}}
-  Include "{{.Include}}"
-{{end}}</VirtualHost>
+<VirtualHost *:{{.Conf.HTTPPort}}>
+  ServerName {{.Hostname}}
+  ErrorLog "{{.LogDir}}/error.log"
+  ProxyPreserveHost On
+  ProxyPass "/" "http://127.0.0.1:{{.Port}}/"
+  RequestHeader set X-Forwarded-Proto "http"
+  RequestHeader set X-Forwarded-Port "{{.Conf.HTTPPort}}"
+</VirtualHost>
+{{if .SSL}}
+<VirtualHost *:{{.Conf.HTTPSPort}}>
+  ServerName {{.Hostname}}
+  SSLEngine on
+  SSLCertificateFile "{{.CertFile}}"
+  SSLCertificateKeyFile "{{.KeyFile}}"
+  ErrorLog "{{.LogDir}}/error.log"
+  ProxyPreserveHost On
+  ProxyPass "/" "http://127.0.0.1:{{.Port}}/"
+  RequestHeader set X-Forwarded-Proto "https"
+  RequestHeader set X-Forwarded-Port "{{.Conf.HTTPSPort}}"
+</VirtualHost>
 {{end}}`))

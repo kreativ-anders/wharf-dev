@@ -11,7 +11,8 @@ void main() {
     final state = WharfState.fromJson(jsonDecode(_snapshot) as Map<String, dynamic>);
 
     expect(state.root, '/Users/x/Wharf');
-    expect(state.domain, 'wharf');
+    expect(state.version, 'v0.1.0');
+    expect(state.domain, 'localhost');
     expect(state.projects, hasLength(2));
     expect(state.unregistered, ['dropped-in']);
     expect(state.services.webserver.active, 'nginx');
@@ -20,14 +21,24 @@ void main() {
     expect(state.ssl.trusted, isFalse);
   });
 
-  test('a project with no hosts entry falls back to its raw port', () {
+  test('every project is published under .localhost, with no port', () {
     final state = WharfState.fromJson(jsonDecode(_snapshot) as Map<String, dynamic>);
-    final declined = state.projects.firstWhere((p) => p.name == 'legacy-app');
+    // legacy-app is on its own Apache instance, behind the front door.
+    final legacy = state.projects.firstWhere((p) => p.name == 'legacy-app');
 
-    expect(declined.hostsEntry, isFalse);
-    expect(declined.prettyUrl, isEmpty);
-    expect(declined.url, declined.fallbackUrl);
-    expect(declined.url, contains('127.0.0.1:8081'));
+    expect(legacy.url, 'http://legacy-app.localhost');
+  });
+
+  test('a project says what serves it, down to the patch version', () {
+    final state = WharfState.fromJson(jsonDecode(_snapshot) as Map<String, dynamic>);
+    final kirby = state.projects.firstWhere((p) => p.name == 'my-kirby-site');
+    final legacy = state.projects.firstWhere((p) => p.name == 'legacy-app');
+
+    expect(kirby.webserverVersion, '1.27.3');
+    expect(kirby.phpFullVersion, '8.4.3');
+    expect(kirby.servedBy, 'nginx 1.27.3 · PHP 8.4.3');
+    // A binary that did not report its version falls back to the configured one.
+    expect(legacy.servedBy, 'apache · PHP 8.4');
   });
 
   test('overrides are distinguishable from the resolved value', () {
@@ -76,6 +87,7 @@ void main() {
   test('an empty snapshot parses, so a disconnected GUI still renders', () {
     final state = WharfState.fromJson(const {});
     expect(state.projects, isEmpty);
+    expect(state.version, isEmpty);
     expect(state.services.webserver.active, isEmpty);
     expect(state.anyRunning, isFalse);
   });
@@ -84,7 +96,8 @@ void main() {
 const _snapshot = '''
 {
   "root": "/Users/x/Wharf",
-  "domain": "wharf",
+  "version": "v0.1.0",
+  "domain": "localhost",
   "services": {
     "webserver": {"active": "nginx", "available": ["apache", "nginx"], "state": "running", "switching": false},
     "php": {
@@ -101,11 +114,10 @@ const _snapshot = '''
     }
   },
   "projects": [
-    {"name": "my-kirby-site", "state": "running", "url": "http://my-kirby-site.wharf",
-     "pretty_url": "http://my-kirby-site.wharf", "fallback_url": "http://127.0.0.1:8080",
-     "hosts_entry": true, "webserver": "nginx", "php_version": "8.4", "ssl": false, "port": 8080},
-    {"name": "legacy-app", "state": "stopped", "url": "http://127.0.0.1:8081",
-     "fallback_url": "http://127.0.0.1:8081", "hosts_entry": false,
+    {"name": "my-kirby-site", "state": "running", "url": "http://my-kirby-site.localhost",
+     "webserver": "nginx", "php_version": "8.4", "ssl": false, "port": 8080,
+     "webserver_version": "1.27.3", "php_full_version": "8.4.3"},
+    {"name": "legacy-app", "state": "stopped", "url": "http://legacy-app.localhost",
      "webserver": "apache", "webserver_override": "apache", "php_version": "8.4",
      "ssl": false, "port": 8081}
   ],

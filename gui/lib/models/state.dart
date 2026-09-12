@@ -13,9 +13,14 @@ class WharfState {
     required this.ssl,
     required this.busy,
     this.appearance = 'system',
+    this.version = '',
   });
 
   final String root;
+
+  /// The running Wharf's version, as wharfd was built; empty while no daemon
+  /// has answered (features/settings.feature).
+  final String version;
 
   /// 'system', 'light' or 'dark' — a setting in wharf.json like any other
   /// (features/settings.feature).
@@ -42,7 +47,7 @@ class WharfState {
     root: '',
     www: '',
     config: '',
-    domain: 'wharf',
+    domain: 'localhost',
     services: Services.empty,
     projects: [],
     unregistered: [],
@@ -54,10 +59,11 @@ class WharfState {
 
   factory WharfState.fromJson(Map<String, dynamic> json) => WharfState(
     root: json['root'] as String? ?? '',
+    version: json['version'] as String? ?? '',
     appearance: json['appearance'] as String? ?? 'system',
     www: json['www'] as String? ?? '',
     config: json['config'] as String? ?? '',
-    domain: json['domain'] as String? ?? 'wharf',
+    domain: json['domain'] as String? ?? 'localhost',
     services: Services.fromJson(json['services'] as Map<String, dynamic>? ?? const {}),
     projects: (json['projects'] as List<dynamic>? ?? const [])
         .map((e) => Project.fromJson(e as Map<String, dynamic>))
@@ -207,6 +213,8 @@ class Php {
     this.dir = '',
     this.downloadable = const [],
     this.downloading = const [],
+    this.settings = '',
+    this.settingsExist = false,
   });
 
   final String version;
@@ -231,6 +239,11 @@ class Php {
   final List<PhpDownload> downloadable;
   final List<String> downloading;
 
+  /// config/php.ini, the user's own PHP settings, and whether it exists yet
+  /// (features/php-settings.feature).
+  final String settings;
+  final bool settingsExist;
+
   static const empty = Php(
     version: '',
     available: [],
@@ -254,6 +267,8 @@ class Php {
     downloading: (json['downloading'] as List<dynamic>? ?? const [])
         .map((e) => e as String)
         .toList(),
+    settings: json['settings'] as String? ?? '',
+    settingsExist: json['settings_exist'] as bool? ?? false,
   );
 
   /// Whether the selected version is actually present on the machine.
@@ -262,13 +277,18 @@ class Php {
 
 /// A version the picker offers to download.
 class PhpDownload {
-  const PhpDownload({required this.version, required this.status});
+  const PhpDownload({required this.version, required this.status, this.fullVersion = ''});
   final String version;
   final String status;
+
+  /// The release a download would fetch, e.g. "8.5.1"; empty until the
+  /// daemon has looked it up (features/php-runtime.feature).
+  final String fullVersion;
 
   factory PhpDownload.fromJson(Map<String, dynamic> json) => PhpDownload(
     version: json['version'] as String? ?? '',
     status: json['status'] as String? ?? 'unknown',
+    fullVersion: json['full_version'] as String? ?? '',
   );
 }
 
@@ -324,9 +344,6 @@ class Project {
     required this.name,
     required this.state,
     required this.url,
-    required this.prettyUrl,
-    required this.fallbackUrl,
-    required this.hostsEntry,
     required this.webserver,
     required this.webserverOverride,
     required this.phpVersion,
@@ -336,23 +353,36 @@ class Project {
     required this.error,
     this.dir = '',
     this.linked = false,
+    this.logDir = '',
     this.customConfigs = const [],
+    this.webserverVersion = '',
+    this.phpFullVersion = '',
   });
 
   final String name;
   final String state;
+  /// `<name>.localhost`, with no port whichever webserver serves the project
+  /// (features/pretty-urls.feature).
   final String url;
-  final String prettyUrl;
-  final String fallbackUrl;
-
-  /// False when the elevation prompt was declined: the project works, but only
-  /// on its raw port.
-  final bool hostsEntry;
 
   final String webserver;
   final String? webserverOverride;
   final String phpVersion;
   final String? phpOverride;
+
+  /// What the serving binaries reported, e.g. "1.27.3" and "8.3.14"; empty
+  /// when one did not say (features/app-configuration.feature, "A running
+  /// project shows what serves it").
+  final String webserverVersion;
+  final String phpFullVersion;
+
+  /// "nginx 1.27.3 · PHP 8.3.14", falling back to the configured version
+  /// where a binary did not report its own.
+  String get servedBy {
+    final server = webserverVersion.isEmpty ? webserver : '$webserver $webserverVersion';
+    final php = phpFullVersion.isEmpty ? phpVersion : phpFullVersion;
+    return '$server · PHP $php';
+  }
   final bool ssl;
   final int port;
   final String error;
@@ -360,6 +390,9 @@ class Project {
   /// The project's folder; [linked] when it is not in www/.
   final String dir;
   final bool linked;
+
+  /// The project's own log folder (features/project-logs.feature).
+  final String logDir;
 
   /// One per webserver (features/app-configuration.feature).
   final List<CustomConfig> customConfigs;
@@ -384,18 +417,18 @@ class Project {
     name: json['name'] as String? ?? '',
     state: json['state'] as String? ?? 'stopped',
     url: json['url'] as String? ?? '',
-    prettyUrl: json['pretty_url'] as String? ?? '',
-    fallbackUrl: json['fallback_url'] as String? ?? '',
-    hostsEntry: json['hosts_entry'] as bool? ?? false,
     webserver: json['webserver'] as String? ?? '',
     webserverOverride: json['webserver_override'] as String?,
     phpVersion: json['php_version'] as String? ?? '',
     phpOverride: json['php_override'] as String?,
+    webserverVersion: json['webserver_version'] as String? ?? '',
+    phpFullVersion: json['php_full_version'] as String? ?? '',
     ssl: json['ssl'] as bool? ?? false,
     port: json['port'] as int? ?? 0,
     error: json['error'] as String? ?? '',
     dir: json['dir'] as String? ?? '',
     linked: json['linked'] as bool? ?? false,
+    logDir: json['log_dir'] as String? ?? '',
     customConfigs: (json['custom_configs'] as List<dynamic>? ?? const [])
         .map((e) => CustomConfig.fromJson(e as Map<String, dynamic>))
         .toList(),

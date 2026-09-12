@@ -20,6 +20,9 @@ class DaemonError implements Exception {
   /// A template could not be downloaded.
   bool get isOffline => code == 'offline';
 
+  /// The daemon does not know the method: it is older than this app.
+  bool get isUnknownMethod => code == 'unknown_method';
+
   @override
   String toString() => message;
 }

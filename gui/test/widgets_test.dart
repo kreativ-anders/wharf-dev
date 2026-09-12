@@ -19,13 +19,36 @@ Daemon fixture(String json) {
   return daemon;
 }
 
+/// A fixture daemon that answers "Edit php.ini" with the snapshot's path, as
+/// the real one does once the file exists.
+class _PhpSettingsDaemon extends Daemon {
+  _PhpSettingsDaemon(String json) : super(root: '/tmp/wharf-test') {
+    state = WharfState.fromJson(jsonDecode(json) as Map<String, dynamic>);
+  }
+
+  @override
+  Future<void> editPhpSettings(Future<void> Function(String) open) =>
+      open(state.services.php.settings);
+}
+
 Widget wrap(Widget child) => MaterialApp(theme: wharfTheme(Brightness.light), home: child);
 
-/// Settings is a lazy list; a tall surface builds all of it.
+/// Settings pages are lazy lists; a tall surface builds all of one.
 void tall(WidgetTester tester) {
   tester.view.physicalSize = const Size(800, 2400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
+}
+
+/// Opens Settings on one page.
+Future<void> showSettings(
+  WidgetTester tester,
+  Daemon daemon, [
+  SettingsSection page = SettingsSection.general,
+]) async {
+  tall(tester);
+  await tester.pumpWidget(wrap(SettingsPage(daemon: daemon, initial: page)));
+  await tester.pump();
 }
 
 /// Records what would have been opened in the file manager.
@@ -38,22 +61,44 @@ List<String> captureOpened() {
 }
 
 void main() {
+  // features/app-configuration.feature — "A running project shows what serves it"
+  testWidgets('a running project shows its webserver and PHP versions', (tester) async {
+    final daemon = fixture(_twoProjects);
+    await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
+
+    expect(find.text('nginx 1.27.3 · PHP 8.4.3'), findsOneWidget);
+    // legacy-app carries the same versions but is stopped: nothing serves it.
+    expect(find.textContaining('· PHP'), findsOneWidget);
+  });
+
   testWidgets('the project list shows name, status and URL, and nothing else', (tester) async {
     final daemon = fixture(_twoProjects);
     await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
 
     expect(find.text('my-kirby-site'), findsOneWidget);
-    expect(find.text('http://my-kirby-site.wharf'), findsOneWidget);
+    expect(find.text('http://my-kirby-site.localhost'), findsOneWidget);
     expect(find.byType(StatusDot), findsNWidgets(2));
 
     // A running project offers Stop, Restart and an Open action; a stopped
     // one offers Start. Each offers its settings. Nothing else is on the row.
-    expect(find.byIcon(Icons.stop), findsOneWidget);
+    expect(find.byIcon(Icons.stop), findsNWidgets(2), reason: 'the row, and Stop all');
     expect(find.byIcon(Icons.restart_alt), findsOneWidget);
     expect(find.byIcon(Icons.play_arrow), findsOneWidget);
     expect(find.byIcon(Icons.open_in_new), findsOneWidget);
     expect(find.byTooltip('Settings for my-kirby-site'), findsOneWidget);
     expect(find.byTooltip('Settings for legacy-app'), findsOneWidget);
+  });
+
+  testWidgets('the title bar carries the mark beside the name', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(wrap(ProjectsPage(daemon: fixture(_twoProjects))));
+
+    final mark = find.descendant(of: find.byType(AppBar), matching: find.byType(Image));
+    expect(mark, findsOneWidget);
+    expect(tester.getCenter(mark).dx, lessThan(tester.getCenter(find.text('Wharf')).dx));
+    // It repeats the name, so a screen reader hears "Wharf" once.
+    expect(tester.widget<Image>(mark).excludeFromSemantics, isTrue);
+    semantics.dispose();
   });
 
   // features/tray-actions.feature — "Every project offers the actions that fit
@@ -93,6 +138,50 @@ void main() {
     expect(find.byTooltip('Stop legacy-app'), findsNothing);
   });
 
+  // features/tray-actions.feature — "Project actions keep their places in the
+  // list"
+  testWidgets('row actions keep one order and their places, each in its colour', (tester) async {
+    final daemon = fixture(_twoProjects);
+    await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
+    double x(String tooltip) => tester.getCenter(find.byTooltip(tooltip)).dx;
+
+    // Open, Restart, Settings, then Stop, left to right.
+    final running = [
+      x('Open http://my-kirby-site.localhost'),
+      x('Restart my-kirby-site'),
+      x('Settings for my-kirby-site'),
+      x('Stop my-kirby-site'),
+    ];
+    expect(running, orderedEquals(List.of(running)..sort()));
+    // A stopped project leaves Open and Restart empty, so its Settings and
+    // Start stand exactly under the running project's Settings and Stop.
+    expect(x('Settings for legacy-app'), running[2]);
+    expect(x('Start legacy-app'), running[3]);
+
+    IconButton button(String tooltip) => tester.widget<IconButton>(
+      find.ancestor(of: find.byTooltip(tooltip), matching: find.byType(IconButton)).first,
+    );
+    const c = WharfColors.light;
+    expect(button('Start legacy-app').color, c.start);
+    expect(button('Stop my-kirby-site').color, c.stop);
+    expect(button('Restart my-kirby-site').color, c.restart);
+    // Neutral actions stay ink.
+    expect(button('Settings for my-kirby-site').color, isNull);
+  });
+
+  // features/tray-actions.feature — "Stopping all from the main window"
+  testWidgets('stop all is a button while anything runs', (tester) async {
+    await tester.pumpWidget(wrap(ProjectsPage(daemon: fixture(_twoProjects))));
+    expect(find.widgetWithText(OutlinedButton, 'Stop all'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Stop all'), findsNothing);
+
+    final idle = _twoProjects
+        .replaceFirst('"state": "running"', '"state": "stopped"')
+        .replaceFirst('"state": "running"', '"state": "stopped"');
+    await tester.pumpWidget(wrap(ProjectsPage(daemon: fixture(idle))));
+    expect(find.text('Stop all'), findsNothing);
+  });
+
   // features/app-configuration.feature — "Every project row leads to its settings"
   testWidgets('every project row has a visible way into its settings', (tester) async {
     final daemon = fixture(_twoProjects);
@@ -115,6 +204,22 @@ void main() {
     expect(find.text('apache'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Edit'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Create'), findsOneWidget);
+  });
+
+  // features/project-logs.feature — "Opening a project's logs"
+  testWidgets('a project\'s logs open from its settings', (tester) async {
+    final opened = captureOpened();
+    await tester.pumpWidget(wrap(ProjectsPage(daemon: fixture(_twoProjects))));
+
+    await tester.tap(find.byTooltip('Settings for my-kirby-site'));
+    await tester.pumpAndSettle();
+    expect(find.text('Logs'), findsOneWidget);
+    expect(find.text('/Users/x/Wharf/data/log/projects/my-kirby-site'), findsOneWidget);
+    await tester.ensureVisible(find.text('Open logs'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open logs'));
+
+    expect(opened, ['/Users/x/Wharf/data/log/projects/my-kirby-site']);
   });
 
   // features/project-folders.feature — "Opening a project's folder"
@@ -154,20 +259,78 @@ void main() {
     expect(find.textContaining('Browsers will warn'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Trust…'), findsOneWidget);
 
-    tall(tester);
-    await tester.pumpWidget(wrap(SettingsPage(daemon: daemon)));
-    await tester.pump();
+    await showSettings(tester, daemon, SettingsSection.ssl);
     expect(find.widgetWithText(FilledButton, 'Trust certificates'), findsOneWidget);
   });
 
-  // features/pretty-urls.feature — "Elevation is declined"
-  testWidgets('a project with no hosts entry shows its raw-port URL', (tester) async {
+  // features/pretty-urls.feature — "Every project is reachable under its own
+  // .localhost name"
+  testWidgets('every project shows its .localhost URL, with no port', (tester) async {
     final daemon = fixture(_twoProjects);
     await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
 
-    // The declined-elevation project shows the fallback, not a pretty URL.
-    expect(find.text('http://127.0.0.1:8081'), findsOneWidget);
-    expect(find.byIcon(Icons.lock_open), findsOneWidget);
+    expect(find.text('http://my-kirby-site.localhost'), findsOneWidget);
+    // legacy-app runs on Apache behind the nginx front door: still no port.
+    expect(find.text('https://legacy-app.localhost'), findsOneWidget);
+    expect(find.textContaining(':80'), findsNothing);
+  });
+
+  // features/quick-app-php.feature — "Choosing the webserver while creating a
+  // project"
+  testWidgets('a new project gets a name, a template and a webserver', (tester) async {
+    final daemon = fixture(_twoProjects);
+    daemon.templates = const [
+      Template(id: 'kirby', name: 'Kirby', runtime: 'php'),
+      Template(id: 'empty', name: 'Empty folder', runtime: 'php'),
+    ];
+    await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
+
+    await tester.tap(find.text('New project'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextField, 'Name'), findsOneWidget);
+    expect(find.text('Kirby'), findsOneWidget);
+    // The active webserver is picked to begin with; there is no "Default".
+    expect(find.text('nginx'), findsOneWidget);
+    expect(find.textContaining('Default'), findsNothing);
+
+    await tester.tap(find.text('nginx'));
+    await tester.pumpAndSettle();
+    expect(find.text('apache').last, findsOneWidget);
+    await tester.tap(find.text('apache').last);
+    await tester.pumpAndSettle();
+    expect(find.text('apache'), findsOneWidget);
+
+    await tester.enterText(find.widgetWithText(TextField, 'Name'), 'blog');
+    await tester.pump();
+    // The address does not depend on the webserver picked.
+    expect(find.text('http://blog.localhost'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Create'), findsOneWidget);
+  });
+
+  // features/settings.feature — "Reset asks first"
+  testWidgets('reset warns first, naming what is deleted and what is kept', (tester) async {
+    final daemon = fixture(_twoProjects);
+    await showSettings(tester, daemon);
+
+    await tester.ensureVisible(find.text('Reset Wharf…'));
+    await tester.tap(find.text('Reset Wharf…'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('Reset Wharf?'), findsOneWidget);
+    // legacy-app lives in www/, and so does the unregistered folder: both go.
+    expect(find.text('•  legacy-app'), findsOneWidget);
+    expect(find.text('•  dropped-in'), findsOneWidget);
+    // my-kirby-site was added from elsewhere: it stays where it is.
+    expect(find.textContaining('/Users/x/Code/my-kirby-site'), findsOneWidget);
+    // The whole config folder goes.
+    expect(find.textContaining('Everything in /Users/x/Wharf/config goes too'), findsOneWidget);
+
+    // And nothing is deleted unless the user confirms
+    await tester.tap(find.text('Cancel'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Reset Wharf?'), findsNothing);
   });
 
   // features/tray-actions.feature — "Adding a project via the tray"
@@ -196,36 +359,80 @@ void main() {
 
   // features/service-management.feature — "Port conflict on switch"
   testWidgets('a webserver switch is shown as switching, not as stopped', (tester) async {
-    final daemon = fixture(_switching);
-    tall(tester);
-    await tester.pumpWidget(wrap(SettingsPage(daemon: daemon)));
-    await tester.pump();
+    await showSettings(tester, fixture(_switching), SettingsSection.webserver);
 
     expect(find.text('switching webserver…'), findsOneWidget);
   });
 
   // features/settings.feature — "Settings screen hides roadmap services in v1"
-  testWidgets('settings show only Webserver, PHP runtime and SSL', (tester) async {
-    final daemon = fixture(_twoProjects);
-    tall(tester);
-    await tester.pumpWidget(wrap(SettingsPage(daemon: daemon)));
-    await tester.pump();
+  testWidgets('settings list only General, Webserver, PHP and SSL', (tester) async {
+    await showSettings(tester, fixture(_twoProjects));
 
-    expect(find.text('Webserver'), findsOneWidget);
-    expect(find.text('PHP runtime'), findsOneWidget);
-    expect(find.text('SSL'), findsOneWidget);
+    final pages = [
+      for (final e in find
+          .byWidgetPredicate(
+            (w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('nav:'),
+          )
+          .evaluate())
+        (e.widget.key! as ValueKey<String>).value,
+    ];
+    expect(pages, ['nav:general', 'nav:webserver', 'nav:php', 'nav:ssl']);
+    for (final label in ['General', 'Webserver', 'PHP', 'SSL']) {
+      expect(find.text(label), findsWidgets, reason: label);
+    }
     for (final roadmap in ['MySQL', 'PostgreSQL', 'Mailpit', 'Database', 'Mail']) {
       expect(find.text(roadmap), findsNothing, reason: '$roadmap is a roadmap capability');
     }
   });
 
+  // features/settings.feature — "Settings pages are chosen from a side
+  // navigation"
+  testWidgets('settings pages are chosen from a navigation on the left', (tester) async {
+    await showSettings(tester, fixture(_twoProjects));
+
+    // General holds the appearance, the config folder, the version and the reset.
+    expect(find.text('Appearance'), findsOneWidget);
+    expect(find.text('Open config folder'), findsOneWidget);
+    expect(find.text('Version'), findsOneWidget);
+    expect(find.text('Reset Wharf…'), findsOneWidget);
+    final php = find.byKey(const ValueKey('nav:php'));
+    expect(tester.getCenter(php).dx, lessThan(tester.getCenter(find.text('Appearance')).dx));
+
+    // Choosing a page shows that page alone.
+    await tester.tap(php);
+    await tester.pump();
+    expect(find.text('PHP 8.4.3'), findsOneWidget);
+    expect(find.text('Appearance'), findsNothing);
+    expect(find.text('Reset Wharf…'), findsNothing);
+
+    // The narrowest window Wharf allows keeps the icons, each still named,
+    // and nothing on the page is cut off.
+    tester.view.physicalSize = const Size(420, 1600);
+    await tester.pump();
+    expect(find.byTooltip('Webserver'), findsOneWidget);
+  });
+
+  // features/settings.feature — "General shows the version, and no update
+  // check yet"
+  testWidgets('General shows the version and an update check that is off', (tester) async {
+    await showSettings(tester, fixture(_twoProjects));
+
+    expect(find.text('Wharf v0.1.0'), findsOneWidget);
+    final check = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'Check for updates'),
+    );
+    expect(check.onPressed, isNull, reason: 'the update check is not built yet');
+    expect(find.textContaining('only look when you ask'), findsOneWidget);
+
+    // A GUI no daemon has answered yet says so, rather than showing "Wharf ".
+    await showSettings(tester, fixture('{}'));
+    expect(find.text('Version unknown'), findsOneWidget);
+  });
+
   // features/php-runtime.feature — "First start prefers a supported version
   // over a newer unsupported one"
   testWidgets('the PHP picker shows each version with its support status', (tester) async {
-    final daemon = fixture(_twoProjects);
-    tall(tester);
-    await tester.pumpWidget(wrap(SettingsPage(daemon: daemon)));
-    await tester.pump();
+    await showSettings(tester, fixture(_twoProjects), SettingsSection.php);
 
     expect(find.text('PHP 8.4.3'), findsOneWidget);
     expect(
@@ -242,10 +449,7 @@ void main() {
   // features/php-runtime.feature — "Opening where a PHP version lives"
   testWidgets('each PHP version\'s folder opens from the picker', (tester) async {
     final opened = captureOpened();
-    final daemon = fixture(_twoProjects);
-    tall(tester);
-    await tester.pumpWidget(wrap(SettingsPage(daemon: daemon)));
-    await tester.pump();
+    await showSettings(tester, fixture(_twoProjects), SettingsSection.php);
 
     await tester.tap(find.byTooltip('Open folder').first);
 
@@ -256,13 +460,14 @@ void main() {
   // download"
   // features/php-runtime.feature — "Downloading a PHP version that is not
   // installed"
+  // features/php-runtime.feature — "A download offer names the release it
+  // downloads"
   testWidgets('supported versions that are not installed can be downloaded', (tester) async {
-    final daemon = fixture(_twoProjects);
-    tall(tester);
-    await tester.pumpWidget(wrap(SettingsPage(daemon: daemon)));
-    await tester.pump();
+    await showSettings(tester, fixture(_twoProjects), SettingsSection.php);
 
-    expect(find.text('PHP 8.5'), findsOneWidget);
+    // Named by the release it fetches where that has been looked up…
+    expect(find.text('PHP 8.5.1'), findsOneWidget);
+    // …and by its minor version where it has not.
     expect(find.text('PHP 8.3'), findsOneWidget);
     expect(find.text('Downloading…'), findsOneWidget, reason: '8.3 is downloading');
     expect(
@@ -272,25 +477,46 @@ void main() {
     );
   });
 
-  // features/settings.feature — "Webserver status while nothing is running"
-  testWidgets('an idle webserver says when it starts, not that it is stopped', (tester) async {
-    final daemon = fixture(_twoProjects.replaceFirst('"state": "running"', '"state": "stopped"'));
-    tall(tester);
-    await tester.pumpWidget(wrap(SettingsPage(daemon: daemon)));
+  // features/php-settings.feature — "Editing PHP settings"
+  testWidgets('php.ini opens in the editor from the PHP page', (tester) async {
+    final edited = <String>[];
+    final previous = editFile;
+    editFile = (path) async => edited.add(path);
+    addTearDown(() => editFile = previous);
+    await showSettings(tester, _PhpSettingsDaemon(_twoProjects), SettingsSection.php);
+
+    expect(find.text('PHP settings'), findsOneWidget);
+    await tester.ensureVisible(find.text('Edit php.ini'));
+    await tester.tap(find.text('Edit php.ini'));
     await tester.pump();
 
-    expect(find.text('Starts with the first project — serves my-kirby-site'), findsOneWidget);
+    expect(edited, ['/Users/x/Wharf/config/php.ini']);
+  });
+
+  // features/settings.feature — "Webserver status while nothing is running"
+  testWidgets('an idle webserver says when it starts, and names its projects on hover', (
+    tester,
+  ) async {
+    final daemon = fixture(_twoProjects.replaceFirst('"state": "running"', '"state": "stopped"'));
+    await showSettings(tester, daemon, SettingsSection.webserver);
+
+    expect(find.text('Starts with the first project'), findsOneWidget);
     expect(find.text('stopped'), findsNothing);
+    // Name and version, not where the copy came from.
+    expect(find.text('nginx 1.27.3'), findsOneWidget);
+    expect(find.textContaining('Homebrew'), findsNothing);
+    expect(find.textContaining('on this machine'), findsNothing);
+    // The projects it serves are in its tooltip, not in the list.
+    expect(find.textContaining('my-kirby-site'), findsNothing);
+    expect(find.byTooltip('Serves my-kirby-site'), findsOneWidget);
+    expect(find.byTooltip('Serves no project'), findsOneWidget);
   });
 
   // features/settings.feature — "A webserver that is not installed says where
   // it belongs"
   testWidgets('a missing webserver says where its binary goes', (tester) async {
     final opened = captureOpened();
-    final daemon = fixture(_twoProjects);
-    tall(tester);
-    await tester.pumpWidget(wrap(SettingsPage(daemon: daemon)));
-    await tester.pump();
+    await showSettings(tester, fixture(_twoProjects), SettingsSection.webserver);
 
     expect(
       find.text('Not installed — expected at /Users/x/Wharf/bin/apache/httpd'),
@@ -301,10 +527,7 @@ void main() {
   });
 
   testWidgets('a selected version that is not installed is called out', (tester) async {
-    final daemon = fixture(_selectedNotInstalled);
-    tall(tester);
-    await tester.pumpWidget(wrap(SettingsPage(daemon: daemon)));
-    await tester.pump();
+    await showSettings(tester, fixture(_selectedNotInstalled), SettingsSection.php);
 
     // The list renders, but nothing in it is selected — so say why.
     expect(find.textContaining('PHP 8.5 is selected but is not installed'), findsOneWidget);
@@ -313,16 +536,12 @@ void main() {
 
   // features/php-runtime.feature — "First start with no PHP installed"
   testWidgets('with no PHP installed the picker says where to put one', (tester) async {
-    final daemon = fixture(_noPhp);
-    tall(tester);
-    await tester.pumpWidget(wrap(SettingsPage(daemon: daemon)));
-    await tester.pump();
+    await showSettings(tester, fixture(_noPhp), SettingsSection.php);
 
     expect(find.text('No PHP installation found on this machine.'), findsOneWidget);
     expect(find.textContaining('/Users/x/Wharf/bin/php'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Download'), findsOneWidget);
-    // One per section: PHP and webservers are scanned separately.
-    expect(find.widgetWithText(TextButton, 'Re-scan'), findsWidgets);
+    expect(find.widgetWithText(TextButton, 'Re-scan'), findsOneWidget);
   });
 
   testWidgets('status is not told by colour alone', (tester) async {
@@ -367,17 +586,14 @@ void main() {
       '"installed": false, "binary": "/Users/x/Wharf/bin/nginx/nginx", "projects": [], '
       '"install": {"installable": true, "via": "download", "hint": "Downloads the latest nginx."}',
     );
-    tall(tester);
-    await tester.pumpWidget(wrap(SettingsPage(daemon: fixture(installable))));
-    await tester.pump();
+    await showSettings(tester, fixture(installable), SettingsSection.webserver);
     expect(find.widgetWithText(FilledButton, 'Install nginx'), findsOneWidget);
 
     final installing = installable.replaceFirst(
       '"projects": [], "install"',
       '"projects": [], "installing": true, "install"',
     );
-    await tester.pumpWidget(wrap(SettingsPage(daemon: fixture(installing))));
-    await tester.pump();
+    await showSettings(tester, fixture(installing), SettingsSection.webserver);
     expect(find.text('Installing…'), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp('Installing nginx')), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Install nginx'), findsNothing);
@@ -394,9 +610,7 @@ void main() {
             '"install": {"installable": false, "hint": "Install Apache with your package manager."}',
       ),
     );
-    tall(tester);
-    await tester.pumpWidget(wrap(SettingsPage(daemon: daemon)));
-    await tester.pump();
+    await showSettings(tester, daemon, SettingsSection.webserver);
 
     expect(find.textContaining('Install Apache with your package manager.'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Install apache'), findsNothing);
@@ -412,6 +626,7 @@ String _withNginx(String fields) => _twoProjects.replaceFirst(
 const _twoProjects = '''
 {
   "root": "/Users/x/Wharf",
+  "version": "v0.1.0",
   "www": "/Users/x/Wharf/www",
   "config": "/Users/x/Wharf/config",
   "ssl": {"installed": true, "trusted": true, "ca_root": "/Users/x/ca"},
@@ -420,12 +635,14 @@ const _twoProjects = '''
       "servers": [
         {"name": "apache", "installed": false, "binary": "/Users/x/Wharf/bin/apache/httpd", "projects": []},
         {"name": "nginx", "installed": true, "binary": "/Users/x/Wharf/bin/nginx/nginx",
-         "projects": ["my-kirby-site"]}
+         "projects": ["my-kirby-site"], "version": "1.27.3", "source": "homebrew"}
       ]},
     "php": {
       "version": "8.4", "available": ["8.1", "8.4"], "recommended": "8.5", "status": "active",
       "dir": "/Users/x/Wharf/bin/php",
-      "downloadable": [{"version": "8.5", "status": "active"}, {"version": "8.3", "status": "security"}],
+      "settings": "/Users/x/Wharf/config/php.ini",
+      "downloadable": [{"version": "8.5", "status": "active", "full_version": "8.5.1"},
+                       {"version": "8.3", "status": "security"}],
       "downloading": ["8.3"],
       "installs": [
         {"version": "8.4", "full_version": "8.4.3", "dir": "/opt/php84", "fastcgi": "/opt/php84/php-fpm",
@@ -436,19 +653,21 @@ const _twoProjects = '''
     }
   },
   "projects": [
-    {"name": "my-kirby-site", "state": "running", "url": "http://my-kirby-site.wharf",
-     "pretty_url": "http://my-kirby-site.wharf", "fallback_url": "http://127.0.0.1:8080",
-     "hosts_entry": true, "webserver": "nginx", "php_version": "8.4", "port": 8080,
+    {"name": "my-kirby-site", "state": "running", "url": "http://my-kirby-site.localhost",
+     "webserver": "nginx", "php_version": "8.4", "port": 8080,
+     "webserver_version": "1.27.3", "php_full_version": "8.4.3",
      "dir": "/Users/x/Code/my-kirby-site", "linked": true,
+     "log_dir": "/Users/x/Wharf/data/log/projects/my-kirby-site",
      "custom_configs": [
        {"webserver": "apache", "path": "/Users/x/Wharf/config/vhosts/my-kirby-site.apache.conf",
         "exists": false, "active": false},
        {"webserver": "nginx", "path": "/Users/x/Wharf/config/vhosts/my-kirby-site.nginx.conf",
         "exists": true, "active": true}
      ]},
-    {"name": "legacy-app", "state": "stopped", "url": "http://127.0.0.1:8081",
-     "fallback_url": "http://127.0.0.1:8081", "hosts_entry": false, "ssl": true,
+    {"name": "legacy-app", "state": "stopped", "url": "https://legacy-app.localhost",
+     "ssl": true,
      "webserver": "nginx", "php_version": "8.4", "port": 8081,
+     "webserver_version": "1.27.3", "php_full_version": "8.4.3",
      "dir": "/Users/x/Wharf/www/legacy-app"}
   ],
   "unregistered": ["dropped-in"]
