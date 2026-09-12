@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/manuel-steinberg/wharf/daemon/internal/layout"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/layout"
 )
 
 func TestValidateName(t *testing.T) {

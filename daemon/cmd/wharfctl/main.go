@@ -14,9 +14,9 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/manuel-steinberg/wharf/daemon/internal/core"
-	"github.com/manuel-steinberg/wharf/daemon/internal/ipc"
-	"github.com/manuel-steinberg/wharf/daemon/internal/layout"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/core"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/ipc"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/layout"
 )
 
 func main() {

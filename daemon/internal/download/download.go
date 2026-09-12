@@ -39,7 +39,7 @@ func get(ctx context.Context, client *http.Client, url string) (*http.Response, 
 		return nil, err
 	}
 	// Some download sites turn away Go's default agent as a bot.
-	req.Header.Set("User-Agent", "Wharf (+https://github.com/manuel-steinberg/wharf)")
+	req.Header.Set("User-Agent", "Wharf (+https://github.com/kreativ-anders/wharf-dev)")
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrUnreachable, err)

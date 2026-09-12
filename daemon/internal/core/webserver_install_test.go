@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/manuel-steinberg/wharf/daemon/internal/ipc"
-	"github.com/manuel-steinberg/wharf/daemon/internal/webserver"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/ipc"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/webserver"
 )
 
 // withoutWebserver removes Wharf's own copy of a webserver before the daemon

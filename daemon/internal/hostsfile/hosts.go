@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/manuel-steinberg/wharf/daemon/internal/elevate"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/elevate"
 )
 
 // marker tags the lines this tool owns, so removing a project touches exactly

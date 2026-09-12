@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/manuel-steinberg/wharf/daemon/internal/layout"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/layout"
 )
 
 // Template is a quick-app starting point (quick-app-php.feature). v1

@@ -15,11 +15,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/manuel-steinberg/wharf/daemon/internal/core"
-	"github.com/manuel-steinberg/wharf/daemon/internal/elevate"
-	"github.com/manuel-steinberg/wharf/daemon/internal/ipc"
-	"github.com/manuel-steinberg/wharf/daemon/internal/layout"
-	"github.com/manuel-steinberg/wharf/daemon/internal/watchdog"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/core"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/elevate"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/ipc"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/layout"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/watchdog"
 )
 
 // version is stamped at build time with -ldflags "-X main.version=…".

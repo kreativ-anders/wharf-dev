@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manuel-steinberg/wharf/daemon/internal/ipc"
-	"github.com/manuel-steinberg/wharf/daemon/internal/runtime"
-	"github.com/manuel-steinberg/wharf/daemon/internal/supervisor"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/ipc"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/runtime"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/supervisor"
 )
 
 // features/tray-actions.feature — "Starting a project from the tray"

@@ -15,9 +15,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/manuel-steinberg/wharf/daemon/internal/certs"
-	"github.com/manuel-steinberg/wharf/daemon/internal/ipc"
-	"github.com/manuel-steinberg/wharf/daemon/internal/runtime"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/certs"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/ipc"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/runtime"
 )
 
 // mkcertWorld is the outside world of an SSL setup: a download server

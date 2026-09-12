@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manuel-steinberg/wharf/daemon/internal/php"
-	"github.com/manuel-steinberg/wharf/daemon/internal/runtime"
-	"github.com/manuel-steinberg/wharf/daemon/internal/supervisor"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/php"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/runtime"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/supervisor"
 )
 
 // features/app-configuration.feature — "A running project shows what serves it"

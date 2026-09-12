@@ -104,7 +104,7 @@ wharf/
 │   └── webserver-install.feature    nginx/Apache: adopt, install, one config per project
 │
 ├── daemon/                    the Go core daemon — see daemon/README.md
-    ├── go.mod                 module github.com/manuel-steinberg/wharf/daemon
+    ├── go.mod                 module github.com/kreativ-anders/wharf-dev/daemon
     ├── cmd/
     │   ├── wharfd/            the daemon binary
     │   └── wharfctl/          CLI client; the front end until the GUI exists

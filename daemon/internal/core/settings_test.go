@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manuel-steinberg/wharf/daemon/internal/config"
-	"github.com/manuel-steinberg/wharf/daemon/internal/php"
-	"github.com/manuel-steinberg/wharf/daemon/internal/runtime"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/config"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/php"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/runtime"
 )
 
 // features/settings.feature — "Changing the global active webserver"

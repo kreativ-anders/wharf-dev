@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/manuel-steinberg/wharf/daemon/internal/download"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/download"
 )
 
 // ErrDownload reports that a build could not be fetched. The GUI shows it as

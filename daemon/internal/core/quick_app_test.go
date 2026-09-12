@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/manuel-steinberg/wharf/daemon/internal/project"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/project"
 )
 
 // starterKit serves a zip shaped like GitHub's starterkit archive: everything

@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manuel-steinberg/wharf/daemon/internal/config"
-	"github.com/manuel-steinberg/wharf/daemon/internal/runtime"
-	"github.com/manuel-steinberg/wharf/daemon/internal/supervisor"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/config"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/runtime"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/supervisor"
 )
 
 // features/service-management.feature — "Switching the active webserver"

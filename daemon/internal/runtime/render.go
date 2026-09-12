@@ -8,9 +8,9 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/manuel-steinberg/wharf/daemon/internal/config"
-	"github.com/manuel-steinberg/wharf/daemon/internal/layout"
-	"github.com/manuel-steinberg/wharf/daemon/internal/webserver"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/config"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/layout"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/webserver"
 )
 
 // vhost is one project an instance serves itself: its files and its PHP.

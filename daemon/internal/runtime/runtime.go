@@ -14,11 +14,11 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/manuel-steinberg/wharf/daemon/internal/config"
-	"github.com/manuel-steinberg/wharf/daemon/internal/layout"
-	"github.com/manuel-steinberg/wharf/daemon/internal/php"
-	"github.com/manuel-steinberg/wharf/daemon/internal/supervisor"
-	"github.com/manuel-steinberg/wharf/daemon/internal/webserver"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/config"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/layout"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/php"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/supervisor"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/webserver"
 )
 
 // Ports the tool binds by convention. They are constants rather than config

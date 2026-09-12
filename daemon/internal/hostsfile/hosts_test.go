@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/manuel-steinberg/wharf/daemon/internal/elevate"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/elevate"
 )
 
 func newManager(t *testing.T, initial string) (*Manager, *elevate.Fake) {

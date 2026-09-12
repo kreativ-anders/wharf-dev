@@ -21,9 +21,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/manuel-steinberg/wharf/daemon/internal/download"
-	"github.com/manuel-steinberg/wharf/daemon/internal/elevate"
-	"github.com/manuel-steinberg/wharf/daemon/internal/layout"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/download"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/elevate"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/layout"
 )
 
 // ErrMkcertMissing reports that mkcert is neither vendored nor on PATH.

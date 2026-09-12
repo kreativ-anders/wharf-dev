@@ -8,6 +8,8 @@ GO      ?= go
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X main.version=$(VERSION)
 BUILD   := build
+# The app looks for wharfd.exe on Windows (gui/lib/daemon_launcher.dart).
+EXE     := $(if $(filter Windows_NT,$(OS)),.exe,)
 
 .PHONY: all build test spec race vet fmt cross clean run check gui gui-test gui-e2e gui-analyze
 
@@ -19,8 +21,8 @@ check: vet test gui-analyze gui-test build gui-e2e
 
 build:
 	@mkdir -p $(BUILD)
-	cd daemon && $(GO) build -ldflags "$(LDFLAGS)" -o ../$(BUILD)/wharfd   ./cmd/wharfd
-	cd daemon && $(GO) build -ldflags "$(LDFLAGS)" -o ../$(BUILD)/wharfctl ./cmd/wharfctl
+	cd daemon && $(GO) build -ldflags "$(LDFLAGS)" -o ../$(BUILD)/wharfd$(EXE)   ./cmd/wharfd
+	cd daemon && $(GO) build -ldflags "$(LDFLAGS)" -o ../$(BUILD)/wharfctl$(EXE) ./cmd/wharfctl
 
 test:
 	cd daemon && $(GO) test ./...
