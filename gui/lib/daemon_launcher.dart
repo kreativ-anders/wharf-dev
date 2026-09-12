@@ -82,9 +82,16 @@ class DaemonLauncher {
   /// Stops the daemon if this app started it. Asked over IPC first so it can
   /// stop its webservers — on Windows a signal is TerminateProcess, which the
   /// daemon never sees. Killed if it does not go.
-  Future<void> stop() async {
+  ///
+  /// [includingAttached] also asks a daemon this app only attached to — what
+  /// "Cast off" means by everything. In development a hot restart makes every
+  /// daemon look attached: the restarted app no longer knows it started it.
+  Future<void> stop({bool includingAttached = false}) async {
     final process = _owned;
-    if (process == null) return;
+    if (process == null) {
+      if (includingAttached) await _askToShutDown();
+      return;
+    }
     _owned = null;
 
     if (!await _askToShutDown()) process.kill(ProcessSignal.sigterm);

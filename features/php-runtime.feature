@@ -74,3 +74,35 @@ Feature: PHP runtime detection and selection
     Given PHP "8.4" is installed
     When the user chooses "Open folder" next to it in the picker
     Then the folder holding its binaries opens in the system file manager
+
+  # Removing and hiding touch nothing outside Wharf's own folder and
+  # wharf.json, so neither asks for a password, on any OS.
+
+  Scenario: Removing a downloaded PHP version
+    Given PHP "8.2" was downloaded into "bin/php/8.2"
+    And neither the global default nor any project uses "8.2"
+    When the user chooses "Remove" next to PHP "8.2" in the picker and confirms
+    Then its PHP backend is stopped and "bin/php/8.2" is deleted
+    And "8.2" is no longer offered as a runtime version
+    And "8.2" is offered for download again
+    And no password is asked for
+
+  Scenario: Hiding a PHP version found on the machine
+    Given PHP "8.3" was adopted from a folder outside Wharf
+    And neither the global default nor any project uses "8.3"
+    When the user chooses "Hide" next to PHP "8.3" in the picker
+    Then its folder is recorded as hidden in config/wharf.json
+    And nothing in that folder is changed or deleted
+    And "8.3" is no longer offered as a runtime version, even after a re-scan
+
+  Scenario: Showing a hidden PHP version again
+    Given the folder of PHP "8.3" is hidden
+    When the user chooses "Show" next to that folder under the hidden versions
+    Then the folder is no longer recorded as hidden
+    And "8.3" is offered as a runtime version again
+
+  Scenario: A PHP version in use is neither removed nor hidden
+    Given PHP "8.3" is the global default, or a project's PHP override
+    When the user removes or hides "8.3"
+    Then nothing is deleted and nothing is hidden
+    And the message names what uses "8.3" and what to change first

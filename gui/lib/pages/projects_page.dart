@@ -14,9 +14,13 @@ import 'settings_page.dart';
 /// The one primary view: a list of projects, each showing name, status and
 /// URL. Nothing else is visible by default (dev/design-principles.md §2).
 class ProjectsPage extends StatelessWidget {
-  const ProjectsPage({super.key, required this.daemon});
+  const ProjectsPage({super.key, required this.daemon, this.onCastOff});
 
   final Daemon daemon;
+
+  /// Stops everything Wharf started and quits it; without one, the window
+  /// offers no way out but the tray.
+  final Future<void> Function()? onCastOff;
 
   /// The platform's command key: ⌘ on macOS, Ctrl elsewhere.
   static SingleActivator _shortcut(LogicalKeyboardKey key) =>
@@ -86,7 +90,7 @@ class ProjectsPage extends StatelessWidget {
           IconButton(
             tooltip: 'Open www folder',
             icon: const Icon(Icons.folder_open, size: 20),
-            onPressed: state.www.isEmpty ? null : () => openFolder(state.www),
+            onPressed: state.www.isEmpty ? null : () => daemon.open(openFolder,state.www),
           ),
           IconButton(
             tooltip: 'Add folder…',
@@ -100,12 +104,7 @@ class ProjectsPage extends StatelessWidget {
           ),
           const SizedBox(width: 8),
         ],
-        bottom: state.busy
-            ? const PreferredSize(
-                preferredSize: Size.fromHeight(1),
-                child: LinearProgressIndicator(minHeight: 1),
-              )
-            : null,
+        bottom: WorkingBar(working: daemon.working),
       ),
       body: Column(
         children: [
@@ -114,12 +113,64 @@ class ProjectsPage extends StatelessWidget {
           Expanded(child: _body(context, state)),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _newProject(context),
-        icon: const Icon(Icons.add, size: 20),
-        label: const Text('New project'),
+      // Leaving stands opposite arriving: Cast off bottom left, New project
+      // bottom right (features/single-application.feature, "Casting off from
+      // the main window"). The row between them lets taps through to the list.
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            if (onCastOff != null)
+              FloatingActionButton.extended(
+                // Two buttons on one page need distinct hero tags.
+                heroTag: null,
+                tooltip: 'Stop everything and quit Wharf',
+                backgroundColor: WharfColors.of(context).castOff,
+                foregroundColor: Theme.of(context).scaffoldBackgroundColor,
+                onPressed: () => _castOff(context),
+                icon: const Icon(Icons.sailing, size: 20),
+                label: const Text('Cast off'),
+              ),
+            const Spacer(),
+            FloatingActionButton.extended(
+              onPressed: () => _newProject(context),
+              icon: const Icon(Icons.add, size: 20),
+              label: const Text('New project'),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  /// Asks first: the window goes too, so a stray click should not end the
+  /// session.
+  Future<void> _castOff(BuildContext context) async {
+    final castOff = WharfColors.of(context).castOff;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: Icon(Icons.sailing, color: castOff),
+        title: const Text('Cast off?'),
+        content: const Text('Every project and service Wharf started stops, then Wharf quits.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Stay moored'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: castOff,
+              foregroundColor: Theme.of(context).scaffoldBackgroundColor,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cast off'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await onCastOff?.call();
   }
 
   Widget _body(BuildContext context, WharfState state) {
@@ -368,7 +419,7 @@ class _Empty extends StatelessWidget {
                   label: const Text('Add folder…'),
                 ),
                 TextButton.icon(
-                  onPressed: www.isEmpty ? null : () => openFolder(www),
+                  onPressed: www.isEmpty ? null : () => daemon.open(openFolder,www),
                   icon: const Icon(Icons.folder_open, size: 18),
                   label: const Text('Open www folder'),
                 ),

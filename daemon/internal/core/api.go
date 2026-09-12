@@ -85,6 +85,32 @@ func (d *Daemon) Register(srv *ipc.Server) {
 		return d.State(), nil
 	})
 
+	srv.Handle(ipc.MethodRemovePHP, func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Version string `json:"version"`
+		}
+		if err := decode(raw, &p); err != nil {
+			return nil, err
+		}
+		if err := d.RemovePHP(ctx, p.Version); err != nil {
+			return nil, asIPCError(err)
+		}
+		return d.State(), nil
+	})
+
+	srv.Handle(ipc.MethodUnhidePHP, func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Dir string `json:"dir"`
+		}
+		if err := decode(raw, &p); err != nil {
+			return nil, err
+		}
+		if err := d.UnhidePHP(ctx, p.Dir); err != nil {
+			return nil, asIPCError(err)
+		}
+		return d.State(), nil
+	})
+
 	srv.Handle(ipc.MethodInstallWebserver, func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var p struct {
 			Name string `json:"name"`

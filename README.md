@@ -69,7 +69,8 @@ Adding a project writes nothing outside the Wharf folder and asks for no
 password: every project is `http://<name>.localhost`, which the OS resolves by
 itself.
 
-Quitting from the tray stops everything Wharf started. If the app is force-quit
+Quitting from the tray — or "Cast off" in the window — stops everything Wharf
+started. If the app is force-quit
 or crashes, the daemon notices within a couple of seconds and stops itself.
 If something looks wrong, the log is at `~/Wharf/data/log/wharfd.log`.
 

@@ -44,6 +44,8 @@ const usage = `usage: wharfctl [--root DIR] <command> [args]
   php use <version>          set the global default PHP version
   php add <version>          register a version without selecting it
   php install <version>      download a version into bin/php/<version>
+  php remove <version>       delete a downloaded version, or hide one found on the machine
+  php unhide <folder>        show a hidden PHP folder again
   php scan                   re-scan the machine for PHP installations
   ssl                        install mkcert and trust its certificate authority
   config <name> <webserver>  print (creating if needed) a project's custom config path
@@ -253,7 +255,7 @@ func runPHP(ctx context.Context, c *ipc.Client, args []string) error {
 		}
 		printPHP(st.Services.PHP)
 		return nil
-	case "use", "add", "install":
+	case "use", "add", "install", "remove":
 		if len(args) < 2 {
 			return fmt.Errorf("usage: wharfctl php %s <version>", args[0])
 		}
@@ -261,6 +263,7 @@ func runPHP(ctx context.Context, c *ipc.Client, args []string) error {
 			"use":     ipc.MethodSetPHPVersion,
 			"add":     ipc.MethodAddPHPVersion,
 			"install": ipc.MethodInstallPHP,
+			"remove":  ipc.MethodRemovePHP,
 		}[args[0]]
 		var st core.State
 		if err := c.Call(ctx, method, map[string]string{"version": args[1]}, &st); err != nil {
@@ -268,8 +271,18 @@ func runPHP(ctx context.Context, c *ipc.Client, args []string) error {
 		}
 		printPHP(st.Services.PHP)
 		return nil
+	case "unhide":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: wharfctl php unhide <folder>")
+		}
+		var st core.State
+		if err := c.Call(ctx, ipc.MethodUnhidePHP, map[string]string{"dir": args[1]}, &st); err != nil {
+			return err
+		}
+		printPHP(st.Services.PHP)
+		return nil
 	}
-	return fmt.Errorf("usage: wharfctl php [list|use <version>|add <version>|install <version>|scan]")
+	return fmt.Errorf("usage: wharfctl php [list|use <version>|add <version>|install <version>|remove <version>|unhide <folder>|scan]")
 }
 
 // printPHP renders the version picker as a list: which version is selected,
@@ -303,6 +316,17 @@ func printPHP(p core.PHP) {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", marker, in.FullVersion, support, in.Source, in.Dir)
 	}
 	w.Flush()
+	printHiddenPHP(p.Hidden)
+}
+
+func printHiddenPHP(hidden []string) {
+	if len(hidden) == 0 {
+		return
+	}
+	fmt.Printf("\nhidden  (wharfctl php unhide <folder>)\n")
+	for _, dir := range hidden {
+		fmt.Printf("  %s\n", dir)
+	}
 }
 
 func runSet(ctx context.Context, c *ipc.Client, args []string) error {

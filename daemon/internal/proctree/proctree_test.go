@@ -95,7 +95,7 @@ func readPID(r io.Reader) (int, error) {
 func waitGone(t *testing.T, pid int) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
-	for alive(pid) {
+	for Alive(pid) {
 		if time.Now().After(deadline) {
 			t.Fatalf("process %d is still running", pid)
 		}
@@ -110,7 +110,7 @@ func TestKillStopsTheWholeTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !alive(worker) {
+	if !Alive(worker) {
 		t.Fatal("the worker never started")
 	}
 	if err := tree.Kill(); err != nil {

@@ -54,6 +54,11 @@ type PHP struct {
 	// absent for vendored builds, so a self-contained install writes no paths
 	// at all and the file stays as short as dev/architecture.md §6 shows it.
 	Paths map[string]string `json:"paths,omitempty"`
+	// Hidden lists folders of PHP installs found on the machine that the user
+	// hid from the picker. They belong to whatever installed them, so Wharf
+	// passes over them rather than deleting them (php-runtime.feature,
+	// "Hiding a PHP version found on the machine").
+	Hidden []string `json:"hidden,omitempty"`
 }
 
 // Project is one folder under www/. Override fields are pointers so that
@@ -305,6 +310,17 @@ func (c *Config) normalise() {
 	if len(c.Services.PHP.Paths) == 0 {
 		c.Services.PHP.Paths = nil
 	}
+	var hidden []string
+	for _, dir := range c.Services.PHP.Hidden {
+		dir = strings.TrimSpace(dir)
+		if dir == "" {
+			continue
+		}
+		if dir = filepath.Clean(dir); !contains(hidden, dir) {
+			hidden = append(hidden, dir)
+		}
+	}
+	c.Services.PHP.Hidden = hidden
 
 	if c.Projects == nil {
 		c.Projects = []Project{}
@@ -334,6 +350,7 @@ func (c *Config) clone() *Config {
 				Version:   c.Services.PHP.Version,
 				Available: append([]string(nil), c.Services.PHP.Available...),
 				Paths:     clonePaths(c.Services.PHP.Paths),
+				Hidden:    append([]string(nil), c.Services.PHP.Hidden...),
 			},
 		},
 		Projects: make([]Project, len(c.Projects)),

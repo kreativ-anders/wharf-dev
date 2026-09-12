@@ -72,7 +72,11 @@ Every design decision favours identical behaviour across OS over the most
   groups and does not take children down with their parent. Before it, a stop
   on Windows killed the nginx master and left a worker holding port 80
   (`features/service-management.feature`, "Stopping a webserver stops its
-  worker processes too").
+  worker processes too"). It also answers whether a process is alive, which
+  the daemon's parent watchdog asks: on Windows an exited process stays
+  openable while anything holds a handle to it — the flutter tool, a
+  debugger — so "can it be opened" kept the daemon waiting for an app that
+  was gone; it must be asked whether the process has exited.
 - **SSL** — `mkcert`, already cross-platform, used unmodified.
 - **Distribution shell** — a portable root folder (`bin/`, `www/`, `config/`)
   is the shared internal model; only the outer package format differs
@@ -256,6 +260,11 @@ them surviving a restart:
 - `services.php.paths` — appears only when the tool adopted a PHP already
   installed on the machine, mapping version to its folder
   (`features/php-runtime.feature`). A self-contained install writes no paths.
+- `services.php.hidden` — appears only once the user hides a PHP found on the
+  machine: its folder, which detection then passes over. Wharf never deletes
+  a PHP it did not download; removing one it did deletes `bin/php/<version>`
+  instead, so neither needs elevation on any OS
+  (`features/php-runtime.feature`).
 
 Custom webserver directives are deliberately *not* keys in this file: they
 are nginx or Apache syntax, which belongs in a file of its own that an editor

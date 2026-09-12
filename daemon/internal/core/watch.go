@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"os"
+	"slices"
 	"time"
 )
 
@@ -38,6 +39,7 @@ func (d *Daemon) WatchConfig(ctx context.Context) {
 			last = info.ModTime()
 
 			d.mu.Lock()
+			prev := d.store.Get()
 			cfg, err := d.store.Reload()
 			d.mu.Unlock()
 			if err != nil {
@@ -45,6 +47,11 @@ func (d *Daemon) WatchConfig(ctx context.Context) {
 				// next tick picks up the finished one.
 				d.log.Warn("config reload failed, keeping previous config", "err", err)
 				continue
+			}
+			// Hidden PHP folders decide what detection finds, so a hand-edit
+			// of that list re-scans like the GUI's hide and show do.
+			if !slices.Equal(prev.Services.PHP.Hidden, cfg.Services.PHP.Hidden) {
+				d.RefreshPHP(ctx)
 			}
 			d.log.Info("config reloaded from disk", "projects", len(cfg.Projects))
 			d.publish()

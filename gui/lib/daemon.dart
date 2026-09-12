@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
@@ -16,6 +17,8 @@ class Method {
   static const addPhpVersion = 'services.addPHPVersion';
   static const detectPhp = 'services.detectPHP';
   static const installPhp = 'services.installPHP';
+  static const removePhp = 'services.removePHP';
+  static const unhidePhp = 'services.unhidePHP';
   static const setupSsl = 'services.setupSSL';
   static const phpSettings = 'services.phpSettings';
   static const phpReleases = 'services.phpReleases';
@@ -65,6 +68,17 @@ class Daemon extends ChangeNotifier {
   /// The last thing that went wrong, shown as a dismissible line rather than a
   /// modal: a declined elevation prompt is not worth a dialog.
   String? notice;
+
+  /// How many of the window's and the tray's actions are still under way. The
+  /// daemon answers one request at a time, so a click can wait behind another
+  /// one; counting them lets the window show the click was taken
+  /// (features/single-application.feature, "A click is acknowledged while
+  /// Wharf works").
+  int _pending = 0;
+
+  /// True while an action is under way here, or the daemon is busy with one
+  /// of its own.
+  bool get working => _pending > 0 || state.busy;
 
   bool _disposed = false;
 
@@ -152,6 +166,13 @@ class Daemon extends ChangeNotifier {
   /// downloading meanwhile (features/php-runtime.feature).
   Future<void> installPhp(String version) => _act(Method.installPhp, {'version': version});
 
+  /// Deletes a PHP version Wharf downloaded, or hides one found on the
+  /// machine — the daemon knows which it is (features/php-runtime.feature).
+  Future<void> removePhp(String version) => _act(Method.removePhp, {'version': version});
+
+  /// Shows a hidden PHP folder in the picker again.
+  Future<void> unhidePhp(String dir) => _act(Method.unhidePhp, {'dir': dir});
+
   /// Installs nginx or Apache; Settings shows it as installing meanwhile
   /// (features/webserver-install.feature).
   Future<void> installWebserver(String name) => _act(Method.installWebserver, {'name': name});
@@ -182,25 +203,51 @@ class Daemon extends ChangeNotifier {
     String webserver,
     Future<void> Function(String) open,
   ) async {
-    await _guard(() async {
-      final result = await _require().call(Method.projectCustomConfig, {
+    final known = state.projects
+        .where((p) => p.name == project)
+        .expand((p) => p.customConfigs)
+        .where((c) => c.webserver == webserver && c.exists)
+        .map((c) => c.path)
+        .firstOrNull;
+    await _openOrCreate(
+      known,
+      open,
+      () => _require().call(Method.projectCustomConfig, {
         'name': project,
         'webserver': webserver,
-      });
-      await refresh();
-      final path = result['path'] as String?;
-      if (path != null) await open(path);
-    });
+      }),
+    );
   }
 
   /// Opens config/php.ini, creating it first if needed
   /// (features/php-settings.feature).
   Future<void> editPhpSettings(Future<void> Function(String) open) async {
+    final php = state.services.php;
+    await _openOrCreate(
+      php.settingsExist ? php.settings : null,
+      open,
+      () => _require().call(Method.phpSettings),
+    );
+  }
+
+  /// A file the snapshot already lists as existing opens at once: the daemon
+  /// handles one request at a time, so asking it first would queue the editor
+  /// behind whatever it is busy with — a release lookup, a project start.
+  /// Only a file that still has to be created goes through the daemon, and the
+  /// editor opens before the snapshot is refreshed.
+  Future<void> _openOrCreate(
+    String? known,
+    Future<void> Function(String) open,
+    Future<Map<String, dynamic>> Function() create,
+  ) async {
     await _guard(() async {
-      final result = await _require().call(Method.phpSettings);
-      await refresh();
-      final path = result['path'] as String?;
+      if (known != null && known.isNotEmpty && await File(known).exists()) {
+        await open(known);
+        return;
+      }
+      final path = (await create())['path'] as String?;
       if (path != null) await open(path);
+      await refresh();
     });
   }
 
@@ -208,16 +255,28 @@ class Daemon extends ChangeNotifier {
   /// name it. Quiet: offline, the offers keep their minor version, which is
   /// no reason for a notice (features/php-runtime.feature).
   Future<void> checkPhpReleases() async {
+    _set(() => _pending++);
     try {
       final result = await _require().call(Method.phpReleases);
       _set(() => state = WharfState.fromJson(result));
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _set(() => _pending--);
+    }
   }
 
   Future<void> rescanPhp() async {
-    await _require().callList(Method.detectPhp);
-    await refresh();
+    await _guard(() async {
+      await _require().callList(Method.detectPhp);
+      await refresh();
+    });
   }
+
+  /// Opens a folder or file with [opener]. The file manager can take a moment
+  /// to appear, so the window shows it is working meanwhile, and a failure
+  /// becomes a notice like any other.
+  Future<void> open(Future<void> Function(String) opener, String path) =>
+      _guard(() => opener(path));
 
   /// Registers an existing folder. A declined elevation prompt is reported as
   Future<void> addProject(String name) => _add({'name': name});
@@ -295,9 +354,9 @@ class Daemon extends ChangeNotifier {
   /// Runs an action, turning a daemon error into a notice. Nothing the user
   /// can do from this window deserves an exception reaching the framework.
   Future<void> _guard(Future<void> Function() action) async {
+    _set(() => _pending++);
     try {
       await action();
-      _set(() {});
     } on DaemonError catch (e) {
       // An older daemon still running after an update — or, in development,
       // after a hot reload, which rebuilds the app but not wharfd — cannot
@@ -310,6 +369,8 @@ class Daemon extends ChangeNotifier {
       );
     } catch (e) {
       _set(() => notice = '$e');
+    } finally {
+      _set(() => _pending--);
     }
   }
 
@@ -326,13 +387,21 @@ class Daemon extends ChangeNotifier {
   }
 
   /// Quits cleanly: stops the daemon if this app started it, and leaves one
-  /// that was already running alone.
-  Future<void> shutdown() async {
+  /// that was already running alone — unless [includingAttached].
+  Future<void> shutdown({bool includingAttached = false}) async {
     _shuttingDown = true;
     _retry?.cancel();
     await _client?.close();
     _client = null;
-    await launcher.stop();
+    await launcher.stop(includingAttached: includingAttached);
+  }
+
+  /// Stops every service and project, then the daemon too — even one this
+  /// app only attached to (features/single-application.feature, "Casting off
+  /// from the main window").
+  Future<void> castOff() async {
+    await stopAll();
+    await shutdown(includingAttached: true);
   }
 
   @override

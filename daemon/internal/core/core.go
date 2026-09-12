@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -204,6 +206,7 @@ func New(opts Options) (*Daemon, error) {
 		version:      opts.Version,
 	}
 	d.res.Installs = d.WebInstalls
+	detector.Hidden = d.phpHidden
 	d.RefreshWebservers(context.Background())
 	// Custom configs present at start are applied by the first webserver
 	// start; only later edits should trigger a restart.
@@ -513,18 +516,7 @@ func (d *Daemon) AddPHPVersion(ctx context.Context, version string) error {
 	}
 
 	_, err = d.store.Update(func(c *config.Config) error {
-		if !containsStr(c.Services.PHP.Available, version) {
-			c.Services.PHP.Available = append(c.Services.PHP.Available, version)
-			php.Sort(c.Services.PHP.Available)
-		}
-		if adopted {
-			if c.Services.PHP.Paths == nil {
-				c.Services.PHP.Paths = map[string]string{}
-			}
-			c.Services.PHP.Paths[version] = dir
-		} else {
-			delete(c.Services.PHP.Paths, version)
-		}
+		registerPHP(c, version, dir, adopted)
 		return nil
 	})
 	if err != nil {
@@ -532,6 +524,180 @@ func (d *Daemon) AddPHPVersion(ctx context.Context, version string) error {
 	}
 	d.publish()
 	return nil
+}
+
+// registerPHP makes a version selectable, recording its folder when it was
+// adopted from the machine rather than vendored.
+func registerPHP(c *config.Config, version, dir string, adopted bool) {
+	if !containsStr(c.Services.PHP.Available, version) {
+		c.Services.PHP.Available = append(c.Services.PHP.Available, version)
+		php.Sort(c.Services.PHP.Available)
+	}
+	if adopted {
+		if c.Services.PHP.Paths == nil {
+			c.Services.PHP.Paths = map[string]string{}
+		}
+		c.Services.PHP.Paths[version] = dir
+	} else {
+		delete(c.Services.PHP.Paths, version)
+	}
+}
+
+// RemovePHP takes a PHP version out of the picker. A build Wharf downloaded
+// is deleted with its folder (php-runtime.feature, "Removing a downloaded PHP
+// version"); one found on the machine belongs to whatever installed it, so
+// its folder is only hidden ("Hiding a PHP version found on the machine").
+// Both stay inside bin/php and wharf.json, which the user owns, so neither
+// asks for a password on any OS.
+func (d *Daemon) RemovePHP(ctx context.Context, version string) error {
+	if version == "" {
+		return invalid("no PHP version given")
+	}
+	version = php.Minor(version)
+	if d.inProgress(d.downloading, version) {
+		return conflict("PHP %s is downloading — wait until it has finished", version)
+	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	install, ok := d.phpInstall(version)
+	if !ok {
+		return notFound("PHP %s is not installed", version)
+	}
+	if err := phpInUse(d.store.Get(), version); err != nil {
+		return err
+	}
+	vendored := install.Source == "vendored"
+	if vendored && filepath.Dir(filepath.Clean(install.Dir)) != filepath.Clean(d.php.VendorDir) {
+		return conflict("%s is not in %s — Wharf deletes only the PHP builds it downloaded", install.Dir, d.php.VendorDir)
+	}
+
+	defer d.track()()
+	// A running backend holds its binaries open, and on Windows its folder
+	// cannot be deleted until it has exited. Stopping first on every OS keeps
+	// the behaviour the same everywhere.
+	if err := d.sup.Stop(ctx, wruntime.PHPServiceID(version)); err != nil {
+		return err
+	}
+	if vendored {
+		if err := os.RemoveAll(install.Dir); err != nil {
+			return fmt.Errorf("delete %s: %w — close any program using it and try again", install.Dir, err)
+		}
+		d.log.Info("removed PHP", "version", version, "dir", install.Dir)
+	} else {
+		_, err := d.store.Update(func(c *config.Config) error {
+			c.Services.PHP.Hidden = append(c.Services.PHP.Hidden, install.Dir)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		d.log.Info("hid PHP", "version", version, "dir", install.Dir)
+	}
+	return d.settlePHP(ctx, version)
+}
+
+// UnhidePHP puts a hidden folder back in front of detection
+// (php-runtime.feature, "Showing a hidden PHP version again").
+func (d *Daemon) UnhidePHP(ctx context.Context, dir string) error {
+	if strings.TrimSpace(dir) == "" {
+		return invalid("no folder given")
+	}
+	dir = filepath.Clean(strings.TrimSpace(dir))
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if !containsStr(d.store.Get().Services.PHP.Hidden, dir) {
+		return notFound("%s is not hidden", dir)
+	}
+	_, err := d.store.Update(func(c *config.Config) error {
+		c.Services.PHP.Hidden = slices.DeleteFunc(c.Services.PHP.Hidden, func(h string) bool { return h == dir })
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	for _, in := range d.RefreshPHP(ctx) {
+		// Another copy of the same version may be the one detection prefers;
+		// the folder is no longer hidden either way.
+		if filepath.Clean(in.Dir) != dir || !in.Servable() {
+			continue
+		}
+		_, err := d.store.Update(func(c *config.Config) error {
+			registerPHP(c, in.Version, in.Dir, in.Source != "vendored")
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	d.publish()
+	return nil
+}
+
+// settlePHP brings the config in line once a copy of a version has gone:
+// another copy found on the machine takes its place, or the version leaves
+// the picker and, if still supported, is offered for download again.
+func (d *Daemon) settlePHP(ctx context.Context, version string) error {
+	var next php.Install
+	for _, in := range d.RefreshPHP(ctx) {
+		if in.Version == version && in.Servable() {
+			next = in
+		}
+	}
+	_, err := d.store.Update(func(c *config.Config) error {
+		if next.Dir != "" {
+			registerPHP(c, version, next.Dir, next.Source != "vendored")
+			return nil
+		}
+		c.Services.PHP.Available = slices.DeleteFunc(c.Services.PHP.Available, func(v string) bool { return v == version })
+		delete(c.Services.PHP.Paths, version)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	d.publish()
+	return nil
+}
+
+// phpInUse refuses to take away a version something is served by, naming
+// what to change first (php-runtime.feature, "A PHP version in use is neither
+// removed nor hidden").
+func phpInUse(cfg *config.Config, version string) error {
+	if cfg.Services.PHP.Version == version {
+		return conflict("PHP %s is the global default — select another version first", version)
+	}
+	var users []string
+	for _, p := range cfg.Projects {
+		if p.PHPVersion != nil && *p.PHPVersion == version {
+			users = append(users, p.Name)
+		}
+	}
+	switch len(users) {
+	case 0:
+		return nil
+	case 1:
+		return conflict("PHP %s is used by %s — choose another PHP version for it first", version, users[0])
+	}
+	return conflict("PHP %s is used by %s — choose another PHP version for them first", version, strings.Join(users, ", "))
+}
+
+// phpInstall is the install the picker shows for a version.
+func (d *Daemon) phpInstall(version string) (php.Install, bool) {
+	for _, in := range d.PHPInstalls() {
+		if in.Version == version {
+			return in, true
+		}
+	}
+	return php.Install{}, false
+}
+
+// phpHidden reports whether the user hid a PHP folder found on the machine.
+func (d *Daemon) phpHidden(dir string) bool {
+	return containsStr(d.store.Get().Services.PHP.Hidden, filepath.Clean(dir))
 }
 
 // SetPHPVersion changes the global default version, adopting it first if it is
@@ -654,6 +820,10 @@ func (d *Daemon) CheckPHPReleases(ctx context.Context) error {
 	if last := d.phpLatest.Load(); last != nil && time.Since(last.at) < 10*time.Minute {
 		return nil
 	}
+	// Bounded tightly: the GUI's requests are answered in order, so a lookup
+	// hanging on a bad connection would hold up every click behind it.
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	latest, err := lister.Latest(ctx)
 	if err != nil {
 		return err

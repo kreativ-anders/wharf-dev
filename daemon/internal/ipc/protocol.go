@@ -29,7 +29,11 @@ const (
 	MethodSetPHPVersion = "services.setPHPVersion"
 	MethodDetectPHP     = "services.detectPHP"
 	MethodInstallPHP    = "services.installPHP"
-	MethodSetupSSL      = "services.setupSSL"
+	// MethodRemovePHP deletes a PHP version Wharf downloaded, or hides one
+	// found on the machine; MethodUnhidePHP shows a hidden folder again.
+	MethodRemovePHP = "services.removePHP"
+	MethodUnhidePHP = "services.unhidePHP"
+	MethodSetupSSL  = "services.setupSSL"
 	// MethodPHPSettings creates config/php.ini if needed and returns its
 	// path, for the GUI to open.
 	MethodPHPSettings = "services.phpSettings"

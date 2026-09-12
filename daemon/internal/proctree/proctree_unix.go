@@ -26,6 +26,13 @@ func Start(cmd *exec.Cmd) (*Tree, error) {
 	return &Tree{pgid: cmd.Process.Pid}, nil
 }
 
+// Alive reports whether a process exists: signal 0 is the standard check, and
+// EPERM means it exists but is not ours to signal.
+func Alive(pid int) bool {
+	err := syscall.Kill(pid, 0)
+	return err == nil || errors.Is(err, syscall.EPERM)
+}
+
 // Kill terminates every process in the tree at once.
 func (t *Tree) Kill() error {
 	err := syscall.Kill(-t.pgid, syscall.SIGKILL)

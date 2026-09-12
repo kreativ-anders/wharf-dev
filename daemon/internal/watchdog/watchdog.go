@@ -11,9 +11,9 @@ package watchdog
 import (
 	"context"
 	"os"
-	"runtime"
-	"syscall"
 	"time"
+
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/proctree"
 )
 
 // DefaultPoll is how often the parent is checked. The cost is one syscall, and
@@ -40,24 +40,10 @@ func WatchParent(ctx context.Context, pid int, poll time.Duration, onGone func()
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if !Alive(pid) {
+			if !proctree.Alive(pid) {
 				onGone()
 				return
 			}
 		}
 	}
-}
-
-// Alive reports whether a process exists. On Unix that is signal 0, the
-// standard existence check; on Windows, FindProcess itself fails for a process
-// that is gone.
-func Alive(pid int) bool {
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	if runtime.GOOS == "windows" {
-		return true
-	}
-	return proc.Signal(syscall.Signal(0)) == nil
 }

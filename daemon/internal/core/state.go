@@ -108,6 +108,10 @@ type PHP struct {
 	// download"); Downloading those being fetched right now.
 	Downloadable []Download `json:"downloadable"`
 	Downloading  []string   `json:"downloading"`
+	// Hidden lists the folders of PHP installs found on the machine that the
+	// user hid, so each can be shown again (php-runtime.feature, "Showing a
+	// hidden PHP version again").
+	Hidden []string `json:"hidden"`
 	// Settings is config/php.ini, the user's own PHP settings, and
 	// SettingsExist whether it has been created yet (php-settings.feature).
 	Settings      string `json:"settings"`
@@ -202,6 +206,10 @@ func (d *Daemon) snapshot(cfg *config.Config) State {
 	if installs == nil {
 		installs = []php.Install{}
 	}
+	hidden := cfg.Services.PHP.Hidden
+	if hidden == nil {
+		hidden = []string{}
+	}
 	st.Services.PHP = PHP{
 		Version:      cfg.Services.PHP.Version,
 		Available:    cfg.Services.PHP.Available,
@@ -212,6 +220,7 @@ func (d *Daemon) snapshot(cfg *config.Config) State {
 		Dir:          filepath.Join(d.root.Bin(), "php"),
 		Downloadable: downloadable(installs, d.now(), d.latestPHP()),
 		Downloading:  d.downloadingVersions(),
+		Hidden:       hidden,
 		Settings:     d.root.PHPIni(),
 	}
 	if _, err := os.Stat(d.root.PHPIni()); err == nil {

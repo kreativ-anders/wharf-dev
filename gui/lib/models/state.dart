@@ -213,6 +213,7 @@ class Php {
     this.dir = '',
     this.downloadable = const [],
     this.downloading = const [],
+    this.hidden = const [],
     this.settings = '',
     this.settingsExist = false,
   });
@@ -238,6 +239,10 @@ class Php {
   /// (features/php-runtime.feature).
   final List<PhpDownload> downloadable;
   final List<String> downloading;
+
+  /// Folders of PHP installs found on the machine that the user hid; each
+  /// can be shown again (features/php-runtime.feature).
+  final List<String> hidden;
 
   /// config/php.ini, the user's own PHP settings, and whether it exists yet
   /// (features/php-settings.feature).
@@ -267,6 +272,7 @@ class Php {
     downloading: (json['downloading'] as List<dynamic>? ?? const [])
         .map((e) => e as String)
         .toList(),
+    hidden: (json['hidden'] as List<dynamic>? ?? const []).map((e) => e as String).toList(),
     settings: json['settings'] as String? ?? '',
     settingsExist: json['settings_exist'] as bool? ?? false,
   );

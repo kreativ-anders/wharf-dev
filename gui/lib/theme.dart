@@ -17,6 +17,7 @@ class WharfColors extends ThemeExtension<WharfColors> {
     required this.failed,
     required this.idle,
     required this.focus,
+    required this.castOff,
   });
 
   /// Secondary text.
@@ -31,6 +32,11 @@ class WharfColors extends ThemeExtension<WharfColors> {
 
   /// Keyboard focus and links.
   final Color focus;
+
+  /// "Cast off" — stop everything and quit: harbour teal, a hue no status
+  /// uses, since leaving is not a state a project can be in. It fills its
+  /// button, so the label is the page colour.
+  final Color castOff;
 
   /// Project actions: Start green, Stop red, Restart blue — the status hues,
   /// so Start looks like what it leads to. Each action also has its own icon
@@ -51,6 +57,7 @@ class WharfColors extends ThemeExtension<WharfColors> {
     failed: Color(0xFFDC1818), // 5.0:1
     idle: Color(0xFF858585), // 3.7:1
     focus: Color(0xFF266EB5), // 5.3:1
+    castOff: Color(0xFF0F7C80), // white on it 5.0:1
   );
 
   static const dark = WharfColors(
@@ -61,6 +68,7 @@ class WharfColors extends ThemeExtension<WharfColors> {
     failed: Color(0xFFEE6363),
     idle: Color(0xFF999999),
     focus: Color(0xFF8DBAE7),
+    castOff: Color(0xFF5FC4C8), // #1C1C1C on it 8.3:1
   );
 
   static WharfColors of(BuildContext context) =>
@@ -81,6 +89,7 @@ class WharfColors extends ThemeExtension<WharfColors> {
       failed: l(failed, other.failed),
       idle: l(idle, other.idle),
       focus: l(focus, other.focus),
+      castOff: l(castOff, other.castOff),
     );
   }
 }
@@ -276,4 +285,20 @@ class StatusDot extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The window's one sign that something is under way: a hairline under the
+/// title bar that moves, announced as "Working…" — motion and words, not
+/// colour. It always takes its one pixel, so the page never jumps.
+class WorkingBar extends StatelessWidget implements PreferredSizeWidget {
+  const WorkingBar({super.key, required this.working});
+  final bool working;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(1);
+
+  @override
+  Widget build(BuildContext context) => working
+      ? const LinearProgressIndicator(minHeight: 1, semanticsLabel: 'Working…')
+      : const SizedBox(height: 1);
 }

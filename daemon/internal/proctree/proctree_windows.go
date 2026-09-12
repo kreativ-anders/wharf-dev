@@ -1,6 +1,7 @@
 package proctree
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"sync"
@@ -124,6 +125,21 @@ func adopt(job syscall.Handle, pid int) error {
 		return fmt.Errorf("NtResumeProcess: status 0x%x", status)
 	}
 	return nil
+}
+
+// Alive reports whether a process is still running. An exited process stays
+// openable while anyone holds a handle to it — the flutter tool that launched
+// the app, a debugger — so it is asked whether it has exited, not merely
+// whether it can be opened.
+func Alive(pid int) bool {
+	h, err := syscall.OpenProcess(syscall.SYNCHRONIZE, false, uint32(pid))
+	if err != nil {
+		// Denied means it exists but is not ours to open.
+		return errors.Is(err, syscall.ERROR_ACCESS_DENIED)
+	}
+	defer syscall.CloseHandle(h)
+	ev, _ := syscall.WaitForSingleObject(h, 0)
+	return ev == syscall.WAIT_TIMEOUT
 }
 
 // Kill terminates every process in the tree at once.

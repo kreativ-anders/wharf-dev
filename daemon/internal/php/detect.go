@@ -61,6 +61,11 @@ type Detector struct {
 	Probe func(ctx context.Context, bin string) (string, error)
 	// Now fixes the clock for support-status calculation.
 	Now func() time.Time
+	// Hidden reports whether the user hid a system install's folder. It is
+	// passed over before the versions found are merged, so another copy of
+	// the same version can take its place. Builds under VendorDir are never
+	// hidden: they are Wharf's own, and removed instead.
+	Hidden func(dir string) bool
 }
 
 // NewDetector returns a Detector for the given bin/php directory.
@@ -159,11 +164,14 @@ func (d *Detector) system(ctx context.Context) []Install {
 		}
 		seen[resolved] = true
 
+		dir := filepath.Dir(cli)
+		if d.Hidden != nil && d.Hidden(dir) {
+			continue
+		}
 		full, err := d.probe(ctx, cli)
 		if err != nil || full == "" {
 			continue
 		}
-		dir := filepath.Dir(cli)
 		out = append(out, Install{
 			Version:     Minor(full),
 			FullVersion: full,

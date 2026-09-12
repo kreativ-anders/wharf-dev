@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -32,6 +33,58 @@ class _PhpSettingsDaemon extends Daemon {
       open(state.services.php.settings);
 }
 
+/// A fixture daemon that records what casting off asks of it.
+class _CastOffDaemon extends Daemon {
+  _CastOffDaemon(String json) : super(root: '/tmp/wharf-test') {
+    state = WharfState.fromJson(jsonDecode(json) as Map<String, dynamic>);
+  }
+
+  final calls = <String>[];
+
+  @override
+  Future<void> stopAll() async => calls.add('stop all');
+
+  @override
+  Future<void> shutdown({bool includingAttached = false}) async =>
+      calls.add(includingAttached ? 'shutdown, attached too' : 'shutdown');
+}
+
+/// A fixture daemon that records which PHP versions it is asked to remove or
+/// hide, and which hidden folders to show again.
+class _PhpDaemon extends Daemon {
+  _PhpDaemon(String json) : super(root: '/tmp/wharf-test') {
+    state = WharfState.fromJson(jsonDecode(json) as Map<String, dynamic>);
+  }
+
+  final calls = <String>[];
+
+  @override
+  Future<void> removePhp(String version) async => calls.add('remove $version');
+
+  @override
+  Future<void> unhidePhp(String dir) async => calls.add('show $dir');
+}
+
+/// One PHP Wharf downloaded, one found on the machine, one folder hidden.
+const _phpRemovable = '''
+{
+  "root": "/Users/x/Wharf",
+  "services": {
+    "webserver": {"active": "nginx", "available": ["nginx"], "state": "stopped"},
+    "php": {"version": "8.4", "available": ["8.2", "8.4"], "recommended": "8.5", "status": "active",
+            "dir": "/Users/x/Wharf/bin/php",
+            "installs": [
+              {"version": "8.4", "full_version": "8.4.3", "dir": "/opt/php84",
+               "fastcgi": "/opt/php84/php-fpm", "source": "system", "status": "active"},
+              {"version": "8.2", "full_version": "8.2.28", "dir": "/Users/x/Wharf/bin/php/8.2",
+               "fastcgi": "/Users/x/Wharf/bin/php/8.2/php-fpm", "source": "vendored", "status": "security"}
+            ],
+            "hidden": ["/opt/php83"]}
+  },
+  "projects": [], "unregistered": []
+}
+''';
+
 Widget wrap(Widget child) => MaterialApp(theme: wharfTheme(Brightness.light), home: child);
 
 /// Settings pages are lazy lists; a tall surface builds all of one.
@@ -62,6 +115,30 @@ List<String> captureOpened() {
 }
 
 void main() {
+  // features/single-application.feature — "A click is acknowledged while Wharf works"
+  testWidgets('the window shows it is working until an action is done', (tester) async {
+    final semantics = tester.ensureSemantics();
+    final opening = Completer<void>();
+    final previous = openFolder;
+    openFolder = (_) => opening.future;
+    addTearDown(() => openFolder = previous);
+
+    final daemon = fixture(_twoProjects);
+    await tester.pumpWidget(
+      wrap(ListenableBuilder(listenable: daemon, builder: (_, _) => ProjectsPage(daemon: daemon))),
+    );
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+
+    await tester.tap(find.byTooltip('Open www folder'));
+    await tester.pump();
+    expect(find.bySemanticsLabel('Working…'), findsOneWidget);
+
+    opening.complete();
+    await tester.pump();
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    semantics.dispose();
+  });
+
   // features/app-configuration.feature — "A running project shows what serves it"
   testWidgets('a running project shows its webserver and PHP versions', (tester) async {
     final daemon = fixture(_twoProjects);
@@ -181,6 +258,50 @@ void main() {
         .replaceFirst('"state": "running"', '"state": "stopped"');
     await tester.pumpWidget(wrap(ProjectsPage(daemon: fixture(idle))));
     expect(find.text('Stop all'), findsNothing);
+  });
+
+  // features/single-application.feature — "Casting off from the main window"
+  testWidgets('cast off stands opposite New project, stops everything, then quits', (
+    tester,
+  ) async {
+    final daemon = _CastOffDaemon(_twoProjects);
+    var quit = 0;
+    await tester.pumpWidget(
+      wrap(
+        ProjectsPage(
+          daemon: daemon,
+          onCastOff: () async {
+            await daemon.castOff();
+            quit++;
+          },
+        ),
+      ),
+    );
+
+    final castOff = find.widgetWithText(FloatingActionButton, 'Cast off');
+    final newProject = find.widgetWithText(FloatingActionButton, 'New project');
+    final middle = tester.getSize(find.byType(Scaffold)).width / 2;
+    expect(tester.getCenter(castOff).dx, lessThan(middle));
+    expect(tester.getCenter(newProject).dx, greaterThan(middle));
+    expect(tester.getCenter(castOff).dy, closeTo(tester.getCenter(newProject).dy, 0.01));
+    expect(tester.widget<FloatingActionButton>(castOff).backgroundColor, WharfColors.light.castOff);
+
+    // Staying moored leaves everything as it was.
+    await tester.tap(castOff);
+    await tester.pumpAndSettle();
+    expect(find.text('Cast off?'), findsOneWidget);
+    await tester.tap(find.text('Stay moored'));
+    await tester.pumpAndSettle();
+    expect(daemon.calls, isEmpty);
+    expect(quit, 0);
+
+    // Confirmed: everything stops before the daemon and the app go.
+    await tester.tap(castOff);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Cast off'));
+    await tester.pumpAndSettle();
+    expect(daemon.calls, ['stop all', 'shutdown, attached too']);
+    expect(quit, 1);
   });
 
   // features/app-configuration.feature — "Every project row leads to its settings"
@@ -483,6 +604,61 @@ void main() {
     await tester.tap(find.byTooltip('Open folder').first);
 
     expect(opened, ['/opt/php84']);
+  });
+
+  // features/php-runtime.feature — "Removing a downloaded PHP version"
+  testWidgets('a downloaded PHP version is removed once the user confirms', (tester) async {
+    final daemon = _PhpDaemon(_phpRemovable);
+    await showSettings(tester, daemon, SettingsSection.php);
+
+    await tester.tap(find.byTooltip('Remove PHP 8.2.28'));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove PHP 8.2.28?'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.textContaining('/Users/x/Wharf/bin/php/8.2'),
+      ),
+      findsOneWidget,
+      reason: 'the dialog names the folder it deletes',
+    );
+
+    // Cancelling removes nothing.
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(daemon.calls, isEmpty);
+
+    await tester.tap(find.byTooltip('Remove PHP 8.2.28'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
+    await tester.pumpAndSettle();
+    expect(daemon.calls, ['remove 8.2']);
+  });
+
+  // features/php-runtime.feature — "Hiding a PHP version found on the machine"
+  testWidgets('a PHP version found on the machine is hidden, never deleted', (tester) async {
+    final daemon = _PhpDaemon(_phpRemovable);
+    await showSettings(tester, daemon, SettingsSection.php);
+
+    expect(find.byTooltip('Remove PHP 8.4.3'), findsNothing);
+    await tester.tap(find.byTooltip('Hide PHP 8.4.3 from Wharf'));
+    await tester.pump();
+
+    expect(find.byType(AlertDialog), findsNothing, reason: 'hiding is undone with one click');
+    expect(daemon.calls, ['remove 8.4']);
+  });
+
+  // features/php-runtime.feature — "Showing a hidden PHP version again"
+  testWidgets('a hidden PHP folder can be shown again', (tester) async {
+    final daemon = _PhpDaemon(_phpRemovable);
+    await showSettings(tester, daemon, SettingsSection.php);
+
+    expect(find.text('Hidden'), findsOneWidget);
+    expect(find.text('/opt/php83'), findsOneWidget);
+    await tester.tap(find.byTooltip('Show /opt/php83 in the picker again'));
+    await tester.pump();
+
+    expect(daemon.calls, ['show /opt/php83']);
   });
 
   // features/php-runtime.feature — "Only supported versions are offered for

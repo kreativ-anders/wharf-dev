@@ -14,6 +14,10 @@
 //     process in it, and the job is set to kill on close: when the daemon dies,
 //     however it dies, Windows closes the handle and the services die with it.
 //
+// Alive, the one other question about a process, differs the same way: on
+// Windows a process that has exited stays openable while anyone holds a
+// handle to it, so it must be asked whether it has exited.
+//
 // This package and internal/elevate are the only platform-specific code in the
 // daemon (dev/architecture.md §4).
 package proctree

@@ -76,9 +76,15 @@ class _WharfAppState extends State<WharfApp> with WindowListener {
   /// Quit from the tray. The daemon this app started goes with it, taking
   /// its webservers along; a daemon that was already running is left alone.
   /// A force quit skips this — the daemon's parent watchdog covers that.
-  Future<void> _quit() async {
+  Future<void> _quit() => _leave(_daemon.shutdown);
+
+  /// "Cast off" from the window: every service stops first, then the app
+  /// quits as it does from the tray.
+  Future<void> _castOff() => _leave(_daemon.castOff);
+
+  Future<void> _leave(Future<void> Function() stopDaemon) async {
     await _tray?.dispose();
-    await _daemon.shutdown();
+    await stopDaemon();
     await windowManager.destroy();
   }
 
@@ -119,7 +125,7 @@ class _WharfAppState extends State<WharfApp> with WindowListener {
         debugShowCheckedModeBanner: false,
         theme: wharfTheme(Brightness.light),
         darkTheme: wharfTheme(Brightness.dark),
-        home: ProjectsPage(daemon: _daemon),
+        home: ProjectsPage(daemon: _daemon, onCastOff: _castOff),
       ),
     );
   }

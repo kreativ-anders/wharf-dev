@@ -93,7 +93,7 @@ class _ProjectSheet extends StatelessWidget {
                   ),
                 ),
                 TextButton.icon(
-                  onPressed: () => openFolder(project.dir),
+                  onPressed: () => daemon.open(openFolder,project.dir),
                   icon: const Icon(Icons.folder_open, size: 16),
                   label: const Text('Open folder'),
                 ),
@@ -206,7 +206,7 @@ class _ProjectSheet extends StatelessWidget {
                   ),
                 ),
                 TextButton.icon(
-                  onPressed: project.logDir.isEmpty ? null : () => openFolder(project.logDir),
+                  onPressed: project.logDir.isEmpty ? null : () => daemon.open(openFolder,project.logDir),
                   icon: const Icon(Icons.article_outlined, size: 16),
                   label: const Text('Open logs'),
                 ),

@@ -474,3 +474,174 @@ func downloadableVersions(h *harness) []string {
 	}
 	return out
 }
+
+func installed(installs []php.Install, version string) bool {
+	for _, in := range installs {
+		if in.Version == version {
+			return true
+		}
+	}
+	return false
+}
+
+// features/php-runtime.feature — "Removing a downloaded PHP version"
+func TestRemovingADownloadedPHPVersion(t *testing.T) {
+	h := newHarness(t) // 8.1, 8.2 and 8.3 in bin/php; 8.3 is the default
+	if got := h.d.Config().Services.PHP.Version; got == "8.2" {
+		t.Fatal("8.2 is the default; the scenario needs it unused")
+	}
+	if err := h.d.ensurePHP(h.ctx(), h.d.Config(), "8.2"); err != nil {
+		t.Fatal(err)
+	}
+	if !h.sup.Running(runtime.PHPServiceID("8.2")) {
+		t.Fatal("the 8.2 backend did not start")
+	}
+	runs, writes := len(h.el.Runs), len(h.el.Writes)
+
+	if err := h.d.RemovePHP(h.ctx(), "8.2"); err != nil {
+		t.Fatalf("remove 8.2: %v", err)
+	}
+
+	// Then its PHP backend is stopped and "bin/php/8.2" is deleted
+	if h.sup.Running(runtime.PHPServiceID("8.2")) {
+		t.Fatal("the 8.2 backend is still running")
+	}
+	if _, err := os.Stat(h.root.PHPBin("8.2")); !os.IsNotExist(err) {
+		t.Fatalf("bin/php/8.2 is still there: %v", err)
+	}
+	// And "8.2" is no longer offered as a runtime version
+	if slices.Contains(h.d.Config().Services.PHP.Available, "8.2") {
+		t.Fatal("8.2 is still available")
+	}
+	if installed(h.d.State().Services.PHP.Installs, "8.2") {
+		t.Fatal("8.2 is still in the picker")
+	}
+	// And "8.2" is offered for download again
+	if !slices.Contains(downloadableVersions(h), "8.2") {
+		t.Fatalf("downloadable = %v, want 8.2 among them", downloadableVersions(h))
+	}
+	// And no password is asked for
+	if len(h.el.Runs) != runs || len(h.el.Writes) != writes {
+		t.Fatal("removing a downloaded PHP asked for elevation")
+	}
+	// The other builds are untouched.
+	for _, v := range []string{"8.1", "8.3"} {
+		if _, err := os.Stat(h.root.PHPBin(v)); err != nil {
+			t.Fatalf("bin/php/%s went too: %v", v, err)
+		}
+	}
+}
+
+// features/php-runtime.feature — "Hiding a PHP version found on the machine"
+func TestHidingAPHPVersionFoundOnTheMachine(t *testing.T) {
+	f := newFirstRun(t, testNow, "8.3", "8.4") // 8.4 is the default
+	dir := filepath.Dir(f.sysCLI["8.3"])
+
+	if err := f.d.RemovePHP(f.ctx(), "8.3"); err != nil {
+		t.Fatalf("hide 8.3: %v", err)
+	}
+
+	// Then its folder is recorded as hidden in config/wharf.json
+	reread, err := config.Load(f.root.ConfigFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reread.Get().Services.PHP.Hidden; !slices.Equal(got, []string{dir}) {
+		t.Fatalf("hidden = %v, want [%s]", got, dir)
+	}
+	// And nothing in that folder is changed or deleted
+	for _, name := range []string{php.CLIName(), php.FastCGIName()} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Fatalf("%s is gone from the hidden folder: %v", name, err)
+		}
+	}
+	// And "8.3" is no longer offered as a runtime version, even after a re-scan
+	f.d.RefreshPHP(f.ctx())
+	st := f.d.State().Services.PHP
+	if contains(st.Available, "8.3") || installed(st.Installs, "8.3") {
+		t.Fatalf("8.3 is still offered: available %v, installs %+v", st.Available, st.Installs)
+	}
+	if _, ok := f.d.Config().PHPPath("8.3"); ok {
+		t.Fatal("the hidden folder is still recorded as 8.3's location")
+	}
+	if !slices.Equal(st.Hidden, []string{dir}) {
+		t.Fatalf("snapshot hidden = %v, want [%s]", st.Hidden, dir)
+	}
+}
+
+// features/php-runtime.feature — "Showing a hidden PHP version again"
+func TestShowingAHiddenPHPVersionAgain(t *testing.T) {
+	f := newFirstRun(t, testNow, "8.3", "8.4")
+	dir := filepath.Dir(f.sysCLI["8.3"])
+	if err := f.d.RemovePHP(f.ctx(), "8.3"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := f.d.UnhidePHP(f.ctx(), dir); err != nil {
+		t.Fatalf("show %s: %v", dir, err)
+	}
+
+	// Then the folder is no longer recorded as hidden
+	if got := f.d.Config().Services.PHP.Hidden; len(got) != 0 {
+		t.Fatalf("hidden = %v, want none", got)
+	}
+	// And "8.3" is offered as a runtime version again
+	st := f.d.State().Services.PHP
+	if !contains(st.Available, "8.3") || !installed(st.Installs, "8.3") {
+		t.Fatalf("8.3 is not offered again: available %v, installs %+v", st.Available, st.Installs)
+	}
+	if path, ok := f.d.Config().PHPPath("8.3"); !ok || path != dir {
+		t.Fatalf("8.3 recorded at %q, want %q", path, dir)
+	}
+
+	var notFound *NotFoundError
+	if err := f.d.UnhidePHP(f.ctx(), dir); !errors.As(err, &notFound) {
+		t.Fatalf("showing a folder that is not hidden: err = %v, want not found", err)
+	}
+}
+
+// features/php-runtime.feature — "A PHP version in use is neither removed nor
+// hidden"
+func TestAPHPVersionInUseIsNeitherRemovedNorHidden(t *testing.T) {
+	h := newHarness(t)
+	var conflictErr *ConflictError
+
+	// The global default…
+	def := h.d.Config().Services.PHP.Version
+	err := h.d.RemovePHP(h.ctx(), def)
+	if !errors.As(err, &conflictErr) || !strings.Contains(err.Error(), "global default") {
+		t.Fatalf("err = %v, want a conflict naming the global default", err)
+	}
+	if _, err := os.Stat(h.root.PHPBin(def)); err != nil {
+		t.Fatalf("the default's build was deleted: %v", err)
+	}
+
+	// …and a project's override.
+	h.mkProject("legacy")
+	if _, err := h.d.AddProject(h.ctx(), "legacy"); err != nil {
+		t.Fatal(err)
+	}
+	pinned := "8.1"
+	if _, err := h.d.UpdateSettings(h.ctx(), "legacy", Settings{PHP: &pinned}); err != nil {
+		t.Fatal(err)
+	}
+	err = h.d.RemovePHP(h.ctx(), "8.1")
+	if !errors.As(err, &conflictErr) || !strings.Contains(err.Error(), "legacy") {
+		t.Fatalf("err = %v, want a conflict naming legacy", err)
+	}
+	if _, err := os.Stat(h.root.PHPBin("8.1")); err != nil {
+		t.Fatalf("an overridden version's build was deleted: %v", err)
+	}
+	if !slices.Contains(h.d.Config().Services.PHP.Available, "8.1") {
+		t.Fatal("8.1 left the picker although legacy uses it")
+	}
+
+	// A version found on the machine is not hidden either.
+	f := newFirstRun(t, testNow, "8.4")
+	if err := f.d.RemovePHP(f.ctx(), "8.4"); !errors.As(err, &conflictErr) {
+		t.Fatalf("err = %v, want a conflict", err)
+	}
+	if got := f.d.Config().Services.PHP.Hidden; len(got) != 0 {
+		t.Fatalf("hidden = %v, want none", got)
+	}
+}

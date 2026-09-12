@@ -63,9 +63,3 @@ func TestNoParentDisablesTheWatch(t *testing.T) {
 		}
 	}
 }
-
-func TestAlive(t *testing.T) {
-	if !Alive(os.Getpid()) {
-		t.Fatal("the test process reports itself as gone")
-	}
-}

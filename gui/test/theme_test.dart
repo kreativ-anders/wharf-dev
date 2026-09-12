@@ -66,6 +66,17 @@ void main() {
         });
       }
 
+      test('cast off is readable and stands out', () {
+        expect(
+          contrast(theme.scaffoldBackgroundColor, c.castOff),
+          greaterThanOrEqualTo(4.5),
+          reason: 'label on the button',
+        );
+        for (final bg in backgrounds.entries) {
+          expect(contrast(c.castOff, bg.value), greaterThanOrEqualTo(3), reason: bg.key);
+        }
+      });
+
       test('filled buttons are readable', () {
         expect(
           contrast(theme.colorScheme.onPrimary, theme.colorScheme.primary),

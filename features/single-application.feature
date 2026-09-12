@@ -31,6 +31,21 @@ Feature: One application
     Then that daemon keeps running
     And the projects it serves stay up
 
+  Scenario: Casting off from the main window
+    Given one or more projects are running
+    When the user looks at the main window
+    Then "Cast off" stands in the corner opposite "New project"
+    When the user chooses "Cast off" and confirms it
+    Then every running service and project is stopped
+    And the application quits, stopping its daemon — even one it attached to
+    But choosing "Stay moored" instead leaves everything as it was
+
+  Scenario: A click is acknowledged while Wharf works
+    When the user chooses an action that takes a moment, such as "Open folder"
+    Then a moving line under the title bar shows that Wharf is working
+    And a screen reader announces it as "Working…"
+    And the line is gone once the action is done
+
   Scenario: The application exits without shutting its daemon down
     Given the application started the daemon itself
     When the application exits unexpectedly

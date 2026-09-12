@@ -90,7 +90,7 @@ wharf/
 ├── features/                  THE SPECIFICATION — Gherkin, one file per capability
 │   ├── app-configuration.feature    per-project overrides, custom webserver config
 │   ├── local-ssl.feature            mkcert installed and trusted by the SSL switch
-│   ├── php-runtime.feature          PHP detection, first-run default, picker, download
+│   ├── php-runtime.feature          PHP detection, first-run default, picker, download, remove/hide
 │   ├── php-settings.feature         config/php.ini, read by every PHP version after its own
 │   ├── pretty-urls.feature          <name>.localhost; old .wharf hosts lines removed
 │   ├── project-logs.feature         one log folder per project, opened from its settings
@@ -123,7 +123,7 @@ wharf/
 │       ├── ipc/               newline-delimited JSON over a unix socket; loopback TCP + token on Windows
 │       ├── layout/            the portable root: bin/ www/ config/ data/
 │       ├── php/               release timeline, support status, detection, downloads
-│       ├── proctree/          PLATFORM-SPECIFIC: a service and its workers, stopped as one
+│       ├── proctree/          PLATFORM-SPECIFIC: a service and its workers, stopped as one; is a process alive
 │       ├── project/           folder-as-project discovery, name rewriting, template scaffolding
 │       ├── runtime/           config → process specs; the front door, one generated file per project
 │       ├── specsync/          THE SYNC GUARD (§1)

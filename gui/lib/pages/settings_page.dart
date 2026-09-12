@@ -64,7 +64,10 @@ class _SettingsPageState extends State<SettingsPage> {
       listenable: daemon,
       builder: (context, _) {
         return Scaffold(
-          appBar: AppBar(title: const Text('Settings')),
+          appBar: AppBar(
+            title: const Text('Settings'),
+            bottom: WorkingBar(working: daemon.working),
+          ),
           body: LayoutBuilder(
             builder: (context, constraints) => Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -104,7 +107,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _AppearanceSection(daemon: daemon, mode: state.appearance),
         const SizedBox(height: 28),
         _SectionHeader('Config file'),
-        _ConfigSection(config: state.config),
+        _ConfigSection(daemon: daemon, config: state.config),
         const SizedBox(height: 28),
         _SectionHeader('Version'),
         _VersionSection(version: state.version),
@@ -292,8 +295,9 @@ class _AppearanceSection extends StatelessWidget {
 
 /// Where every setting lives, for someone who would rather edit the file.
 class _ConfigSection extends StatelessWidget {
-  const _ConfigSection({required this.config});
+  const _ConfigSection({required this.daemon, required this.config});
 
+  final Daemon daemon;
   final String config;
 
   @override
@@ -313,7 +317,7 @@ class _ConfigSection extends StatelessWidget {
           child: Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
-              onPressed: config.isEmpty ? null : () => openFolder(config),
+              onPressed: config.isEmpty ? null : () => daemon.open(openFolder,config),
               icon: const Icon(Icons.folder_open, size: 16),
               label: const Text('Open config folder'),
             ),
@@ -484,7 +488,7 @@ class _InstallAction extends StatelessWidget {
     return IconButton(
       tooltip: 'Open the folder it belongs in',
       icon: const Icon(Icons.folder_open, size: 18),
-      onPressed: () => openFolder(_parent(server.binary)),
+      onPressed: () => daemon.open(openFolder,_parent(server.binary)),
     );
   }
 }
@@ -573,15 +577,39 @@ class _PhpSection extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    secondary: IconButton(
-                      tooltip: 'Open folder',
-                      icon: const Icon(Icons.folder_open, size: 18),
-                      onPressed: () => openFolder(install.dir),
+                    secondary: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Open folder',
+                          icon: const Icon(Icons.folder_open, size: 18),
+                          onPressed: () => daemon.open(openFolder,install.dir),
+                        ),
+                        _RemovePhpButton(daemon: daemon, install: install),
+                      ],
                     ),
                   ),
               ],
             ),
           ),
+        if (php.hidden.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+            child: Text('Hidden', style: Theme.of(context).textTheme.titleSmall),
+          ),
+          for (final dir in php.hidden)
+            ListTile(
+              title: Text(dir, maxLines: 1, overflow: TextOverflow.ellipsis),
+              trailing: Tooltip(
+                message: 'Show $dir in the picker again',
+                child: TextButton(
+                  onPressed: () => daemon.unhidePhp(dir),
+                  child: const Text('Show'),
+                ),
+              ),
+            ),
+        ],
         if (php.downloadable.isNotEmpty) ...[
           const SizedBox(height: 8),
           Padding(
@@ -627,12 +655,65 @@ class _PhpSection extends StatelessWidget {
               IconButton(
                 tooltip: 'Open ${php.dir}',
                 icon: const Icon(Icons.folder_open, size: 18),
-                onPressed: php.dir.isEmpty ? null : () => openFolder(php.dir),
+                onPressed: php.dir.isEmpty ? null : () => daemon.open(openFolder,php.dir),
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Removes a PHP version Wharf downloaded, once the user has confirmed, or
+/// hides one found on the machine — Wharf never deletes a PHP it did not put
+/// there (features/php-runtime.feature).
+class _RemovePhpButton extends StatelessWidget {
+  const _RemovePhpButton({required this.daemon, required this.install});
+
+  final Daemon daemon;
+  final PhpInstall install;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = 'PHP ${install.fullVersion.isEmpty ? install.version : install.fullVersion}';
+    if (install.source != 'vendored') {
+      return IconButton(
+        tooltip: 'Hide $name from Wharf',
+        icon: const Icon(Icons.visibility_off_outlined, size: 18),
+        onPressed: () => daemon.removePhp(install.version),
+      );
+    }
+    return IconButton(
+      tooltip: 'Remove $name',
+      icon: const Icon(Icons.delete_outline, size: 18),
+      onPressed: () async {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) {
+            final scheme = Theme.of(context).colorScheme;
+            return AlertDialog(
+              title: Text('Remove $name?'),
+              content: Text('Deletes ${install.dir}. You can download it again at any time.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: scheme.error,
+                    foregroundColor: scheme.onError,
+                  ),
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Remove'),
+                ),
+              ],
+            );
+          },
+        );
+        if (confirmed == true) await daemon.removePhp(install.version);
+      },
     );
   }
 }
@@ -705,7 +786,7 @@ class _SslSection extends StatelessWidget {
                     : IconButton(
                         tooltip: 'Open certificate authority folder',
                         icon: const Icon(Icons.folder_open, size: 18),
-                        onPressed: () => openFolder(ssl.caRoot),
+                        onPressed: () => daemon.open(openFolder,ssl.caRoot),
                       ))
               : FilledButton(
                   onPressed: busy ? null : daemon.setupSsl,

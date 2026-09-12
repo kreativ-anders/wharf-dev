@@ -100,6 +100,23 @@ void main() {
     addTearDown(again.close);
     expect((await again.call('ping'))['pong'], 'wharf', reason: 'its projects stay up');
   });
+
+  // features/single-application.feature — "Casting off from the main window"
+  test('casting off stops even a daemon the app only attached to', () async {
+    final external = await _startExternal(binary, root.path, safeArgs);
+    addTearDown(() async {
+      external.kill();
+      await external.exitCode;
+    });
+
+    final launcher = launcherFor();
+    final client = await launcher.connect();
+    await client.close();
+    await launcher.stop(includingAttached: true);
+
+    await external.exitCode.timeout(const Duration(seconds: 20));
+    expect(File(endpointPathFor(root.path)).existsSync(), isFalse);
+  });
 }
 
 /// Starts a daemon the way a user might have — not through the launcher.
