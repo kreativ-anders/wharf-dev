@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wharf_gui/daemon.dart';
+import 'package:wharf_gui/daemon_launcher.dart';
 import 'package:wharf_gui/ipc/client.dart';
 import 'package:wharf_gui/ipc/endpoint.dart';
 
@@ -19,7 +20,8 @@ void main() {
   late String hostsPath;
 
   final binary =
-      Platform.environment['WHARFD_BIN'] ?? '${Directory.current.parent.path}/build/wharfd';
+      Platform.environment['WHARFD_BIN'] ??
+      '${Directory.current.parent.path}/build/${daemonBinaryName()}';
 
   setUpAll(() async {
     if (!File(binary).existsSync()) {

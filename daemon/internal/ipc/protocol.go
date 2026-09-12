@@ -17,6 +17,12 @@ const (
 	MethodAuth = "auth"
 	// MethodState returns the full snapshot the GUI renders.
 	MethodState = "state.get"
+	// MethodShutdown stops the daemon the way a signal would on macOS and
+	// Linux. The app asks rather than signals because on Windows a signal is
+	// TerminateProcess, which ends the daemon before it can stop its
+	// webservers. The reply may be lost as connections close; the process
+	// exiting is the answer.
+	MethodShutdown = "daemon.shutdown"
 
 	MethodSetWebserver  = "services.setWebserver"
 	MethodAddPHPVersion = "services.addPHPVersion"

@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -111,6 +112,15 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// The app quits a daemon it started through this rather than a signal, so
+	// the shutdown below runs on Windows too (single-application.feature,
+	// "Quitting an application that started its own daemon").
+	srv.Handle(ipc.MethodShutdown, func(context.Context, json.RawMessage) (any, error) {
+		log.Info("asked to shut down")
+		stop()
+		return map[string]bool{"ok": true}, nil
+	})
 
 	go d.WatchConfig(ctx)
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -8,12 +9,18 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/ipc"
 )
 
 // buildDaemon compiles this command so it can be run as the app runs it.
 func buildDaemon(t *testing.T) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "wharfd")
+	name := "wharfd"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	bin := filepath.Join(t.TempDir(), name)
 	out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput()
 	if err != nil {
 		t.Fatalf("build wharfd: %v\n%s", err, out)
@@ -91,6 +98,56 @@ func TestDaemonShutsDownCleanlyWhenTheAppDies(t *testing.T) {
 	case <-time.After(15 * time.Second):
 		daemon.Process.Kill()
 		t.Fatal("daemon kept running after the app died")
+	}
+
+	if _, err := os.Stat(endpoint); !os.IsNotExist(err) {
+		t.Fatal("endpoint file left behind: the daemon skipped its shutdown")
+	}
+}
+
+// features/single-application.feature — "Quitting an application that
+// started its own daemon"
+//
+// The app asks rather than signals, so the daemon runs its own shutdown on
+// every OS — including Windows, where a signal cannot be caught.
+func TestDaemonShutsDownCleanlyWhenAsked(t *testing.T) {
+	bin := buildDaemon(t)
+
+	root := t.TempDir()
+	hosts := filepath.Join(root, "hosts")
+	if err := os.WriteFile(hosts, []byte("127.0.0.1\tlocalhost\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	daemon := exec.Command(bin, "--root", root, "--hosts", hosts, "--elevator", "direct")
+	if err := daemon.Start(); err != nil {
+		t.Fatal(err)
+	}
+	exited := make(chan error, 1)
+	go func() { exited <- daemon.Wait() }()
+
+	endpoint := filepath.Join(root, "data", ipc.EndpointFileName)
+	c, err := ipc.DialFileWait(endpoint, 10*time.Second)
+	if err != nil {
+		daemon.Process.Kill()
+		t.Fatalf("daemon never accepted a connection: %v", err)
+	}
+	defer c.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	// The reply can be lost as the daemon drops its connections; exiting is
+	// the answer that counts.
+	_ = c.Call(ctx, ipc.MethodShutdown, nil, nil)
+
+	select {
+	case err := <-exited:
+		if err != nil {
+			t.Fatalf("daemon did not exit cleanly when asked: %v", err)
+		}
+	case <-time.After(15 * time.Second):
+		daemon.Process.Kill()
+		t.Fatal("daemon kept running after it was asked to shut down")
 	}
 
 	if _, err := os.Stat(endpoint); !os.IsNotExist(err) {

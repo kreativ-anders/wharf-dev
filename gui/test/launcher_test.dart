@@ -10,28 +10,31 @@ void main() {
   tearDown(() async => tmp.delete(recursive: true));
 
   test('an explicit override is tried first, then next to the app', () {
+    final sep = Platform.pathSeparator;
+    final appDir = '${tmp.path}${sep}Contents${sep}MacOS';
     final path = daemonSearchPath(
       override: '/custom/wharfd',
-      executable: '/Applications/Wharf.app/Contents/MacOS/Wharf',
+      executable: '$appDir${sep}Wharf',
       workingDirectory: tmp.path,
     );
     expect(path.first, '/custom/wharfd');
-    expect(path[1], '/Applications/Wharf.app/Contents/MacOS/${daemonBinaryName()}');
+    expect(path[1], '$appDir$sep${daemonBinaryName()}');
   });
 
   test('a repository checkout finds its own build folder', () async {
     // gui/ sits beside daemon/ in the repo; running from gui/ must find
     // build/wharfd at the repo root.
-    await Directory('${tmp.path}/daemon').create();
-    await File('${tmp.path}/daemon/go.mod').writeAsString('module x\n');
-    await Directory('${tmp.path}/gui').create();
+    final sep = Platform.pathSeparator;
+    await Directory('${tmp.path}${sep}daemon').create();
+    await File('${tmp.path}${sep}daemon${sep}go.mod').writeAsString('module x\n');
+    await Directory('${tmp.path}${sep}gui').create();
 
     final path = daemonSearchPath(
       override: '',
-      executable: '/elsewhere/Wharf',
-      workingDirectory: '${tmp.path}/gui',
+      executable: '${tmp.path}${sep}elsewhere${sep}Wharf',
+      workingDirectory: '${tmp.path}${sep}gui',
     );
-    expect(path, contains('${tmp.path}/build/${daemonBinaryName()}'));
+    expect(path, contains('${tmp.path}${sep}build$sep${daemonBinaryName()}'));
   });
 
   test('the first candidate that exists wins', () async {

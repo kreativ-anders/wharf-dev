@@ -15,7 +15,10 @@ make run              # run against build/dev/ with elevation disabled
 ```
 
 Users never start `wharfd` themselves: the desktop app finds it, starts it with
-`--parent-pid <app pid>`, and stops it on quit. The parent pid is a safety net —
+`--parent-pid <app pid>`, and stops it on quit by asking over IPC
+(`daemon.shutdown`) — the same on every OS, because on Windows a signal is
+`TerminateProcess` and the daemon would never get to stop its webservers. It
+is killed only if it does not exit in time. The parent pid is a safety net —
 if the app crashes, the daemon notices within two seconds and shuts down
 ([`internal/watchdog`](internal/watchdog/watchdog.go)). It ignores `SIGPIPE`,
 because a crashed app also takes the daemon's stdout and stderr pipes with it,

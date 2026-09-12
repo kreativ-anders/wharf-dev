@@ -35,9 +35,12 @@ If `wharfd` cannot be found, the window says where it looked and to run
 
 - **macOS** — an Xcode build phase, *Embed wharfd*, runs `make build` and copies
   the binary into `Wharf.app/Contents/MacOS/`. It needs Go on the build machine.
-- **Linux, Windows** — not wired yet. Place `wharfd` next to the app executable
-  and the launcher finds it; the CMake equivalent of the Xcode phase is part of
-  packaging.
+- **Windows** — a CMake custom target in `windows/CMakeLists.txt` runs
+  `go build` and drops `wharfd.exe` next to `wharf_gui.exe` on every build, so
+  `flutter run -d windows` always launches the daemon built from the working
+  tree. Needs Go on `PATH` at CMake configure time.
+- **Linux** — not wired yet. Place `wharfd` next to the app executable and the
+  launcher finds it; the CMake equivalent is part of packaging.
 
 ## How it talks to the daemon
 

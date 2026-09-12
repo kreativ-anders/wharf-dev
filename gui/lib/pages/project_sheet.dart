@@ -64,7 +64,10 @@ class _ProjectSheet extends StatelessWidget {
                 IconButton(
                   tooltip: 'Close',
                   icon: const Icon(Icons.close, size: 18),
-                  onPressed: () => Navigator.pop(context),
+                  // Drop focus before the dialog's subtree is torn down, or
+                  // Windows logs an AXTree error trying to reconcile a
+                  // focused node that vanished mid-frame.
+                  onPressed: () => _closeDialog(context),
                 ),
               ],
             ),
@@ -217,7 +220,7 @@ class _ProjectSheet extends StatelessWidget {
                   onPressed: () async {
                     final confirmed = await _confirmRemove(context, project);
                     if (confirmed && context.mounted) {
-                      Navigator.pop(context);
+                      _closeDialog(context);
                       await daemon.removeProject(project.name);
                     }
                   },
@@ -248,13 +251,27 @@ class _ProjectSheet extends StatelessWidget {
           'Its folder${project.linked ? ' (${project.dir})' : ' in www/'} is left untouched.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Remove')),
+          TextButton(
+            onPressed: () => _closeDialog(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => _closeDialog(context, true),
+            child: const Text('Remove'),
+          ),
         ],
       ),
     );
     return result ?? false;
   }
+}
+
+// Drop focus before popping: a control still focused when its dialog's
+// subtree is torn out in the same frame makes Windows log an AXTree error
+// while it reconciles the accessibility tree against the vanished node.
+void _closeDialog<T extends Object?>(BuildContext context, [T? result]) {
+  FocusManager.instance.primaryFocus?.unfocus();
+  Navigator.pop(context, result);
 }
 
 class _Row extends StatelessWidget {

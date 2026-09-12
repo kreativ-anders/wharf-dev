@@ -79,20 +79,34 @@ class DaemonLauncher {
     throw DaemonFailedToStart(binary, 'did not come up within ${startTimeout.inSeconds}s');
   }
 
-  /// Stops the daemon if this app started it. Asked politely first so it can
-  /// stop its webservers; killed if it does not go.
+  /// Stops the daemon if this app started it. Asked over IPC first so it can
+  /// stop its webservers — on Windows a signal is TerminateProcess, which the
+  /// daemon never sees. Killed if it does not go.
   Future<void> stop() async {
     final process = _owned;
     if (process == null) return;
     _owned = null;
 
-    process.kill(ProcessSignal.sigterm);
+    if (!await _askToShutDown()) process.kill(ProcessSignal.sigterm);
     try {
       await process.exitCode.timeout(const Duration(seconds: 20));
     } on TimeoutException {
       process.kill(ProcessSignal.sigkill);
       await process.exitCode;
     }
+  }
+
+  /// False if the daemon could not be reached to ask.
+  Future<bool> _askToShutDown() async {
+    final client = await _tryConnect(endpointPathFor(root));
+    if (client == null) return false;
+    try {
+      await client.call('daemon.shutdown').timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // The daemon drops its connections as it goes down; the reply can be lost.
+    }
+    await client.close().catchError((_) {});
+    return true;
   }
 
   Future<IpcClient?> _tryConnect(String endpointPath) async {

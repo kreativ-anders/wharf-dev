@@ -116,4 +116,10 @@ Future<Process> _startExternal(String binary, String root, List<String> args) as
   return process;
 }
 
-bool _alive(int pid) => Process.runSync('kill', ['-0', '$pid']).exitCode == 0;
+bool _alive(int pid) {
+  if (Platform.isWindows) {
+    final result = Process.runSync('tasklist', ['/FI', 'PID eq $pid', '/NH']);
+    return result.stdout.toString().contains('$pid');
+  }
+  return Process.runSync('kill', ['-0', '$pid']).exitCode == 0;
+}

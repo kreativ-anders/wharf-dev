@@ -38,3 +38,32 @@ target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.
 add_dependencies(${BINARY_NAME} flutter_assemble)
+
+# === Wharf daemon ===
+# Builds wharfd fresh and drops it next to the app executable on every build,
+# so `flutter run -d windows` runs the daemon from the working tree instead of
+# a stale build/wharfd.exe (the CMake equivalent of the "Embed wharfd" Xcode
+# build phase in gui/macos; see gui/README.md "Embedding on each platform").
+# A POST_BUILD step must live in the directory that defines the target, so
+# this can't move to the top-level windows/CMakeLists.txt. It reruns every
+# build regardless of whether wharf_gui's own sources changed; `go build`'s
+# own cache keeps that cheap on unchanged daemon code.
+# The Go installer puts go.exe in Program Files but only adds it to PATH for
+# shells started afterwards, so an IDE or terminal opened earlier misses it.
+# ProgramW6432, not just ProgramFiles: Visual Studio's CMake may run as a
+# 32-bit process, where ProgramFiles means "Program Files (x86)".
+find_program(GO_EXECUTABLE go
+  PATHS "$ENV{GOROOT}/bin" "$ENV{ProgramW6432}/Go/bin" "$ENV{ProgramFiles}/Go/bin" "C:/Go/bin")
+if(GO_EXECUTABLE)
+  set(WHARF_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../..")
+  add_custom_command(TARGET ${BINARY_NAME} POST_BUILD
+    COMMAND "${GO_EXECUTABLE}" build -o "$<TARGET_FILE_DIR:${BINARY_NAME}>/wharfd.exe" ./cmd/wharfd
+    WORKING_DIRECTORY "${WHARF_REPO_ROOT}/daemon"
+    COMMENT "Building wharfd.exe (Wharf daemon)"
+    VERBATIM
+  )
+else()
+  message(WARNING "Go not found on PATH, in GOROOT or in Program Files — wharfd.exe will not be rebuilt; "
+    "Wharf falls back to build\\wharfd.exe or WHARFD_BIN. Install Go and "
+    "reconfigure to enable it.")
+endif()
