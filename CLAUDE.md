@@ -156,6 +156,7 @@ wharf/
     │   ├── state_test.dart      snapshot parsing
     │   ├── theme_test.dart      WCAG contrast of the palette, both themes
     │   ├── widgets_test.dart    what each view renders
+    │   ├── accessibility_tree_test.dart  semantics updates replayed through the Windows engine's AXTree commit
     │   ├── project_name_test.dart  the name rewrite, against the daemon's own table
     │   ├── launcher_test.dart   binary search order, missing-binary message
     │   ├── launcher_e2e_test.dart  start / attach / quit against real wharfd (--tags e2e)

@@ -18,6 +18,11 @@ import 'package:wharf_gui/theme.dart';
 void main() {
   _AxBinding();
   setUp(_engine.reset);
+  tearDown(() {
+    for (final move in _engine.moves) {
+      debugPrint('MOVE $move');
+    }
+  });
 
   test('the engine model rejects what Windows rejects', () {
     _Node n(List<int> children) => _Node(children, '');
@@ -329,6 +334,53 @@ void main() {
     semantics.dispose();
   }, variant: _windows);
 
+  testWidgets('the status mark shows its tooltip inside the merged row', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _app(tester, _FakeDaemon());
+    final mouse = await _mouse(tester);
+
+    await mouse.moveTo(tester.getCenter(find.byType(StatusDot).first));
+    await _wait(tester);
+    expect(find.text('Running'), findsOneWidget, reason: 'the tooltip is showing');
+    await mouse.moveTo(_nowhere);
+    await _wait(tester);
+
+    expect(_engine.errors, isEmpty);
+    semantics.dispose();
+  }, variant: _windows);
+
+  // Hovering long enough to read a tooltip, then clicking: the click opens a
+  // dialog or a page while the tooltip is still fading out.
+  for (final (name, tip) in [
+    ('a row\'s settings', 'Settings for my-kirby-site'),
+    ('settings', 'Settings'),
+    ('cast off', 'Stop everything and quit Wharf'),
+  ]) {
+    testWidgets('clicking $name while its tooltip shows', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await _app(tester, _FakeDaemon());
+      final mouse = await _mouse(tester);
+
+      await _click(tester, mouse, find.byTooltip(tip).first);
+
+      expect(_engine.errors, isEmpty);
+      semantics.dispose();
+    }, variant: _windows);
+  }
+
+  testWidgets('closing the sheet with the mouse while Close shows its tooltip', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _app(tester, _FakeDaemon());
+    final mouse = await _mouse(tester);
+
+    await _click(tester, mouse, find.byTooltip('Settings for my-kirby-site').first);
+    await _click(tester, mouse, find.byTooltip('Close'));
+    expect(find.byTooltip('Close'), findsNothing, reason: 'the sheet is closed');
+
+    expect(_engine.errors, isEmpty);
+    semantics.dispose();
+  }, variant: _windows);
+
   testWidgets('a row action clicked while its tooltip shows', (tester) async {
     final semantics = tester.ensureSemantics();
     final daemon = _FakeDaemon();
@@ -484,11 +536,22 @@ Future<TestGesture> _mouse(WidgetTester tester) async {
   return mouse;
 }
 
+/// Rests the mouse on [target] until its tooltip shows, then clicks it.
+Future<void> _click(WidgetTester tester, TestGesture mouse, Finder target) async {
+  final at = tester.getCenter(target);
+  await mouse.moveTo(at);
+  await _wait(tester);
+  await mouse.down(at);
+  await tester.pump(const Duration(milliseconds: 16));
+  await mouse.up();
+  await _wait(tester);
+}
+
 /// Long enough for a tooltip to wait, fade in, and for a route to finish its
 /// transition, a frame at a time so every intermediate update is sent.
 Future<void> _wait(WidgetTester tester) async {
-  for (var i = 0; i < 20; i++) {
-    await tester.pump(const Duration(milliseconds: 100));
+  for (var i = 0; i < 120; i++) {
+    await tester.pump(const Duration(milliseconds: 16));
   }
 }
 
@@ -655,15 +718,33 @@ class _Engine {
   final _labels = <int, String>{};
   final errors = <String>[];
 
+  /// Every node listed under a new parent: the one change the engine cannot
+  /// make in a single update.
+  final moves = <String>[];
+  Map<int, _Node> _pending = const {};
+
   int get size => _tree.length;
 
   void reset() {
     _tree.clear();
     _labels.clear();
     errors.clear();
+    moves.clear();
+  }
+
+  /// A node's label, or the first one found below it.
+  String _name(int id, [int depth = 0]) {
+    final label = _labels[id] ?? '';
+    if (label.isNotEmpty || depth > 6) return label;
+    for (final child in _pending[id]?.children ?? _tree[id] ?? const <int>[]) {
+      final below = _name(child, depth + 1);
+      if (below.isNotEmpty) return '…$below';
+    }
+    return '';
   }
 
   void commit(Map<int, _Node> pending) {
+    _pending = pending;
     pending.forEach((id, node) => _labels[id] = node.label);
 
     // Update 1: every node listed under a new parent leaves its old one.
@@ -677,6 +758,10 @@ class _Engine {
         final parent = parents[child];
         if (parent == null || parent == id) continue;
         removals.putIfAbsent(parent, () => [..._tree[parent]!]).remove(child);
+        moves.add(
+          '$child "${_name(child)}" from $parent "${_name(parent)}" to $id "${_name(id)}"'
+          '${pending.containsKey(child) ? '' : ' (not resent)'}',
+        );
       }
     });
     if (removals.isNotEmpty &&
