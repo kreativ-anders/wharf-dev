@@ -79,8 +79,12 @@ wharf/
 │   └── design-principles.md   Kirby-inspired minimalism, applied
 │
 ├── docs/                      the public landing page (GitHub Pages) — HTML + CSS, no JS
-│   ├── index.html
-│   ├── style.css
+│   ├── index.html             content from features/; FAQ mirrored in its JSON-LD
+│   ├── style.css              the app's Kirby-plain palette (gui/lib/theme.dart)
+│   ├── icon.svg               favicon: the app mark on its tile
+│   ├── apple-touch-icon.png   the app icon at 180 px
+│   ├── og.png                 1200×630 link preview, drawn from the same mark
+│   ├── robots.txt, sitemap.xml
 │   └── .nojekyll              serve the files as-is, no Jekyll build
 │
 ├── features/                  THE SPECIFICATION — Gherkin, one file per capability

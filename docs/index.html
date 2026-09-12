@@ -3,110 +3,545 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Wharf — local PHP development, no Docker</title>
-  <meta name="description" content="A local development environment manager. Native processes, no Docker. A folder is a project.">
+  <title>Wharf — a friendly local PHP development environment, no Docker</title>
+  <meta name="description" content="Run PHP projects locally on Windows, macOS and Linux. Native nginx, Apache and PHP — no Docker, no VM. A folder is a project at name.localhost, with HTTPS in one switch.">
+  <link rel="canonical" href="https://kreativ-anders.github.io/wharf-dev/">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1c1c1c" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Wharf">
+  <meta property="og:title" content="Wharf — local PHP development. Just files and folders.">
+  <meta property="og:description" content="Native nginx, Apache and PHP on Windows, macOS and Linux. No Docker, no VM. Every folder is a project at name.localhost, with HTTPS in one switch.">
+  <meta property="og:url" content="https://kreativ-anders.github.io/wharf-dev/">
+  <meta property="og:image" content="https://kreativ-anders.github.io/wharf-dev/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="The Wharf mark — a pier standing in a wave — beside the words: Local PHP development. Just files and folders.">
+  <meta name="twitter:card" content="summary_large_image">
+
   <link rel="stylesheet" href="style.css">
+
+  <!-- Keep in step with the visible FAQ below: search engines compare the two. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "name": "Wharf",
+        "description": "A local development environment for PHP. Runs nginx, Apache and PHP as native processes on Windows, macOS and Linux — no Docker, no VM. Every folder is a project, reachable at name.localhost.",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "macOS, Windows, Linux",
+        "url": "https://kreativ-anders.github.io/wharf-dev/",
+        "image": "https://kreativ-anders.github.io/wharf-dev/og.png",
+        "codeRepository": "https://github.com/kreativ-anders/wharf-dev",
+        "featureList": [
+          "Every project at its own name.localhost address, with no hosts file and no password prompt",
+          "HTTPS for a project with one switch, using mkcert",
+          "PHP versions adopted from the machine or downloaded; one version per project",
+          "nginx or Apache, chosen per project",
+          "One php.ini for every PHP version",
+          "Per-project logs",
+          "One-click Kirby project scaffolding",
+          "Tray menu for start, stop and restart",
+          "One flat, hand-editable JSON config file"
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Does Wharf use Docker or a virtual machine?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No. PHP, nginx, Apache and mkcert run as ordinary programs on your computer. Nothing is put in a container and nothing is virtualised, so your files are as fast as your disk." }
+          },
+          {
+            "@type": "Question",
+            "name": "Will Wharf ask for my password?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Adding or creating a project never does. The one prompt comes the first time you turn on HTTPS: your computer has to be told once to trust Wharf's certificates. Saying no is fine — HTTPS stays on, browsers show a warning until you trust it, and Settings offers to ask again." }
+          },
+          {
+            "@type": "Question",
+            "name": "Why .localhost and not .test?",
+            "acceptedAnswer": { "@type": "Answer", "text": "The name .localhost is reserved for your own computer (RFC 6761). macOS, Linux and every current browser answer it by themselves, so nothing is written to the hosts file. A made-up ending such as .test needs the hosts file instead, which macOS 26 does not reliably read." }
+          },
+          {
+            "@type": "Question",
+            "name": "Which PHP versions can I use?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Any version already on your computer is used where it is. Every version that still gets security fixes can be downloaded from Settings. The default is the newest version in active support, and each project can pick its own." }
+          },
+          {
+            "@type": "Question",
+            "name": "Do I have to move my projects into a special folder?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No. Any folder in www/ is a project, and a folder anywhere else can be added with Add folder… and stays where it is. Removing such a project never touches its files." }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I use Wharf without the app?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. The wharfctl command line does everything the app does, and the whole setup is one JSON file that Wharf picks up again when you edit it by hand." }
+          },
+          {
+            "@type": "Question",
+            "name": "Is Wharf only for Kirby?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No — any folder of PHP is a project. Kirby is the reference: its starter kit is one click away, and a Kirby site needs no webserver setup on nginx or Apache." }
+          },
+          {
+            "@type": "Question",
+            "name": "What about MySQL, PostgreSQL, Node.js or Mailpit?",
+            "acceptedAnswer": { "@type": "Answer", "text": "They are on the roadmap: how they will behave is written down, but they are deliberately not built yet. The first version does PHP, and does it well." }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I install an older nginx or Apache for one project?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Not yet. Wharf has one version of nginx and one of Apache, and installs the newest. nginx and Apache do not offer ready-made downloads themselves, and the places Wharf gets them from usually offer only the newest version. What works today: each project can use either nginx or Apache, and its address stays the same." }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I download Wharf?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Not yet — there are no installers. The desktop app runs on macOS today when built from source with make gui." }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
-  <header class="wrap">
-    <p class="mark">Wharf</p>
-    <nav>
-      <a href="#how">How it works</a>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="site wrap">
+    <a class="brand" href="./" aria-label="Wharf, home">
+      <svg class="pier" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><path d="M0 10h100v15H0zM16 10h15v52H16zM69 10h15v52H69zM0 72.5L5 74.66 10 76.61 15 78.16 20 79.16 25 79.5 30 79.16 35 78.16 40 76.61 45 74.66 50 72.5 55 70.34 60 68.39 65 66.84 70 65.84 75 65.5 80 65.84 85 66.84 90 68.39 95 70.34 100 72.5V87.5L95 85.34 90 83.39 85 81.84 80 80.84 75 80.5 70 80.84 65 81.84 60 83.39 55 85.34 50 87.5 45 89.66 40 91.61 35 93.16 30 94.16 25 94.5 20 94.16 15 93.16 10 91.61 5 89.66 0 87.5z"/></svg>
+      Wharf
+    </a>
+    <nav aria-label="Main">
+      <a href="#features">Features</a>
+      <a href="#config">Config</a>
       <a href="#status">Status</a>
       <a href="#faq">FAQ</a>
-      <a href="https://github.com/manuel-steinberg/wharf">Source</a>
+      <a href="https://github.com/kreativ-anders/wharf-dev">GitHub</a>
     </nav>
   </header>
 
-  <main class="wrap">
-    <section class="hero">
-      <h1>Local PHP development.<br>Just files and folders.</h1>
+  <main id="main">
+    <!-- Hero -->
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <p class="eyebrow">Local PHP development · Windows, macOS &amp; Linux</p>
+      <h1 id="hero-title">Local PHP development.<br><span class="soft">Just files and folders.</span></h1>
       <p class="lede">
-        Wharf runs your projects as native processes on Windows, macOS and
-        Linux. No Docker, no VM. A folder is a project — put it in
-        <code>www/</code>, or pick it wherever it already lives.
+        Wharf runs PHP, nginx and Apache right on your computer — no Docker,
+        no VM. Every folder is a project with a real address like
+        <code>my-kirby-site.localhost</code>, HTTPS in one switch, and the PHP
+        version it needs.
       </p>
-      <p class="note">Early development — no downloads yet.</p>
+      <p class="cta">
+        <a class="button" href="#how">See how it works</a>
+        <a class="button ghost" href="https://github.com/kreativ-anders/wharf-dev">Read the source</a>
+      </p>
+      <p class="note"><span class="status is-busy" aria-hidden="true"></span> Early development. The app runs on macOS today; there are no downloads yet.</p>
+
+      <figure class="shot">
+        <div class="window" aria-hidden="true">
+          <div class="titlebar"><span class="lights"><i></i><i></i><i></i></span><span>Wharf</span></div>
+          <div class="toolbar">
+            <strong>Projects</strong>
+            <span class="tools"><span class="chip">Add folder…</span><span class="chip">New project</span><span class="chip is-stop"><b>■</b> Stop all</span></span>
+          </div>
+          <ul class="rows">
+            <li>
+              <span class="status is-running"></span>
+              <span class="who"><b>my-kirby-site</b><span class="url">https://my-kirby-site.localhost</span><span class="meta">nginx 1.27.3 · PHP 8.4.12</span></span>
+              <span class="acts"><span class="act"><b>↗</b> Open</span><span class="act is-restart"><b>↻</b> Restart</span><span class="act"><b>⋯</b> Settings</span><span class="act is-stop"><b>■</b> Stop</span></span>
+            </li>
+            <li>
+              <span class="status is-running"></span>
+              <span class="who"><b>legacy-app</b><span class="url">http://legacy-app.localhost</span><span class="meta">Apache 2.4.62 · PHP 8.2.29</span></span>
+              <span class="acts"><span class="act"><b>↗</b> Open</span><span class="act is-restart"><b>↻</b> Restart</span><span class="act"><b>⋯</b> Settings</span><span class="act is-stop"><b>■</b> Stop</span></span>
+            </li>
+            <li>
+              <span class="status is-idle"></span>
+              <span class="who"><b>client-site</b><span class="url">http://client-site.localhost</span></span>
+              <span class="acts"><span class="act"><b>↗</b> Open</span><span class="act is-empty"></span><span class="act"><b>⋯</b> Settings</span><span class="act is-start"><b>▸</b> Start</span></span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="tray" aria-hidden="true">
+          <p class="tray-head">Wharf</p>
+          <ul>
+            <li><span class="status is-running"></span>my-kirby-site<span class="chev">›</span></li>
+            <li><span class="status is-running"></span>legacy-app<span class="chev">›</span></li>
+            <li><span class="status is-idle"></span>client-site<span class="chev">›</span></li>
+            <li class="sep"></li>
+            <li>Add project…</li>
+            <li>Open Wharf</li>
+            <li>Stop all</li>
+            <li class="sep"></li>
+            <li>Quit Wharf</li>
+          </ul>
+        </div>
+
+        <figcaption>
+          The one main view: a list of projects. Each row shows whether it is
+          running — as a shape, not only a colour — its address, and what serves
+          it. The tray menu shows the same thing.
+        </figcaption>
+      </figure>
     </section>
 
-    <section id="how">
-      <h2>How it works</h2>
-      <ol class="steps">
-        <li>
-          <h3>Pick a folder</h3>
-          <p>Every folder in <code>www/</code> is a project, and any other
-          folder can be added where it is. No wizard, no import step.</p>
-        </li>
-        <li>
-          <h3>Start it from the tray</h3>
-          <p>Start, stop and open live in the tray menu. The window is there
-          when you need it, not for a two-second action.</p>
-        </li>
-        <li>
-          <h3>Open a real URL</h3>
-          <p>Each project gets its own address, <code>&lt;name&gt;.localhost</code>,
-          with HTTPS if you want it. Your computer finds it by itself: nothing
-          to set up, no password, no port number in the address.</p>
-        </li>
-      </ol>
-
-      <pre class="tree" aria-label="The Wharf folder">wharf/
-├── bin/       PHP, nginx, Apache
-├── www/       <span>your projects — one folder each</span>
-├── config/
-│   └── wharf.json   <span>one flat, hand-editable file</span>
-└── data/      generated; safe to delete</pre>
+    <!-- How it works -->
+    <section id="how" class="band" aria-labelledby="how-title">
+      <div class="wrap">
+        <p class="eyebrow">How it works</p>
+        <h2 id="how-title">Three steps. No wizard.</h2>
+        <ol class="steps">
+          <li>
+            <h3>Pick a folder</h3>
+            <p>Every folder in <code>www/</code> is a project. Any other folder
+            can be added right where it lives — your code never moves.</p>
+          </li>
+          <li>
+            <h3>Start it from the tray</h3>
+            <p>Start, stop and open live in the tray menu. The window is there
+            when you need it, not for a two-second action.</p>
+          </li>
+          <li>
+            <h3>Open a real URL</h3>
+            <p>Each project gets its own address, with HTTPS if you want it.
+            Your computer finds it by itself: nothing to set up, no password,
+            no port number in the address.</p>
+            <p class="address"><span class="dim">https://</span>my-kirby-site.localhost</p>
+          </li>
+        </ol>
+      </div>
     </section>
 
-    <section>
-      <h2>What it is not</h2>
-      <ul class="plain">
-        <li>No containers and no virtual machine — native host processes only.</li>
-        <li>No dashboard, no charts, no onboarding carousel. One list of projects.</li>
-        <li>No database. The whole state is one JSON file you can edit by hand.</li>
-        <li>No per-OS surprises. One behaviour on Windows, macOS and Linux.</li>
+    <!-- Features -->
+    <section id="features" class="wrap" aria-labelledby="features-title">
+      <p class="eyebrow">Features</p>
+      <h2 id="features-title">Everything a PHP project needs.<br><span class="soft">Nothing it doesn't.</span></h2>
+
+      <ul class="grid">
+        <li>
+          <h3>Real addresses, no prompts</h3>
+          <p>Each project answers at <code>&lt;name&gt;.localhost</code>, which
+          your computer knows by itself — Safari included. Adding a project
+          never touches the hosts file or asks for a password.</p>
+        </li>
+        <li>
+          <h3>HTTPS with one switch</h3>
+          <p>Turn it on and Wharf fetches mkcert, checks it, and makes a
+          certificate. Your computer asks once to trust it. Say no, and the
+          project still works.</p>
+        </li>
+        <li>
+          <h3>The PHP you already have</h3>
+          <p>PHP versions on your computer are found and used where they are.
+          Any supported version is one click to download, and each shows how
+          long it still gets fixes.</p>
+        </li>
+        <li>
+          <h3>One PHP version per project</h3>
+          <p>An old client site on PHP 8.2 next to a fresh one on 8.4 — set it
+          in the project's settings. Everything else keeps the default.</p>
+        </li>
+        <li>
+          <h3>nginx or Apache, per project</h3>
+          <p>Switch the webserver for everyone, or give one project the other
+          one. Its address stays the same.</p>
+        </li>
+        <li>
+          <h3>One <code>php.ini</code> for all</h3>
+          <p><code>memory_limit</code>, upload sizes, <code>display_errors</code>:
+          one file, read by every PHP version. Save it, and only PHP
+          restarts.</p>
+        </li>
+        <li>
+          <h3>Your own webserver settings</h3>
+          <p>A per-project <code>.nginx.conf</code> or <code>.apache.conf</code>,
+          applied when you save. If the webserver refuses it, you see its own
+          error with the file and line — right away.</p>
+        </li>
+        <li>
+          <h3>Logs, one folder per project</h3>
+          <p>Requests and errors for each project — PHP's warnings included —
+          land in <code>data/log/projects/&lt;name&gt;/</code>, one click away
+          in its settings.</p>
+        </li>
+        <li>
+          <h3>Kirby in one click</h3>
+          <p>“New project” fetches the Kirby starter kit and starts it. Pages,
+          Panel and media just work, and <code>content/</code> and
+          <code>site/</code> are never served as files.</p>
+        </li>
+        <li>
+          <h3>Lives in your tray</h3>
+          <p>Start, stop, restart and open projects without opening a window.
+          The tray and the window always show the same thing.</p>
+        </li>
+        <li>
+          <h3>One application</h3>
+          <p>Launch Wharf and it works. Quit, and everything it started stops.
+          Even if it crashes, nothing is left running behind your back.</p>
+        </li>
+        <li>
+          <h3>Accessible by default</h3>
+          <p>Readable contrast in light and dark, status shown by shape as well
+          as colour, every button labelled, and the keyboard reaches
+          everything.</p>
+        </li>
       </ul>
     </section>
 
-    <section id="status">
-      <h2>Status</h2>
-      <dl class="status">
-        <div><dt>Core daemon</dt><dd>Implemented</dd></div>
-        <div><dt>Desktop app</dt><dd>Implemented; runs on macOS today</dd></div>
-        <div><dt>Command line</dt><dd>Implemented — usable without the app</dd></div>
-        <div><dt>PHP</dt><dd>Detects and adopts installed versions</dd></div>
-        <div><dt>Node, Go, Python, databases, Mailpit</dt><dd>Roadmap</dd></div>
-        <div><dt>Installers</dt><dd>Not started</dd></div>
-      </dl>
+    <!-- Front door -->
+    <section class="band" aria-labelledby="door-title">
+      <div class="wrap split">
+        <div class="prose">
+          <p class="eyebrow">Under the hood</p>
+          <h2 id="door-title">One front door on port 80.</h2>
+          <p>One copy of the active webserver serves every project, each with
+          its own generated config file. A project that uses the other
+          webserver gets its own copy, reachable only from your computer, and
+          the front door passes its requests through.</p>
+          <p>HTTPS ends at the front door, so it works the same either way. A
+          name no project has is turned away, never answered by the wrong
+          project.</p>
+        </div>
+        <pre class="code diagram" aria-label="Diagram: the browser reaches nginx on ports 80 and 443. nginx serves my-kirby-site and client-site directly and passes legacy-app to Apache on 127.0.0.1 port 8081."><span class="dim">browser</span>
+   │
+   ▼
+nginx  :80  :443      <span class="dim">the front door</span>
+   ├──► my-kirby-site     <span class="dim">served directly</span>
+   ├──► client-site       <span class="dim">served directly</span>
+   └──► legacy-app  ──►  apache
+                         <span class="dim">127.0.0.1:8081</span></pre>
+      </div>
     </section>
 
-    <section id="faq">
-      <h2>FAQ</h2>
-      <div class="faq">
-        <details>
-          <summary>Can I install an older nginx or Apache for one project?</summary>
-          <p>Not yet. Wharf has one version of nginx and one of Apache. When it
-          installs one, it gets the newest version. <em>Re-scan</em> only looks
-          for what is already on your computer — it does not check for
-          updates.</p>
-          <p>Why: nginx and Apache do not offer ready-made downloads
-          themselves, so Wharf gets them from somewhere else, and those places
-          usually offer only the newest version. On a Mac, nginx comes from
-          Homebrew, which has just the current version. On Linux, Apache comes
-          from your system's package manager, which has just one version.</p>
-          <p>What works today: each project can use either nginx or Apache. So
-          a project that needs Apache can run on Apache while all others run
-          on nginx — and its address stays the same. Choosing a webserver
-          <em>version</em> per project, as you already can for PHP, is planned
-          wherever older versions are available to download.</p>
-        </details>
+    <!-- Config -->
+    <section id="config" class="wrap" aria-labelledby="config-title">
+      <p class="eyebrow">Plain text</p>
+      <h2 id="config-title">Your whole setup is one file you can read.</h2>
+      <p class="intro">No database, no scattered formats. If you like a text
+      editor, skip the app entirely: Wharf picks up your changes when you save.
+      Only what differs from the defaults is written down.</p>
+
+      <div class="pair">
+        <figure>
+          <figcaption><code>config/wharf.json</code></figcaption>
+<pre class="code">{
+  "services": {
+    "webserver": { "active": "nginx", "available": ["apache", "nginx"] },
+    "php": { "version": "8.4", "available": ["8.2", "8.4"] }
+  },
+  "projects": [
+    { "name": "my-kirby-site", "ssl": true },
+    { "name": "legacy-app", <b>"webserver_override": "apache"</b>,
+      <b>"php_version": "8.2"</b>, "ssl": false, "port": 8081 },
+    { "name": "client-site", "ssl": false,
+      <b>"path": "/Users/you/Code/Client Site"</b> }
+  ]
+}</pre>
+        </figure>
+        <figure>
+          <figcaption>The Wharf folder</figcaption>
+<pre class="code">wharf/
+├── bin/      <span class="dim">PHP, nginx, Apache, mkcert</span>
+├── www/      <span class="dim">your projects</span>
+├── config/   <span class="dim">worth backing up</span>
+│   ├── wharf.json
+│   ├── php.ini
+│   └── vhosts/  <span class="dim">my-site.nginx.conf</span>
+└── data/     <span class="dim">generated; safe to delete</span></pre>
+        </figure>
+      </div>
+    </section>
+
+    <!-- Spec-driven -->
+    <section class="band" aria-labelledby="spec-title">
+      <div class="wrap split">
+        <div class="prose">
+          <p class="eyebrow">Written down first</p>
+          <h2 id="spec-title">Every promise on this page is a test.</h2>
+          <p>Everything Wharf does is described in plain English before it is
+          built. Each description is checked by a test, and the build fails the
+          moment the two disagree.</p>
+          <p><a href="https://github.com/kreativ-anders/wharf-dev/tree/main/features">Read all the scenarios</a></p>
+        </div>
+<pre class="code gherkin" aria-label="Example scenario from pretty-urls.feature"><span class="dim"># features/pretty-urls.feature</span>
+<b>Scenario:</b> Adding a project never asks for a password
+  <b>When</b> the user adds or scaffolds a project
+  <b>Then</b> the hosts file is not written
+  <b>And</b>  no elevation prompt is shown</pre>
+      </div>
+    </section>
+
+    <!-- What it is not -->
+    <section class="wrap" aria-labelledby="not-title">
+      <p class="eyebrow">Kirby-inspired minimalism</p>
+      <h2 id="not-title">What Wharf is not.</h2>
+      <ul class="nots">
+        <li><strong>Not a container.</strong> No Docker, no VM — ordinary programs, so your files are as fast as your disk.</li>
+        <li><strong>Not a dashboard.</strong> No charts, no onboarding carousel. One list of projects; details behind a click.</li>
+        <li><strong>Not a database.</strong> Your whole setup is one JSON file you can edit by hand.</li>
+        <li><strong>Not three different apps.</strong> It works the same on Windows, macOS and Linux.</li>
+        <li><strong>Not a big first download.</strong> Wharf uses what you have and installs only when you ask.</li>
+      </ul>
+    </section>
+
+    <!-- Sources -->
+    <section class="band" aria-labelledby="sources-title">
+      <div class="wrap">
+        <p class="eyebrow">Trust</p>
+        <h2 id="sources-title">Where every download comes from.</h2>
+        <p class="intro">Whatever is already on your computer is used first. When
+        Wharf does install something, it picks the best source for your system —
+        and never leaves a half-installed folder behind.</p>
+        <div class="table">
+          <table>
+            <thead><tr><th scope="col">What</th><th scope="col">Source</th><th scope="col">Checked by</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">PHP · macOS, Linux</th><td>static-php-cli builds, with every extension Kirby needs</td><td>HTTPS</td></tr>
+              <tr><th scope="row">PHP · Windows</th><td>windows.php.net, official NTS x64 builds</td><td>SHA-256</td></tr>
+              <tr><th scope="row">nginx · Linux, Windows</th><td>static builds, newest version</td><td>SHA-1 from the index</td></tr>
+              <tr><th scope="row">nginx · macOS</th><td>Homebrew</td><td>Homebrew</td></tr>
+              <tr><th scope="row">Apache · Windows</th><td>Apache Lounge, newest 2.4</td><td>SHA-256</td></tr>
+              <tr><th scope="row">Apache · macOS</th><td>the one macOS ships — nothing to install</td><td>—</td></tr>
+              <tr><th scope="row">Apache · Linux</th><td>your system's package; Settings names the command</td><td>—</td></tr>
+              <tr><th scope="row">mkcert</th><td>a pinned GitHub release</td><td>SHA-256, pinned</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Status -->
+    <section id="status" class="wrap" aria-labelledby="status-title">
+      <p class="eyebrow">Status</p>
+      <h2 id="status-title">Where Wharf stands today.</h2>
+      <p class="legend">
+        <span><span class="status is-running" aria-hidden="true"></span> Done</span>
+        <span><span class="status is-busy" aria-hidden="true"></span> Partly</span>
+        <span><span class="status is-idle" aria-hidden="true"></span> Not yet</span>
+      </p>
+      <dl class="state">
+        <div><dt><span class="status is-running" aria-hidden="true"></span>Core service</dt><dd><span class="sr-only">Done. </span>Every scenario has a test</dd></div>
+        <div><dt><span class="status is-running" aria-hidden="true"></span>Command line (<code>wharfctl</code>)</dt><dd><span class="sr-only">Done. </span>Everything, without the app</dd></div>
+        <div><dt><span class="status is-running" aria-hidden="true"></span>PHP, nginx, Apache, HTTPS</dt><dd><span class="sr-only">Done. </span>Used if present, installed on request</dd></div>
+        <div><dt><span class="status is-busy" aria-hidden="true"></span>Desktop app</dt><dd><span class="sr-only">Partly. </span>Runs on macOS; Windows and Linux builds next</dd></div>
+        <div><dt><span class="status is-idle" aria-hidden="true"></span>Installers</dt><dd><span class="sr-only">Not yet. </span>DMG, MSI and AppImage not started</dd></div>
+      </dl>
+
+      <h3 class="roadmap-title">On the roadmap</h3>
+      <p class="intro">Written down, deliberately not built. The first version does PHP, and does it well.</p>
+      <ul class="tags">
+        <li>MySQL / PostgreSQL</li>
+        <li>Mailpit</li>
+        <li>Node.js</li>
+        <li>Go</li>
+        <li>Python</li>
+        <li>WordPress &amp; Laravel templates</li>
+        <li>Update check, only when you ask</li>
+      </ul>
+    </section>
+
+    <!-- FAQ -->
+    <section id="faq" class="band" aria-labelledby="faq-title">
+      <div class="wrap narrow">
+        <p class="eyebrow">FAQ</p>
+        <h2 id="faq-title">Questions, answered.</h2>
+        <div class="faq">
+          <details>
+            <summary>Does Wharf use Docker or a virtual machine?</summary>
+            <p>No. PHP, nginx, Apache and mkcert run as ordinary programs on your
+            computer. Nothing is put in a container and nothing is virtualised,
+            so your files are as fast as your disk.</p>
+          </details>
+          <details>
+            <summary>Will Wharf ask for my password?</summary>
+            <p>Adding or creating a project never does. The one prompt comes the
+            first time you turn on HTTPS: your computer has to be told once to
+            trust Wharf's certificates. Saying no is fine — HTTPS stays on,
+            browsers show a warning until you trust it, and Settings offers to
+            ask again.</p>
+          </details>
+          <details>
+            <summary>Why <code>.localhost</code> and not <code>.test</code>?</summary>
+            <p>The name <code>.localhost</code> is reserved for your own computer
+            (<a href="https://www.rfc-editor.org/rfc/rfc6761">RFC 6761</a>).
+            macOS, Linux and every current browser answer it by themselves, so
+            nothing is written to the hosts file. A made-up ending such as
+            <code>.test</code> needs the hosts file instead, which macOS 26 does
+            not reliably read.</p>
+          </details>
+          <details>
+            <summary>Which PHP versions can I use?</summary>
+            <p>Any version already on your computer is used where it is. Every
+            version that still gets security fixes can be downloaded from
+            Settings. The default is the newest version in active support, and
+            each project can pick its own.</p>
+          </details>
+          <details>
+            <summary>Do I have to move my projects into a special folder?</summary>
+            <p>No. Any folder in <code>www/</code> is a project, and a folder
+            anywhere else can be added with “Add folder…” and stays where it is.
+            Removing such a project never touches its files.</p>
+          </details>
+          <details>
+            <summary>Can I use Wharf without the app?</summary>
+            <p>Yes. The <code>wharfctl</code> command line does everything the
+            app does, and the whole setup is one JSON file that Wharf picks up
+            again when you edit it by hand.</p>
+          </details>
+          <details>
+            <summary>Is Wharf only for Kirby?</summary>
+            <p>No — any folder of PHP is a project. Kirby is the reference: its
+            starter kit is one click away, and a Kirby site needs no webserver
+            setup on nginx or Apache.</p>
+          </details>
+          <details>
+            <summary>What about MySQL, PostgreSQL, Node.js or Mailpit?</summary>
+            <p>They are on the roadmap: how they will behave is written down, but
+            they are deliberately not built yet. The first version does PHP, and
+            does it well.</p>
+          </details>
+          <details>
+            <summary>Can I install an older nginx or Apache for one project?</summary>
+            <p>Not yet. Wharf has one version of nginx and one of Apache. When it
+            installs one, it gets the newest version. <em>Re-scan</em> only looks
+            for what is already on your computer — it does not check for
+            updates.</p>
+            <p>Why: nginx and Apache do not offer ready-made downloads
+            themselves, so Wharf gets them from somewhere else, and those places
+            usually offer only the newest version. On a Mac, nginx comes from
+            Homebrew, which has just the current version. On Linux, Apache comes
+            from your system's package manager, which has just one version.</p>
+            <p>What works today: each project can use either nginx or Apache. So
+            a project that needs Apache can run on Apache while all others run
+            on nginx — and its address stays the same. Choosing a webserver
+            <em>version</em> per project, as you already can for PHP, is planned
+            wherever older versions are available to download.</p>
+          </details>
+          <details>
+            <summary>Can I download Wharf?</summary>
+            <p>Not yet — there are no installers. The desktop app runs on macOS
+            today when built from source with <code>make gui</code>; see the
+            <a href="https://github.com/kreativ-anders/wharf-dev#running-it">README</a>.</p>
+          </details>
+        </div>
       </div>
     </section>
   </main>
 
-  <footer class="wrap">
+  <footer class="site wrap">
+    <svg class="pier" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><path d="M0 10h100v15H0zM16 10h15v52H16zM69 10h15v52H69zM0 72.5L5 74.66 10 76.61 15 78.16 20 79.16 25 79.5 30 79.16 35 78.16 40 76.61 45 74.66 50 72.5 55 70.34 60 68.39 65 66.84 70 65.84 75 65.5 80 65.84 85 66.84 90 68.39 95 70.34 100 72.5V87.5L95 85.34 90 83.39 85 81.84 80 80.84 75 80.5 70 80.84 65 81.84 60 83.39 55 85.34 50 87.5 45 89.66 40 91.61 35 93.16 30 94.16 25 94.5 20 94.16 15 93.16 10 91.61 5 89.66 0 87.5z"/></svg>
     <p>Wharf is a working title. Inspired by the minimalism of
-    <a href="https://getkirby.com">Kirby</a>.</p>
+    <a href="https://getkirby.com">Kirby</a>.
+    <a href="https://github.com/kreativ-anders/wharf-dev">Source on GitHub</a>.</p>
   </footer>
 </body>
 </html>
