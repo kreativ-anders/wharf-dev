@@ -8,18 +8,18 @@ import 'package:wharf_gui/daemon_launcher.dart';
 import 'package:wharf_gui/ipc/client.dart';
 import 'package:wharf_gui/ipc/endpoint.dart';
 
+import 'e2e_daemon.dart';
+
 /// The launcher against the real wharfd binary: the app must be one thing to
 /// start and leave nothing behind. Run with `make gui-e2e`.
 void main() {
-  final binary =
-      Platform.environment['WHARFD_BIN'] ??
-      '${Directory.current.parent.path}/build/${daemonBinaryName()}';
-
+  late String binary;
   late Directory root;
   late List<String> safeArgs;
 
+  setUpAll(() => binary = e2eDaemonBinary());
+
   setUp(() async {
-    if (!File(binary).existsSync()) fail('run `make build` first: no $binary');
     root = await Directory.systemTemp.createTemp('wharf-launch');
     final hosts = File('${root.path}/hosts')..writeAsStringSync('127.0.0.1\tlocalhost\n');
     // Never the real hosts file, never a password prompt.

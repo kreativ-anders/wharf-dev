@@ -160,7 +160,8 @@ wharf/
     │   ├── project_name_test.dart  the name rewrite, against the daemon's own table
     │   ├── launcher_test.dart   binary search order, missing-binary message
     │   ├── launcher_e2e_test.dart  start / attach / quit against real wharfd (--tags e2e)
-    │   └── daemon_e2e_test.dart drives the real wharfd binary (--tags e2e)
+    │   ├── daemon_e2e_test.dart drives the real wharfd binary (--tags e2e)
+    │   └── e2e_daemon.dart      the binary both e2e tests drive; refuses a build older than daemon/
     └── macos/ linux/ windows/   platform shells; macOS embeds wharfd via the
                                  "Embed wharfd" Xcode build phase
 ```

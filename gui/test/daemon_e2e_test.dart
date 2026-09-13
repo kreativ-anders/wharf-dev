@@ -5,9 +5,10 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wharf_gui/daemon.dart';
-import 'package:wharf_gui/daemon_launcher.dart';
 import 'package:wharf_gui/ipc/client.dart';
 import 'package:wharf_gui/ipc/endpoint.dart';
+
+import 'e2e_daemon.dart';
 
 /// Drives the real wharfd binary from the GUI's own client, which is the only
 /// way to prove the two halves actually fit: the Go snapshot shape, the
@@ -19,14 +20,8 @@ void main() {
   late Process daemon;
   late String hostsPath;
 
-  final binary =
-      Platform.environment['WHARFD_BIN'] ??
-      '${Directory.current.parent.path}/build/${daemonBinaryName()}';
-
   setUpAll(() async {
-    if (!File(binary).existsSync()) {
-      fail('wharfd not found at $binary — run `make build` at the repo root first');
-    }
+    final binary = e2eDaemonBinary();
 
     root = await Directory.systemTemp.createTemp('wharf-e2e');
     hostsPath = '${root.path}/hosts';
