@@ -166,7 +166,8 @@ when complete, so a failure leaves no half-installed folder. The newest patch
 of a PHP minor version is found from each source's index, not hard-coded.
 
 Wharf itself is not updated from inside the app yet. Settings → General shows
-the version `wharfd` was built as (`-X main.version`, from `git describe`) —
+the version `wharfd` was built as (`-X main.version`, from
+`gui/pubspec.yaml` through `tool/version.sh` — see `dev/releasing.md`) —
 the daemon publishes it, so the window and the tray cannot name different
 ones — and a "Check for updates" button that stays disabled until there are
 releases to check against. When it is built (`features/settings.feature`,

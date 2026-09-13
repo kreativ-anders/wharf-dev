@@ -53,16 +53,29 @@ Run `make spec` to print the coverage matrix.
 - **New behaviour** → write the scenario, watch `make spec` show `✗ NO TEST`,
   then make it pass.
 - **Behaviour that turns out to be wrong or out of scope** → change or re-tag
-  the scenario. Do not delete a scenario to silence the guard.
-- **`dev/architecture.md` and `dev/design-principles.md`** are not covered by
-  the guard. When a decision recorded there changes, update the document in the
-  same commit and say so in the message.
+  the scenario, and say why in the commit. Do not delete a scenario to silence
+  the guard.
+- **Documents in `dev/`** are not covered by the guard. When a decision
+  recorded there changes, update the document in the same commit and say so in
+  the message. A code change without its document change is unfinished.
 
 ### Keeping the section-2 map current
 
 Section 2 below is the file directory. Update it whenever a file or package is
 added, removed or renamed — in the same commit. It is the map a new reader
-starts from; a stale map is worse than none.
+starts from; a stale map is worse than none, and `internal/docsync` fails when
+it goes stale.
+
+### The prose guard
+
+[`internal/docsync`](daemon/internal/docsync/) does for prose what the sync
+guard does for specs, also inside `make test`: every file in the places §2
+covers is named in §2; the landing page's FAQ and its JSON-LD ask the same
+questions; every build of `wharfd` stamps its version; every path the release
+workflow names exists; `tool/version.sh` computes versions correctly.
+
+Only claims a machine can decide go there. **A prose rule that has been broken
+twice becomes a test in `docsync`**, not just a corrected sentence.
 
 ---
 
@@ -70,13 +83,24 @@ starts from; a stale map is worse than none.
 
 ```
 wharf/
-├── CLAUDE.md                  ← this file: the sync rule and the map
+├── CLAUDE.md                  ← this file: the working agreement and the map — the only instruction file
 ├── README.md                  project overview and status
-├── Makefile                   build, test, cross-compile, spec matrix
+├── CONTRIBUTING.md            set-up, workflow, commit subjects — points here for the rules
+├── CHANGELOG.md               written by the release workflow, never by hand
+├── Makefile                   build, test, cross-compile, spec matrix, version and release
+├── .github/workflows/
+│   └── release.yml            THE ONLY WORKFLOW: gate → bump → build per OS → release
+├── tool/
+│   └── version.sh             the one place a version is computed, bumped, tagged, changelogged
+├── packaging/macos/
+│   └── build_dmg.sh           Wharf.app → signed, notarised DMG; same script locally and in CI
 │
 ├── dev/                       developer documentation — decisions, not user docs
 │   ├── architecture.md        components, cross-OS strategy, config shape
-│   └── design-principles.md   Kirby-inspired minimalism, applied
+│   ├── design-principles.md   Kirby-inspired minimalism, applied
+│   ├── glossary.md            the words Wharf uses for its own things
+│   ├── releasing.md           one version source, cutting a release, what the workflow does
+│   └── quality-audit.md       the recurring on-demand review: a11y, landing page, code
 │
 ├── docs/                      the public landing page (GitHub Pages) — HTML + CSS, no JS
 │   ├── index.html             content from features/; FAQ mirrored in its JSON-LD
@@ -117,6 +141,7 @@ wharf/
 │       │   ├── api.go         IPC method wiring
 │       │   ├── watch.go       reloads wharf.json and custom configs when hand-edited
 │       │   └── *_test.go      one test file per feature file (see §1)
+│       ├── docsync/           THE PROSE GUARD (§1): the map, the FAQ mirror, version stamping
 │       ├── download/          HTTPS fetch, checksum, untar/unzip for PHP and mkcert
 │       ├── elevate/           PLATFORM-SPECIFIC: elevation prompts (3 adapters)
 │       ├── hostsfile/         removes hosts lines left from the old <name>.wharf scheme
@@ -132,7 +157,7 @@ wharf/
 │       └── webserver/         find nginx/Apache (Wharf's, Homebrew's, the OS's), install them
 │
 └── gui/                       the Flutter desktop app — see gui/README.md
-    ├── pubspec.yaml
+    ├── pubspec.yaml           THE VERSION: `version: X.Y.Z+B` (dev/releasing.md)
     ├── dart_test.yaml          declares the e2e tag (excluded from the default run)
     ├── assets/tray/           tray icon: template_*.png (macOS), icon_*.png (Linux), icon.ico (Windows)
     ├── tool/draw_icons.py     draws the tray and app icons from one mark
@@ -163,7 +188,8 @@ wharf/
     │   ├── daemon_e2e_test.dart drives the real wharfd binary (--tags e2e)
     │   └── e2e_daemon.dart      the binary both e2e tests drive; refuses a build older than daemon/
     └── macos/ linux/ windows/   platform shells; macOS embeds wharfd via the
-                                 "Embed wharfd" Xcode build phase
+                                 "Embed wharfd" Xcode build phase, Windows via
+                                 a post-build step in windows/runner/CMakeLists.txt
 ```
 
 ---
@@ -201,17 +227,54 @@ means changing the document that records it.
   its own daemon and stops it on quit; the daemon is never something a user has
   to know about, start, or clean up after.
 
+### Settled decisions
+
+Each of these was worked through and written down, several after the first
+plan failed in practice. **Do not reverse one — not even as a "cleanup" —
+without discussing it first.** If the discussion changes it, the document
+that records it changes in the same commit.
+
+- `<name>.localhost`, no hosts-file lines, no DNS resolver of Wharf's own:
+  the `.wharf` plan left Safari unable to find projects on macOS 26
+  (`dev/architecture.md` §2).
+- One front door on ports 80/443. A project pinned to the other webserver is
+  proxied to its own loopback instance, so every URL has the same shape (§2, §4c).
+- IPC is a unix socket on macOS/Linux and loopback TCP with a token on Windows,
+  found through `data/wharf.endpoint`, because Dart has no unix sockets on
+  Windows (§4a).
+- Custom webserver directives and PHP settings are files (`config/vhosts/`,
+  `config/php.ini`), not JSON keys (§6).
+- The app stops the daemon by asking over IPC, never by a signal: on Windows a
+  signal is `TerminateProcess` (`daemon/README.md`).
+- The macOS sandbox stays off (§4 below).
+- The update check, once built, looks only when asked and never runs what it
+  downloaded (`features/settings.feature`, `dev/architecture.md` §4b).
+- One version source, `gui/pubspec.yaml`; one GitHub workflow, and no push or
+  PR CI (`dev/releasing.md`).
+
+**When the code and a document disagree, ask or reconcile both — don't
+guess.** A document that no longer matches was usually forgotten in the last
+change. That does not prove the code is right.
+
 ---
 
 ## 4. Conventions
 
 - **Comments explain why, never what.** Where a decision came from a spec, name
-  it: `(service-management.feature, "Port conflict on switch")`.
+  it: `(service-management.feature, "Port conflict on switch")`. A comment
+  that explains *how Wharf works* belongs in `dev/` and shrinks to a pointer
+  (`see dev/architecture.md §4c`). Keep the comments that name a concrete
+  failure or say why something is deliberately *not* done.
+- **A `TODO` names the condition that makes it due** ("once packaging exists").
+  One without a condition is a wish; delete it.
 - **Errors name the fix.** "PHP 8.2 is not installed (expected …/bin/php/8.2)",
   not "exec: no such file".
 - **A declined elevation prompt is a normal outcome**, never an error dialog:
   the action finishes without what the prompt would have added — SSL works
   with a browser warning, an old hosts line stays behind.
+- **Use the glossary's words** ([`dev/glossary.md`](dev/glossary.md)) in UI
+  text, specs, docs and identifiers. A new concept gets a row in the same
+  commit that introduces it.
 - **Tests fake the outside world** — processes, ports, hosts file, mkcert, the
   network — so the suite never prompts for a password, binds a real port, or
   needs a vendored binary.
@@ -224,13 +287,19 @@ means changing the document that records it.
 - **The macOS sandbox stays off** (`gui/macos/Runner/*.entitlements`). Wharf
   manages the user's own projects and processes; a container reaches none of
   them.
+- **Commit subjects are a gitmoji and an imperative English sentence.** They
+  go into `CHANGELOG.md` word for word at release, so write them for a reader
+  of release notes. The body says why.
+- **This is the only instruction file.** Point a new tool at it; never copy
+  these rules into a second file (AGENTS.md, a Copilot file, CONTRIBUTING.md)
+  where they can drift.
 
 ---
 
 ## 5. Commands
 
 ```sh
-make test      # daemon tests, including the sync guard
+make test      # daemon tests, including both guards
 make spec      # print the spec-to-test coverage matrix
 make race      # the daemon suite under the race detector
 make cross     # build the daemon for macOS, Linux and Windows (arm64 + amd64)
@@ -240,4 +309,23 @@ make gui-test  # GUI unit and widget tests
 make gui-e2e   # GUI driving the real daemon binary (needs `make build` first)
 make gui       # build and launch the desktop app against a throwaway root
 make check     # everything above that is not interactive
+
+make version                 # the version this checkout builds as
+make release BUMP=minor      # bump gui/pubspec.yaml, commit, tag — never pushes
+make dmg                     # release Wharf.app in a DMG (macOS)
 ```
+
+---
+
+## 6. Versions and releases
+
+- `gui/pubspec.yaml` holds the only version number (`X.Y.Z+B`), and
+  `tool/version.sh` is the only thing that computes one. Never hard-code a
+  version anywhere else.
+- A release is `make release BUMP=…` followed by a push of the commit and the
+  tag, or the button in the Release workflow. Do not tag by hand without
+  bumping: the gate refuses a tag that disagrees with the pubspec.
+- `CHANGELOG.md` and the GitHub release notes are generated from commit
+  subjects. Never edit the changelog by hand.
+- The details, and why the workflow is shaped the way it is:
+  [`dev/releasing.md`](dev/releasing.md).

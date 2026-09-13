@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Shell scripts run under bash on the Windows release runner too, where a CRLF
+# checkout breaks them ($'\r': command not found).
+*.sh text eol=lf

@@ -5,13 +5,18 @@
 # the "one codebase, minimal platform branching" claim still holds.
 
 GO      ?= go
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+# gui/pubspec.yaml is the one version source; see dev/releasing.md.
+VERSION ?= $(shell ./tool/version.sh describe 2>/dev/null || echo dev)
 LDFLAGS := -X main.version=$(VERSION)
 BUILD   := build
 # The app looks for wharfd.exe on Windows (gui/lib/daemon_launcher.dart).
 EXE     := $(if $(filter Windows_NT,$(OS)),.exe,)
+# DARWIN_UNIVERSAL=1 builds wharfd for Apple Silicon and Intel in one binary:
+# a release Wharf.app is universal, so the daemon it embeds must be too.
+UNIVERSAL := $(and $(filter 1,$(DARWIN_UNIVERSAL)),$(filter Darwin,$(shell uname)))
 
-.PHONY: all build test spec race vet fmt cross clean run check gui gui-test gui-e2e gui-analyze
+.PHONY: all build test spec race vet fmt cross clean run check gui gui-test gui-e2e gui-analyze \
+	version bump release dmg
 
 all: fmt vet test build
 
@@ -21,7 +26,16 @@ check: vet test gui-analyze gui-test build gui-e2e
 
 build:
 	@mkdir -p $(BUILD)
+	@# go build will not overwrite a universal binary it did not write itself.
+	@rm -f $(BUILD)/wharfd$(EXE)
+ifneq ($(UNIVERSAL),)
+	cd daemon && GOARCH=arm64 $(GO) build -ldflags "$(LDFLAGS)" -o ../$(BUILD)/wharfd-arm64 ./cmd/wharfd
+	cd daemon && GOARCH=amd64 $(GO) build -ldflags "$(LDFLAGS)" -o ../$(BUILD)/wharfd-amd64 ./cmd/wharfd
+	lipo -create -output $(BUILD)/wharfd $(BUILD)/wharfd-arm64 $(BUILD)/wharfd-amd64
+	rm -f $(BUILD)/wharfd-arm64 $(BUILD)/wharfd-amd64
+else
 	cd daemon && $(GO) build -ldflags "$(LDFLAGS)" -o ../$(BUILD)/wharfd$(EXE)   ./cmd/wharfd
+endif
 	cd daemon && $(GO) build -ldflags "$(LDFLAGS)" -o ../$(BUILD)/wharfctl$(EXE) ./cmd/wharfctl
 
 test:
@@ -85,6 +99,29 @@ gui: build
 	cd gui && WHARF_ROOT=$(DEV_ROOT) \
 		WHARFD_ARGS="--hosts $(DEV_HOSTS) --elevator direct" \
 		$(FLUTTER) run -d $(FLUTTER_DEVICE)
+
+# ------------------------------------------------------------------ release
+
+# The version this checkout builds as.
+version:
+	@./tool/version.sh describe
+
+# BUMP is patch, minor, major or an exact X.Y.Z. `bump` only edits
+# gui/pubspec.yaml; `release` also commits and tags, and never pushes.
+bump:
+	@$(if $(BUMP),,$(error BUMP=patch|minor|major|X.Y.Z is required))./tool/version.sh bump $(BUMP)
+
+release:
+	@$(if $(BUMP),,$(error BUMP=patch|minor|major|X.Y.Z is required))tag=$$(./tool/version.sh release $(BUMP)) && \
+		echo "Tagged $$tag. Publishing it starts the release workflow:" && \
+		echo "  git push --atomic origin HEAD:main $$tag"
+
+# The release build of Wharf.app in a DMG, through the same script the release
+# workflow runs: signed and notarised when the credentials are there, unsigned
+# otherwise (dev/releasing.md §5).
+dmg:
+	cd gui && $(FLUTTER) build macos --release
+	./packaging/macos/build_dmg.sh
 
 clean:
 	rm -rf $(BUILD)

@@ -18,7 +18,11 @@ one is renamed, deleted or left unimplemented. See [CLAUDE.md](CLAUDE.md) §1.
 - `dev/design-principles.md` — Kirby-inspired minimalism, applied to this tool
 - `features/*.feature` — Gherkin behaviour specs, one file per capability
 - `docs/` — the public landing page (static HTML + CSS, served by GitHub Pages)
-- [`CLAUDE.md`](CLAUDE.md) — the sync rule and the file directory
+- [`CLAUDE.md`](CLAUDE.md) — the working agreement: the sync rule, the file
+  directory, the settled decisions
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — getting set up, commits
+- `dev/releasing.md` — versions and how a release is cut;
+  [`CHANGELOG.md`](CHANGELOG.md) is written by each release
 - `daemon/` — the Go core daemon (`wharfd`) and its CLI (`wharfctl`) — see
   [`daemon/README.md`](daemon/README.md)
 - `gui/` — the Flutter desktop app — see [`gui/README.md`](gui/README.md)
@@ -35,7 +39,8 @@ one is renamed, deleted or left unimplemented. See [CLAUDE.md](CLAUDE.md) §1.
 | Webservers | Adopted where installed (a Mac's own Apache is used out of the box), or installed from Settings: nginx on Linux/Windows by download, on macOS via Homebrew; Apache on Windows by download. |
 | Appearance | Kirby-plain light and dark themes, or follow the system. |
 | Updates | Settings → General shows the running version. "Check for updates" is there but disabled until releases exist; its behaviour is specified as `@roadmap`. |
-| Packaging (DMG / MSI / AppImage) | Not started. |
+| Releases | A release workflow builds and publishes all three platforms from one version in `gui/pubspec.yaml` (`dev/releasing.md`). Nothing is published yet. |
+| Packaging | macOS: a DMG, signed and notarised when the credentials are there. Linux and Windows: a tarball and a zip for now; AppImage and installer not started. |
 
 ## Running it
 

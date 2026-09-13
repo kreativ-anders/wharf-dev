@@ -33,14 +33,22 @@ If `wharfd` cannot be found, the window says where it looked and to run
 
 ### Embedding on each platform
 
-- **macOS** — an Xcode build phase, *Embed wharfd*, runs `make build` and copies
-  the binary into `Wharf.app/Contents/MacOS/`. It needs Go on the build machine.
-- **Windows** — a CMake custom target in `windows/CMakeLists.txt` runs
+- **macOS** — an Xcode build phase, *Embed wharfd*, runs `make build`, copies
+  the binary into `Wharf.app/Contents/MacOS/` and signs it with Xcode's
+  identity. Release and Profile builds are universal, so the phase builds the
+  daemon for Apple Silicon and Intel too (`DARWIN_UNIVERSAL=1`); an arm64-only
+  daemon in a universal app could not start on an Intel Mac. It needs Go on the
+  build machine.
+- **Windows** — a post-build step in `windows/runner/CMakeLists.txt` runs
   `go build` and drops `wharfd.exe` next to `wharf_gui.exe` on every build, so
   `flutter run -d windows` always launches the daemon built from the working
-  tree. Needs Go on `PATH` at CMake configure time.
-- **Linux** — not wired yet. Place `wharfd` next to the app executable and the
-  launcher finds it; the CMake equivalent is part of packaging.
+  tree. It stamps the version from `VERSION`, else pubspec's. Needs Go on
+  `PATH` at CMake configure time.
+- **Linux** — not wired into CMake yet. The release workflow copies `wharfd`
+  next to the app executable in the bundle, where the launcher finds it.
+
+Every path stamps `wharfd` with the version from `gui/pubspec.yaml`
+(`dev/releasing.md`).
 
 ## How it talks to the daemon
 
@@ -94,7 +102,9 @@ From `dev/design-principles.md`:
   the daemon's endpoint file, connects to a unix socket under the user's root
   folder, opens a folder picker on any folder, and opens folders in the file
   manager. A sandboxed container reaches
-  none of that. This is a developer tool distributed outside the App Store.
+  none of that. This is a developer tool distributed outside the App Store:
+  signed with Developer ID and notarized, so it opens without a warning
+  ([`packaging/macos/build_dmg.sh`](../packaging/macos/build_dmg.sh)).
 - **Linux tray** availability differs: KDE and Xfce work natively, GNOME needs
   an AppIndicator extension. Documented in `dev/architecture.md` §4, not
   solved.
@@ -105,7 +115,5 @@ From `dev/design-principles.md`:
 
 ## Not done yet
 
-- Release signing: the embedded `wharfd` is ad-hoc signed in debug builds;
-  notarised distribution will need it signed explicitly.
-- No packaging (DMG / MSI / AppImage) — `dev/architecture.md` §4 leaves the
-  outer package format per-OS, and it is not built yet.
+- No MSI or AppImage yet — `dev/architecture.md` §4 leaves the outer package
+  format per-OS. macOS has its disk image: see `dev/releasing.md`.

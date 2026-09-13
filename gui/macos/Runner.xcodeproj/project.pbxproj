@@ -357,7 +357,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# Builds the daemon and embeds it next to the app executable, so the .app is one self-contained application (features/single-application.feature).\n# Xcode runs build phases with a minimal PATH; add the usual Go locations.\nexport PATH=\"/opt/homebrew/bin:/usr/local/go/bin:/usr/local/bin:$HOME/go/bin:$PATH\"\nREPO=\"$PROJECT_DIR/../..\"\nif ! command -v go >/dev/null 2>&1; then\n  echo \"error: Go is required to build the Wharf daemon (brew install go)\"; exit 1\nfi\nmake -C \"$REPO\" build || exit 1\ncp \"$REPO/build/wharfd\" \"$BUILT_PRODUCTS_DIR/$EXECUTABLE_FOLDER_PATH/wharfd\"\nchmod +x \"$BUILT_PRODUCTS_DIR/$EXECUTABLE_FOLDER_PATH/wharfd\"\n";
+			shellScript = "# Builds the daemon and embeds it next to the app executable, so the .app is one self-contained application (features/single-application.feature).\n# Xcode runs build phases with a minimal PATH; add the usual Go locations.\nexport PATH=\"/opt/homebrew/bin:/usr/local/go/bin:/usr/local/bin:$HOME/go/bin:$PATH\"\nREPO=\"$PROJECT_DIR/../..\"\nif ! command -v go >/dev/null 2>&1; then\n  echo \"error: Go is required to build the Wharf daemon (brew install go)\"; exit 1\nfi\n# An app built for every architecture (Release, Profile) needs a daemon built for every architecture: an arm64-only wharfd in a universal app cannot start on an Intel Mac. packaging/macos/build_dmg.sh refuses the mismatch.\nif [ \"$ONLY_ACTIVE_ARCH\" != YES ]; then export DARWIN_UNIVERSAL=1; fi\nmake -C \"$REPO\" build || exit 1\nDEST=\"$BUILT_PRODUCTS_DIR/$EXECUTABLE_FOLDER_PATH/wharfd\"\ncp \"$REPO/build/wharfd\" \"$DEST\"\nchmod +x \"$DEST\"\n# Xcode signs the bundle, not code a script put inside it, and refuses a nested binary with an unsigned slice. The Go linker signs only its arm64 output, so a universal wharfd carries an unsigned Intel slice. Sign it with Xcode's own identity (\"-\" = ad hoc); build_dmg.sh re-signs it with Developer ID for distribution.\ncodesign --force --sign \"${EXPANDED_CODE_SIGN_IDENTITY:--}\" --timestamp=none \"$DEST\" || exit 1\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -415,7 +415,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.wharf.wharfGui.RunnerTests;
+				PRODUCT_BUNDLE_IDENTIFIER = de.kreativ-anders.wharf.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/wharf_gui.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/wharf_gui";
@@ -429,7 +429,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.wharf.wharfGui.RunnerTests;
+				PRODUCT_BUNDLE_IDENTIFIER = de.kreativ-anders.wharf.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/wharf_gui.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/wharf_gui";
@@ -443,7 +443,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.wharf.wharfGui.RunnerTests;
+				PRODUCT_BUNDLE_IDENTIFIER = de.kreativ-anders.wharf.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/wharf_gui.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/wharf_gui";

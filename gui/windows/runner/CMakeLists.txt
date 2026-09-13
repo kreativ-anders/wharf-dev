@@ -56,8 +56,15 @@ find_program(GO_EXECUTABLE go
   PATHS "$ENV{GOROOT}/bin" "$ENV{ProgramW6432}/Go/bin" "$ENV{ProgramFiles}/Go/bin" "C:/Go/bin")
 if(GO_EXECUTABLE)
   set(WHARF_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../..")
+  # The version Settings shows (dev/releasing.md): the release workflow passes
+  # VERSION; a local build takes pubspec's, which Flutter hands to CMake.
+  if(DEFINED ENV{VERSION})
+    set(WHARF_VERSION "$ENV{VERSION}")
+  else()
+    set(WHARF_VERSION "${FLUTTER_VERSION_MAJOR}.${FLUTTER_VERSION_MINOR}.${FLUTTER_VERSION_PATCH}")
+  endif()
   add_custom_command(TARGET ${BINARY_NAME} POST_BUILD
-    COMMAND "${GO_EXECUTABLE}" build -o "$<TARGET_FILE_DIR:${BINARY_NAME}>/wharfd.exe" ./cmd/wharfd
+    COMMAND "${GO_EXECUTABLE}" build -ldflags "-X main.version=${WHARF_VERSION}" -o "$<TARGET_FILE_DIR:${BINARY_NAME}>/wharfd.exe" ./cmd/wharfd
     WORKING_DIRECTORY "${WHARF_REPO_ROOT}/daemon"
     COMMENT "Building wharfd.exe (Wharf daemon)"
     VERBATIM
