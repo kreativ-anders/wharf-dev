@@ -17,7 +17,7 @@ func TestEveryProjectIsReachableUnderItsOwnLocalhostName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Then it is reachable at "http://my-kirby-site.localhost"
+	// INFO: Then it is reachable at "http://my-kirby-site.localhost"
 	// And no port is part of that URL, whichever webserver serves it
 	for name, want := range map[string]string{
 		"my-kirby-site": "http://my-kirby-site.localhost",
@@ -46,11 +46,11 @@ func TestAddingAProjectNeverAsksForAPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Then the hosts file is not written
+	// INFO: Then the hosts file is not written
 	if got := h.hostsContent(); got != before {
 		t.Fatalf("the hosts file changed:\n%s", got)
 	}
-	// And no elevation prompt is shown
+	// INFO: And no elevation prompt is shown
 	if len(h.el.Writes) != 0 {
 		t.Fatalf("%d elevation prompts were raised", len(h.el.Writes))
 	}
@@ -72,7 +72,7 @@ func TestTheWebserverAnswersOverIPv6AsWellAsIPv4(t *testing.T) {
 			t.Fatalf("nginx lacks %q:\n%s", want, block)
 		}
 	}
-	// Apache's plain "Listen 80" binds every address family.
+	// INFO: Apache's plain "Listen 80" binds every address family.
 	if err := h.d.SetWebserver(h.ctx(), "apache"); err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestRemovingAProjectAddedUnderTheOldDomainRemovesItsHostsEntry(t *testing.T
 		t.Fatalf("remove project: %v", err)
 	}
 
-	// Then that hosts entry is deleted through one elevation prompt
+	// INFO: Then that hosts entry is deleted through one elevation prompt
 	if len(h.el.Writes) != 1 {
 		t.Fatalf("%d elevation prompts, want 1", len(h.el.Writes))
 	}
@@ -114,11 +114,11 @@ func TestRemovingAProjectAddedUnderTheOldDomainRemovesItsHostsEntry(t *testing.T
 	if strings.Contains(after, "my-kirby-site.wharf") {
 		t.Fatalf("entry survived removal:\n%s", after)
 	}
-	// And no other line of the hosts file is affected
+	// INFO: And no other line of the hosts file is affected
 	if !strings.Contains(after, "other-site.wharf") || !strings.Contains(after, "127.0.0.1\tlocalhost") {
 		t.Fatalf("other lines were removed too:\n%s", after)
 	}
-	// The folder itself is left alone: the folder is the project.
+	// INFO: The folder itself is left alone: the folder is the project.
 	if _, err := os.Stat(h.root.ProjectDir("my-kirby-site")); err != nil {
 		t.Fatalf("project folder was deleted: %v", err)
 	}

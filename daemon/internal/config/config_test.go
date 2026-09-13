@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -118,7 +119,7 @@ func TestGetReturnsACopy(t *testing.T) {
 
 func TestNormaliseRepairsAHandEditedFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "wharf.json")
-	// A user edits the file to select a webserver they did not list.
+	// INFO: A user edits the file to select a webserver they did not list.
 	body := `{"services":{"webserver":{"active":"apache","available":["nginx"]},"php":{"version":"8.2","available":[]}},"projects":[{"name":"site","webserver_override":"  "}]}`
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -128,10 +129,10 @@ func TestNormaliseRepairsAHandEditedFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := s.Get()
-	if !contains(cfg.Services.Webserver.Available, "apache") {
+	if !slices.Contains(cfg.Services.Webserver.Available, "apache") {
 		t.Fatalf("active webserver missing from available: %v", cfg.Services.Webserver.Available)
 	}
-	if !contains(cfg.Services.PHP.Available, "8.2") {
+	if !slices.Contains(cfg.Services.PHP.Available, "8.2") {
 		t.Fatalf("php available = %v, want it to include the selected version", cfg.Services.PHP.Available)
 	}
 	if p, _ := cfg.Project("site"); p.WebserverOverride != nil {
@@ -158,6 +159,59 @@ func TestResolutionPrefersOverrides(t *testing.T) {
 	}
 	if got := cfg.PHPVersionFor(fancy); got != "8.1" {
 		t.Fatalf("overridden php = %q", got)
+	}
+}
+
+// A name becomes a folder in www/, files in config/vhosts/ and data/certs/,
+// and a server_name line. A hand-edited one that could leave those folders
+// or end a directive is refused with the fix — on load and on reload — and
+// the daemon's own writes are held to the same rule.
+func TestAProjectThatCannotBeServedSafelyIsRefused(t *testing.T) {
+	for _, entry := range []string{
+		`{"name":"../../escape"}`,
+		`{"name":"my site"}`,
+		`{"name":"a;b"}`,
+		`{"name":"   "}`,
+		`{"name":"quoted","path":"/tmp/a\"b"}`,
+	} {
+		path := filepath.Join(t.TempDir(), "wharf.json")
+		body := `{"services":{"webserver":{"active":"nginx","available":["nginx"]},` +
+			`"php":{"version":"8.3","available":["8.3"]}},"projects":[` + entry + `]}`
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "wharf.json") {
+			t.Errorf("Load accepted %s (err = %v), want a refusal naming the file", entry, err)
+		}
+	}
+
+	path := filepath.Join(t.TempDir(), "wharf.json")
+	s, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Update(func(c *Config) error {
+		c.SetProject(Project{Name: "../escape"})
+		return nil
+	}); err == nil {
+		t.Fatal("Update wrote a project name that leaves www/")
+	}
+	// INFO: What a hand-edit may still use, though the GUI would rewrite it.
+	if _, err := s.Update(func(c *Config) error {
+		c.SetProject(Project{Name: "Client_Site.v2", Path: "/Users/you/Code/Client Site"})
+		return nil
+	}); err != nil {
+		t.Fatalf("a usable hand-written name was refused: %v", err)
+	}
+
+	if err := os.WriteFile(path, []byte(`{"projects":[{"name":"../escape"}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Reload(); err == nil {
+		t.Fatal("Reload accepted a project name that leaves www/")
+	}
+	if _, ok := s.Get().Project("Client_Site.v2"); !ok {
+		t.Fatal("a refused reload replaced the config in use")
 	}
 }
 

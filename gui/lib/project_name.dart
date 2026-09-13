@@ -1,10 +1,10 @@
-// The daemon's project.Slug (daemon/internal/project/registry.go), mirrored so
+// INFO: The daemon's project.Slug (daemon/internal/project/registry.go), mirrored so
 // the "New project" field can rewrite itself without a round trip. The daemon
 // applies the same rewrite again and has the last word; both are tested
 // against daemon/internal/project/testdata/slug.json
 // (features/quick-app-php.feature, "A typed name becomes a project name").
 
-// Letters with a conventional spelled-out form or no base letter to fall back
+// INFO: Letters with a conventional spelled-out form or no base letter to fall back
 // to. The umlauts are listed decomposed as well, as macOS stores them.
 const _spelled = <String, String>{
   'ä': 'ae',
@@ -63,13 +63,13 @@ String projectName(String typed) {
     if (base != null) {
       out.writeCharCode(base);
     } else if (r < 0x300 || r > 0x36f) {
-      // Anything else in that range is a combining accent, as in a
+      // INFO: Anything else in that range is a combining accent, as in a
       // decomposed "é"; dropping it leaves the base letter.
       out.writeCharCode(r);
     }
   }
   s = out.toString().replaceAll(_disallowed, '-').replaceAll(_edgeHyphens, '');
-  // A hostname label ends at 63 characters, and never on a hyphen.
+  // INFO: A hostname label ends at 63 characters, and never on a hyphen.
   if (s.length > 63) s = s.substring(0, 63).replaceAll(_edgeHyphens, '');
   return s;
 }

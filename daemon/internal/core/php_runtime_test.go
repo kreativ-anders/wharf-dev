@@ -107,17 +107,17 @@ func (f *firstRun) ctx() context.Context { return context.Background() }
 // features/php-runtime.feature — "First start adopts the PHP versions already
 // on the machine"
 func TestFirstStartAdoptsInstalledPHPVersions(t *testing.T) {
-	// March 2026: 8.4 is in active support, 8.1 is end of life.
+	// INFO: March 2026: 8.4 is in active support, 8.1 is end of life.
 	f := newFirstRun(t, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), "8.1", "8.4")
 
 	st := f.d.State().Services.PHP
 
-	// Then both "8.1" and "8.4" are offered as runtime versions
+	// INFO: Then both "8.1" and "8.4" are offered as runtime versions
 	if !contains(st.Available, "8.1") || !contains(st.Available, "8.4") {
 		t.Fatalf("available = %v, want both installed versions", st.Available)
 	}
 
-	// And "8.4" is selected as the global default, being the newest in active support
+	// INFO: And "8.4" is selected as the global default, being the newest in active support
 	if st.Version != "8.4" {
 		t.Fatalf("default = %q, want 8.4", st.Version)
 	}
@@ -125,7 +125,7 @@ func TestFirstStartAdoptsInstalledPHPVersions(t *testing.T) {
 		t.Fatalf("status of the default = %q, want active", st.Status)
 	}
 
-	// And the location of each adopted version is recorded in config/wharf.json
+	// INFO: And the location of each adopted version is recorded in config/wharf.json
 	raw, err := os.ReadFile(f.root.ConfigFile())
 	if err != nil {
 		t.Fatal(err)
@@ -144,7 +144,7 @@ func TestFirstStartAdoptsInstalledPHPVersions(t *testing.T) {
 		}
 	}
 
-	// And no PHP binary is downloaded
+	// INFO: And no PHP binary is downloaded
 	if _, err := os.Stat(f.root.PHPBin("8.4")); !os.IsNotExist(err) {
 		t.Fatalf("something was written into bin/php/8.4: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestFirstStartAdoptsInstalledPHPVersions(t *testing.T) {
 // features/php-runtime.feature — "First start prefers a supported version over
 // a newer unsupported one"
 func TestFirstStartPrefersASupportedVersion(t *testing.T) {
-	// March 2026: 8.1 is end of life, 8.3 still receives security fixes.
+	// INFO: March 2026: 8.1 is end of life, 8.3 still receives security fixes.
 	f := newFirstRun(t, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), "8.1", "8.3")
 
 	st := f.d.State().Services.PHP
@@ -164,7 +164,7 @@ func TestFirstStartPrefersASupportedVersion(t *testing.T) {
 		t.Fatalf("status = %q, want security", st.Status)
 	}
 
-	// And the version's support status is shown alongside it in the picker
+	// INFO: And the version's support status is shown alongside it in the picker
 	byVersion := map[string]php.Install{}
 	for _, in := range st.Installs {
 		byVersion[in.Version] = in
@@ -184,7 +184,7 @@ func TestFirstStartWithNoPHPInstalled(t *testing.T) {
 
 	st := f.d.State().Services.PHP
 
-	// Then the newest actively supported PHP version is selected as the default
+	// INFO: Then the newest actively supported PHP version is selected as the default
 	want := php.Recommended(now)
 	if st.Version != want {
 		t.Fatalf("default = %q, want the recommended %q", st.Version, want)
@@ -193,12 +193,12 @@ func TestFirstStartWithNoPHPInstalled(t *testing.T) {
 		t.Fatalf("recommended = %q, want %q", st.Recommended, want)
 	}
 
-	// And no runtime versions are offered as installed
+	// INFO: And no runtime versions are offered as installed
 	if len(st.Installs) != 0 {
 		t.Fatalf("installs = %+v, want none", st.Installs)
 	}
 
-	// And starting a project reports where the missing binary is expected
+	// INFO: And starting a project reports where the missing binary is expected
 	if err := os.MkdirAll(f.root.ProjectDir("site"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestChoosingADifferentPHPVersionGlobally(t *testing.T) {
 		t.Fatalf("select 8.3: %v", err)
 	}
 
-	// Then "8.3" is written to config/wharf.json as the global default
+	// INFO: Then "8.3" is written to config/wharf.json as the global default
 	reread, err := config.Load(f.root.ConfigFile())
 	if err != nil {
 		t.Fatal(err)
@@ -250,7 +250,7 @@ func TestChoosingADifferentPHPVersionGlobally(t *testing.T) {
 		t.Fatalf("persisted default = %q, want 8.3", got)
 	}
 
-	// And projects without their own PHP override are served by "8.3"
+	// INFO: And projects without their own PHP override are served by "8.3"
 	state := f.d.State()
 	byName := map[string]Project{}
 	for _, p := range state.Projects {
@@ -260,12 +260,12 @@ func TestChoosingADifferentPHPVersionGlobally(t *testing.T) {
 		t.Fatalf("plain project on PHP %q, want 8.3", byName["plain"].PHPVersion)
 	}
 
-	// And projects with an override keep the version they had
+	// INFO: And projects with an override keep the version they had
 	if byName["pinned"].PHPVersion != "8.4" {
 		t.Fatalf("pinned project on PHP %q, want it to keep 8.4", byName["pinned"].PHPVersion)
 	}
 
-	// The running site must actually be routed to the new backend.
+	// INFO: The running site must actually be routed to the new backend.
 	conf, err := os.ReadFile(filepath.Join(f.root.Data(), "gen", "nginx", "plain.conf"))
 	if err != nil {
 		t.Fatal(err)
@@ -285,7 +285,7 @@ func TestRescanningAfterInstallingAPHPVersion(t *testing.T) {
 		t.Fatalf("installs = %+v, want just 8.3", f.d.State().Services.PHP.Installs)
 	}
 
-	// The user installs 8.4 while the daemon is running.
+	// INFO: The user installs 8.4 while the daemon is running.
 	binDir := filepath.Join(f.root.Dir, "machine", "php8.4", "bin")
 	stubBinary(t, filepath.Join(binDir, php.CLIName()))
 	stubBinary(t, filepath.Join(binDir, php.FastCGIName()))
@@ -332,7 +332,7 @@ func TestDownloadingAPHPVersionThatIsNotInstalled(t *testing.T) {
 		t.Fatal("8.4 offered before it was downloaded")
 	}
 
-	// The download is held open so the snapshot can be looked at mid-way.
+	// INFO: The download is held open so the snapshot can be looked at mid-way.
 	inside := make(chan []string)
 	release := make(chan struct{})
 	stub := h.php.fn
@@ -345,7 +345,7 @@ func TestDownloadingAPHPVersionThatIsNotInstalled(t *testing.T) {
 	done := make(chan error)
 	go func() { done <- h.d.InstallPHP(h.ctx(), "8.4") }()
 
-	// And the picker shows it as downloading until it is done
+	// INFO: And the picker shows it as downloading until it is done
 	if got := <-inside; !slices.Equal(got, []string{"8.4"}) {
 		t.Fatalf("downloading = %v, want [8.4]", got)
 	}
@@ -357,12 +357,12 @@ func TestDownloadingAPHPVersionThatIsNotInstalled(t *testing.T) {
 		t.Fatalf("still downloading %v after it finished", got)
 	}
 
-	// Then the newest "8.4" build for this OS and CPU is downloaded into
+	// INFO: Then the newest "8.4" build for this OS and CPU is downloaded into
 	// "bin/php/8.4"
 	if _, err := os.Stat(filepath.Join(h.root.PHPBin("8.4"), php.FastCGIName())); err != nil {
 		t.Fatalf("no build in bin/php/8.4: %v", err)
 	}
-	// And it becomes selectable without any further setup
+	// INFO: And it becomes selectable without any further setup
 	if !slices.Contains(h.d.Config().Services.PHP.Available, "8.4") {
 		t.Fatal("8.4 is not offered after the download")
 	}
@@ -378,7 +378,7 @@ func TestDownloadingAPHPVersionThatIsNotInstalled(t *testing.T) {
 func TestAPHPDownloadFails(t *testing.T) {
 	h := newHarness(t)
 	h.php.fn = func(_ context.Context, _, dest string) (string, error) {
-		// Half a download, then the network goes away.
+		// INFO: Half a download, then the network goes away.
 		_ = os.WriteFile(filepath.Join(dest, "php-fpm"), []byte("partial"), 0o755)
 		return "", php.ErrDownload
 	}
@@ -390,7 +390,7 @@ func TestAPHPDownloadFails(t *testing.T) {
 	if !errors.Is(err, php.ErrDownload) || !asIPC(asIPCError(err), &ipcErr) || ipcErr.Code != ipc.CodeOffline {
 		t.Fatalf("err = %v, want an offline error", err)
 	}
-	// And no partial "bin/php/8.4" folder is left behind
+	// INFO: And no partial "bin/php/8.4" folder is left behind
 	if _, err := os.Stat(h.root.PHPBin("8.4")); !os.IsNotExist(err) {
 		t.Fatal("bin/php/8.4 exists after a failed download")
 	}
@@ -408,15 +408,15 @@ func TestAPHPDownloadFails(t *testing.T) {
 // features/php-runtime.feature — "Only supported versions are offered for
 // download"
 func TestOnlySupportedVersionsAreOfferedForDownload(t *testing.T) {
-	h := newHarness(t) // 8.1, 8.2 and 8.3 installed; clock at 2026-03-01
+	h := newHarness(t) // INFO: 8.1, 8.2 and 8.3 installed; clock at 2026-03-01
 
 	got := downloadableVersions(h)
 
-	// Every version still receiving security fixes that is not installed…
+	// INFO: Every version still receiving security fixes that is not installed…
 	if !slices.Equal(got, []string{"8.5", "8.4"}) {
 		t.Fatalf("downloadable = %v, want [8.5 8.4]", got)
 	}
-	// …and never an end-of-life one, installed or not.
+	// INFO: …and never an end-of-life one, installed or not.
 	if slices.Contains(php.Downloadable(testNow), "8.1") {
 		t.Fatal("end-of-life 8.1 is offered for download")
 	}
@@ -425,7 +425,7 @@ func TestOnlySupportedVersionsAreOfferedForDownload(t *testing.T) {
 // features/php-runtime.feature — "A download offer names the release it
 // downloads"
 func TestADownloadOfferNamesTheReleaseItDownloads(t *testing.T) {
-	h := newHarness(t) // 8.4 and 8.5 are not installed
+	h := newHarness(t) // INFO: 8.4 and 8.5 are not installed
 
 	fullVersions := func() map[string]string {
 		out := map[string]string{}
@@ -435,7 +435,7 @@ func TestADownloadOfferNamesTheReleaseItDownloads(t *testing.T) {
 		return out
 	}
 
-	// And without a connection the offer names "8.5" alone
+	// INFO: And without a connection the offer names "8.5" alone
 	h.php.latestErr = php.ErrDownload
 	if err := h.d.CheckPHPReleases(h.ctx()); !errors.Is(err, php.ErrDownload) {
 		t.Fatalf("err = %v, want ErrDownload", err)
@@ -444,13 +444,13 @@ func TestADownloadOfferNamesTheReleaseItDownloads(t *testing.T) {
 		t.Fatalf("offline, 8.5 is offered as %q", got["8.5"])
 	}
 
-	// When the user opens the PHP page, Wharf looks up the newest releases
+	// INFO: When the user opens the PHP page, Wharf looks up the newest releases
 	h.php.latestErr = nil
 	h.php.latest = map[string]string{"8.5": "8.5.1", "8.4": "8.4.12", "8.1": "8.1.34"}
 	if err := h.d.CheckPHPReleases(h.ctx()); err != nil {
 		t.Fatal(err)
 	}
-	// Then "8.5" is offered as that release
+	// INFO: Then "8.5" is offered as that release
 	if got := fullVersions(); got["8.5"] != "8.5.1" || got["8.4"] != "8.4.12" {
 		t.Fatalf("offers = %v, want 8.5.1 and 8.4.12", got)
 	}
@@ -486,7 +486,7 @@ func installed(installs []php.Install, version string) bool {
 
 // features/php-runtime.feature — "Removing a downloaded PHP version"
 func TestRemovingADownloadedPHPVersion(t *testing.T) {
-	h := newHarness(t) // 8.1, 8.2 and 8.3 in bin/php; 8.3 is the default
+	h := newHarness(t) // INFO: 8.1, 8.2 and 8.3 in bin/php; 8.3 is the default
 	if got := h.d.Config().Services.PHP.Version; got == "8.2" {
 		t.Fatal("8.2 is the default; the scenario needs it unused")
 	}
@@ -502,29 +502,29 @@ func TestRemovingADownloadedPHPVersion(t *testing.T) {
 		t.Fatalf("remove 8.2: %v", err)
 	}
 
-	// Then its PHP backend is stopped and "bin/php/8.2" is deleted
+	// INFO: Then its PHP backend is stopped and "bin/php/8.2" is deleted
 	if h.sup.Running(runtime.PHPServiceID("8.2")) {
 		t.Fatal("the 8.2 backend is still running")
 	}
 	if _, err := os.Stat(h.root.PHPBin("8.2")); !os.IsNotExist(err) {
 		t.Fatalf("bin/php/8.2 is still there: %v", err)
 	}
-	// And "8.2" is no longer offered as a runtime version
+	// INFO: And "8.2" is no longer offered as a runtime version
 	if slices.Contains(h.d.Config().Services.PHP.Available, "8.2") {
 		t.Fatal("8.2 is still available")
 	}
 	if installed(h.d.State().Services.PHP.Installs, "8.2") {
 		t.Fatal("8.2 is still in the picker")
 	}
-	// And "8.2" is offered for download again
+	// INFO: And "8.2" is offered for download again
 	if !slices.Contains(downloadableVersions(h), "8.2") {
 		t.Fatalf("downloadable = %v, want 8.2 among them", downloadableVersions(h))
 	}
-	// And no password is asked for
+	// INFO: And no password is asked for
 	if len(h.el.Runs) != runs || len(h.el.Writes) != writes {
 		t.Fatal("removing a downloaded PHP asked for elevation")
 	}
-	// The other builds are untouched.
+	// INFO: The other builds are untouched.
 	for _, v := range []string{"8.1", "8.3"} {
 		if _, err := os.Stat(h.root.PHPBin(v)); err != nil {
 			t.Fatalf("bin/php/%s went too: %v", v, err)
@@ -534,14 +534,14 @@ func TestRemovingADownloadedPHPVersion(t *testing.T) {
 
 // features/php-runtime.feature — "Hiding a PHP version found on the machine"
 func TestHidingAPHPVersionFoundOnTheMachine(t *testing.T) {
-	f := newFirstRun(t, testNow, "8.3", "8.4") // 8.4 is the default
+	f := newFirstRun(t, testNow, "8.3", "8.4") // INFO: 8.4 is the default
 	dir := filepath.Dir(f.sysCLI["8.3"])
 
 	if err := f.d.RemovePHP(f.ctx(), "8.3"); err != nil {
 		t.Fatalf("hide 8.3: %v", err)
 	}
 
-	// Then its folder is recorded as hidden in config/wharf.json
+	// INFO: Then its folder is recorded as hidden in config/wharf.json
 	reread, err := config.Load(f.root.ConfigFile())
 	if err != nil {
 		t.Fatal(err)
@@ -549,13 +549,13 @@ func TestHidingAPHPVersionFoundOnTheMachine(t *testing.T) {
 	if got := reread.Get().Services.PHP.Hidden; !slices.Equal(got, []string{dir}) {
 		t.Fatalf("hidden = %v, want [%s]", got, dir)
 	}
-	// And nothing in that folder is changed or deleted
+	// INFO: And nothing in that folder is changed or deleted
 	for _, name := range []string{php.CLIName(), php.FastCGIName()} {
 		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
 			t.Fatalf("%s is gone from the hidden folder: %v", name, err)
 		}
 	}
-	// And "8.3" is no longer offered as a runtime version, even after a re-scan
+	// INFO: And "8.3" is no longer offered as a runtime version, even after a re-scan
 	f.d.RefreshPHP(f.ctx())
 	st := f.d.State().Services.PHP
 	if contains(st.Available, "8.3") || installed(st.Installs, "8.3") {
@@ -581,11 +581,11 @@ func TestShowingAHiddenPHPVersionAgain(t *testing.T) {
 		t.Fatalf("show %s: %v", dir, err)
 	}
 
-	// Then the folder is no longer recorded as hidden
+	// INFO: Then the folder is no longer recorded as hidden
 	if got := f.d.Config().Services.PHP.Hidden; len(got) != 0 {
 		t.Fatalf("hidden = %v, want none", got)
 	}
-	// And "8.3" is offered as a runtime version again
+	// INFO: And "8.3" is offered as a runtime version again
 	st := f.d.State().Services.PHP
 	if !contains(st.Available, "8.3") || !installed(st.Installs, "8.3") {
 		t.Fatalf("8.3 is not offered again: available %v, installs %+v", st.Available, st.Installs)
@@ -606,7 +606,7 @@ func TestAPHPVersionInUseIsNeitherRemovedNorHidden(t *testing.T) {
 	h := newHarness(t)
 	var conflictErr *ConflictError
 
-	// The global default…
+	// INFO: The global default…
 	def := h.d.Config().Services.PHP.Version
 	err := h.d.RemovePHP(h.ctx(), def)
 	if !errors.As(err, &conflictErr) || !strings.Contains(err.Error(), "global default") {
@@ -616,7 +616,7 @@ func TestAPHPVersionInUseIsNeitherRemovedNorHidden(t *testing.T) {
 		t.Fatalf("the default's build was deleted: %v", err)
 	}
 
-	// …and a project's override.
+	// INFO: …and a project's override.
 	h.mkProject("legacy")
 	if _, err := h.d.AddProject(h.ctx(), "legacy"); err != nil {
 		t.Fatal(err)
@@ -636,7 +636,7 @@ func TestAPHPVersionInUseIsNeitherRemovedNorHidden(t *testing.T) {
 		t.Fatal("8.1 left the picker although legacy uses it")
 	}
 
-	// A version found on the machine is not hidden either.
+	// INFO: A version found on the machine is not hidden either.
 	f := newFirstRun(t, testNow, "8.4")
 	if err := f.d.RemovePHP(f.ctx(), "8.4"); !errors.As(err, &conflictErr) {
 		t.Fatalf("err = %v, want a conflict", err)

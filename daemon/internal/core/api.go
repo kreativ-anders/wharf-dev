@@ -14,141 +14,82 @@ import (
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/webserver"
 )
 
+// The params each method takes, as the GUI and wharfctl send them.
+type (
+	nameParams struct {
+		Name string `json:"name"`
+	}
+	versionParams struct {
+		Version string `json:"version"`
+	}
+	dirParams struct {
+		Dir string `json:"dir"`
+	}
+	modeParams struct {
+		Mode string `json:"mode"`
+	}
+	addParams struct {
+		Name string `json:"name"`
+		Path string `json:"path"`
+	}
+	settingsParams struct {
+		Name     string   `json:"name"`
+		Settings Settings `json:"settings"`
+	}
+	customConfigParams struct {
+		Name      string `json:"name"`
+		Webserver string `json:"webserver"`
+	}
+	scaffoldParams struct {
+		Template  string `json:"template"`
+		Name      string `json:"name"`
+		Webserver string `json:"webserver"`
+	}
+)
+
 // Register wires the daemon's methods onto an IPC server and arranges for
 // every state change to be broadcast, so a connected GUI never has to poll.
 func (d *Daemon) Register(srv *ipc.Server) {
 	d.OnState(func(st State) { srv.Broadcast(ipc.EventState, st) })
 
-	srv.Handle(ipc.MethodPing, func(context.Context, json.RawMessage) (any, error) {
-		return map[string]string{"pong": "wharf"}, nil
-	})
-	srv.Handle(ipc.MethodState, func(context.Context, json.RawMessage) (any, error) {
-		return d.State(), nil
-	})
-	srv.Handle(ipc.MethodTemplates, func(context.Context, json.RawMessage) (any, error) {
-		return d.Templates(), nil
-	})
+	srv.Handle(ipc.MethodPing, query(func(context.Context) any { return map[string]string{"pong": "wharf"} }))
+	srv.Handle(ipc.MethodState, query(func(context.Context) any { return d.State() }))
+	srv.Handle(ipc.MethodTemplates, query(func(context.Context) any { return d.Templates() }))
+	srv.Handle(ipc.MethodDetectPHP, query(func(ctx context.Context) any { return d.RefreshPHP(ctx) }))
 
-	srv.Handle(ipc.MethodSetWebserver, func(ctx context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			Name string `json:"name"`
-		}
-		if err := decode(raw, &p); err != nil {
-			return nil, err
-		}
-		if err := d.SetWebserver(ctx, p.Name); err != nil {
-			return nil, asIPCError(err)
-		}
-		return d.State(), nil
-	})
+	// INFO: An action answers with the snapshot it leaves behind, so the GUI
+	// renders its outcome without asking a second time.
+	for method, act := range map[string]func(context.Context) error{
+		ipc.MethodDetectWebservers: func(ctx context.Context) error { d.RefreshWebservers(ctx); return nil },
+		ipc.MethodSetupSSL:         d.SetupSSL,
+		ipc.MethodPHPReleases:      d.CheckPHPReleases,
+		ipc.MethodStopAll:          d.StopAll,
+		ipc.MethodReset:            d.Reset,
+	} {
+		srv.Handle(method, d.stateAfter(act))
+	}
+	for method, act := range map[string]func(context.Context, string) error{
+		ipc.MethodSetWebserver:     d.SetWebserver,
+		ipc.MethodInstallWebserver: d.InstallWebserver,
+		ipc.MethodProjectRemove:    d.RemoveProject,
+		ipc.MethodProjectStart:     d.StartProject,
+		ipc.MethodProjectStop:      d.StopProject,
+		ipc.MethodProjectRestart:   d.RestartProject,
+	} {
+		srv.Handle(method, action(d, func(ctx context.Context, p nameParams) error { return act(ctx, p.Name) }))
+	}
+	for method, act := range map[string]func(context.Context, string) error{
+		ipc.MethodAddPHPVersion: d.AddPHPVersion,
+		ipc.MethodSetPHPVersion: d.SetPHPVersion,
+		ipc.MethodInstallPHP:    d.InstallPHP,
+		ipc.MethodRemovePHP:     d.RemovePHP,
+	} {
+		srv.Handle(method, action(d, func(ctx context.Context, p versionParams) error { return act(ctx, p.Version) }))
+	}
+	srv.Handle(ipc.MethodUnhidePHP, action(d, func(ctx context.Context, p dirParams) error { return d.UnhidePHP(ctx, p.Dir) }))
+	srv.Handle(ipc.MethodSetAppearance, action(d, func(_ context.Context, p modeParams) error { return d.SetAppearance(p.Mode) }))
 
-	srv.Handle(ipc.MethodAddPHPVersion, func(ctx context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			Version string `json:"version"`
-		}
-		if err := decode(raw, &p); err != nil {
-			return nil, err
-		}
-		if err := d.AddPHPVersion(ctx, p.Version); err != nil {
-			return nil, asIPCError(err)
-		}
-		return d.State(), nil
-	})
-
-	srv.Handle(ipc.MethodSetPHPVersion, func(ctx context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			Version string `json:"version"`
-		}
-		if err := decode(raw, &p); err != nil {
-			return nil, err
-		}
-		if err := d.SetPHPVersion(ctx, p.Version); err != nil {
-			return nil, asIPCError(err)
-		}
-		return d.State(), nil
-	})
-
-	srv.Handle(ipc.MethodDetectPHP, func(ctx context.Context, _ json.RawMessage) (any, error) {
-		return d.RefreshPHP(ctx), nil
-	})
-
-	srv.Handle(ipc.MethodInstallPHP, func(ctx context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			Version string `json:"version"`
-		}
-		if err := decode(raw, &p); err != nil {
-			return nil, err
-		}
-		if err := d.InstallPHP(ctx, p.Version); err != nil {
-			return nil, asIPCError(err)
-		}
-		return d.State(), nil
-	})
-
-	srv.Handle(ipc.MethodRemovePHP, func(ctx context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			Version string `json:"version"`
-		}
-		if err := decode(raw, &p); err != nil {
-			return nil, err
-		}
-		if err := d.RemovePHP(ctx, p.Version); err != nil {
-			return nil, asIPCError(err)
-		}
-		return d.State(), nil
-	})
-
-	srv.Handle(ipc.MethodUnhidePHP, func(ctx context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			Dir string `json:"dir"`
-		}
-		if err := decode(raw, &p); err != nil {
-			return nil, err
-		}
-		if err := d.UnhidePHP(ctx, p.Dir); err != nil {
-			return nil, asIPCError(err)
-		}
-		return d.State(), nil
-	})
-
-	srv.Handle(ipc.MethodInstallWebserver, func(ctx context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			Name string `json:"name"`
-		}
-		if err := decode(raw, &p); err != nil {
-			return nil, err
-		}
-		if err := d.InstallWebserver(ctx, p.Name); err != nil {
-			return nil, asIPCError(err)
-		}
-		return d.State(), nil
-	})
-
-	srv.Handle(ipc.MethodDetectWebservers, func(ctx context.Context, _ json.RawMessage) (any, error) {
-		d.RefreshWebservers(ctx)
-		return d.State(), nil
-	})
-
-	srv.Handle(ipc.MethodSetAppearance, func(_ context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			Mode string `json:"mode"`
-		}
-		if err := decode(raw, &p); err != nil {
-			return nil, err
-		}
-		if err := d.SetAppearance(p.Mode); err != nil {
-			return nil, asIPCError(err)
-		}
-		return d.State(), nil
-	})
-
-	srv.Handle(ipc.MethodSetupSSL, func(ctx context.Context, _ json.RawMessage) (any, error) {
-		if err := d.SetupSSL(ctx); err != nil {
-			return nil, asIPCError(err)
-		}
-		return d.State(), nil
-	})
-
+	// INFO: These answer with what they made or changed, not the snapshot.
 	srv.Handle(ipc.MethodPHPSettings, func(ctx context.Context, _ json.RawMessage) (any, error) {
 		path, err := d.PHPSettings(ctx)
 		if err != nil {
@@ -156,148 +97,67 @@ func (d *Daemon) Register(srv *ipc.Server) {
 		}
 		return map[string]string{"path": path}, nil
 	})
-
-	srv.Handle(ipc.MethodPHPReleases, func(ctx context.Context, _ json.RawMessage) (any, error) {
-		if err := d.CheckPHPReleases(ctx); err != nil {
-			return nil, asIPCError(err)
-		}
-		return d.State(), nil
-	})
-
-	srv.Handle(ipc.MethodStopAll, func(ctx context.Context, _ json.RawMessage) (any, error) {
-		if err := d.StopAll(ctx); err != nil {
-			return nil, asIPCError(err)
-		}
-		return d.State(), nil
-	})
-
-	srv.Handle(ipc.MethodProjectAdd, func(ctx context.Context, raw json.RawMessage) (any, error) {
-		// A name adds a folder from www/; a path adds a folder from anywhere
-		// (project-folders.feature).
-		var p struct {
-			Name string `json:"name"`
-			Path string `json:"path"`
-		}
-		if err := decode(raw, &p); err != nil {
-			return nil, err
-		}
-		var added Project
-		var err error
+	srv.Handle(ipc.MethodProjectAdd, handler(func(ctx context.Context, p addParams) (any, error) {
+		// INFO: A name adds a folder from www/; a path adds a folder from
+		// anywhere (project-folders.feature).
 		if p.Path != "" {
-			added, err = d.AddFolder(ctx, p.Path)
-		} else {
-			added, err = d.AddProject(ctx, p.Name)
+			return d.AddFolder(ctx, p.Path)
 		}
-		if err != nil {
-			return nil, asIPCError(err)
-		}
-		return added, nil
-	})
-
-	srv.Handle(ipc.MethodProjectRemove, func(ctx context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			Name string `json:"name"`
-		}
-		if err := decode(raw, &p); err != nil {
-			return nil, err
-		}
-		if err := d.RemoveProject(ctx, p.Name); err != nil {
-			return nil, asIPCError(err)
-		}
-		return d.State(), nil
-	})
-
-	srv.Handle(ipc.MethodProjectStart, func(ctx context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			Name string `json:"name"`
-		}
-		if err := decode(raw, &p); err != nil {
-			return nil, err
-		}
-		if err := d.StartProject(ctx, p.Name); err != nil {
-			return nil, asIPCError(err)
-		}
-		return d.State(), nil
-	})
-
-	srv.Handle(ipc.MethodProjectStop, func(ctx context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			Name string `json:"name"`
-		}
-		if err := decode(raw, &p); err != nil {
-			return nil, err
-		}
-		if err := d.StopProject(ctx, p.Name); err != nil {
-			return nil, asIPCError(err)
-		}
-		return d.State(), nil
-	})
-
-	srv.Handle(ipc.MethodReset, func(ctx context.Context, _ json.RawMessage) (any, error) {
-		if err := d.Reset(ctx); err != nil {
-			return nil, asIPCError(err)
-		}
-		return d.State(), nil
-	})
-
-	srv.Handle(ipc.MethodProjectRestart, func(ctx context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			Name string `json:"name"`
-		}
-		if err := decode(raw, &p); err != nil {
-			return nil, err
-		}
-		if err := d.RestartProject(ctx, p.Name); err != nil {
-			return nil, asIPCError(err)
-		}
-		return d.State(), nil
-	})
-
-	srv.Handle(ipc.MethodProjectSettings, func(ctx context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			Name     string   `json:"name"`
-			Settings Settings `json:"settings"`
-		}
-		if err := decode(raw, &p); err != nil {
-			return nil, err
-		}
-		updated, err := d.UpdateSettings(ctx, p.Name, p.Settings)
-		if err != nil {
-			return nil, asIPCError(err)
-		}
-		return updated, nil
-	})
-
-	srv.Handle(ipc.MethodProjectCustomConfig, func(ctx context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			Name      string `json:"name"`
-			Webserver string `json:"webserver"`
-		}
-		if err := decode(raw, &p); err != nil {
-			return nil, err
-		}
+		return d.AddProject(ctx, p.Name)
+	}))
+	srv.Handle(ipc.MethodProjectSettings, handler(func(ctx context.Context, p settingsParams) (any, error) {
+		return d.UpdateSettings(ctx, p.Name, p.Settings)
+	}))
+	srv.Handle(ipc.MethodProjectCustomConfig, handler(func(ctx context.Context, p customConfigParams) (any, error) {
 		path, err := d.CustomConfig(ctx, p.Name, p.Webserver)
-		if err != nil {
+		return map[string]string{"path": path}, err
+	}))
+	srv.Handle(ipc.MethodProjectScaffold, handler(func(ctx context.Context, p scaffoldParams) (any, error) {
+		return d.Scaffold(ctx, p.Template, p.Name, p.Webserver)
+	}))
+}
+
+// query answers a method that takes no params and cannot fail.
+func query(fn func(context.Context) any) ipc.Handler {
+	return func(ctx context.Context, _ json.RawMessage) (any, error) { return fn(ctx), nil }
+}
+
+// stateAfter runs an action that takes no params and answers with the
+// snapshot it left behind.
+func (d *Daemon) stateAfter(act func(context.Context) error) ipc.Handler {
+	return func(ctx context.Context, _ json.RawMessage) (any, error) {
+		if err := act(ctx); err != nil {
 			return nil, asIPCError(err)
 		}
-		return map[string]string{"path": path}, nil
-	})
+		return d.State(), nil
+	}
+}
 
-	srv.Handle(ipc.MethodProjectScaffold, func(ctx context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			Template  string `json:"template"`
-			Name      string `json:"name"`
-			Webserver string `json:"webserver"`
+// action decodes an action's params and answers with the snapshot it left
+// behind.
+func action[P any](d *Daemon, act func(context.Context, P) error) ipc.Handler {
+	return handler(func(ctx context.Context, p P) (any, error) {
+		if err := act(ctx, p); err != nil {
+			return nil, err
 		}
+		return d.State(), nil
+	})
+}
+
+// handler decodes a request's params into P, runs fn, and maps its error onto
+// a code the GUI branches on.
+func handler[P any](fn func(context.Context, P) (any, error)) ipc.Handler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p P
 		if err := decode(raw, &p); err != nil {
 			return nil, err
 		}
-		created, err := d.Scaffold(ctx, p.Template, p.Name, p.Webserver)
+		out, err := fn(ctx, p)
 		if err != nil {
 			return nil, asIPCError(err)
 		}
-		return created, nil
-	})
+		return out, nil
+	}
 }
 
 func decode(raw json.RawMessage, out any) error {

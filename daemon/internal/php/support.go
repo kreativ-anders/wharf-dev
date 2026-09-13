@@ -109,7 +109,7 @@ func Recommended(now time.Time) string {
 	if best != "" {
 		return best
 	}
-	// Every listed release has aged out — the table needs updating. Fall back
+	// INFO: Every listed release has aged out — the table needs updating. Fall back
 	// to the newest one that was ever released rather than to nothing.
 	for i := len(Releases) - 1; i >= 0; i-- {
 		if !now.Before(Releases[i].Released) {

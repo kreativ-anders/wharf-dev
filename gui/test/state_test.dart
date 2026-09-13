@@ -23,7 +23,7 @@ void main() {
 
   test('every project is published under .localhost, with no port', () {
     final state = WharfState.fromJson(jsonDecode(_snapshot) as Map<String, dynamic>);
-    // legacy-app is on its own Apache instance, behind the front door.
+    // INFO: legacy-app is on its own Apache instance, behind the front door.
     final legacy = state.projects.firstWhere((p) => p.name == 'legacy-app');
 
     expect(legacy.url, 'http://legacy-app.localhost');
@@ -37,7 +37,7 @@ void main() {
     expect(kirby.webserverVersion, '1.27.3');
     expect(kirby.phpFullVersion, '8.4.3');
     expect(kirby.servedBy, 'nginx 1.27.3 · PHP 8.4.3');
-    // A binary that did not report its version falls back to the configured one.
+    // INFO: A binary that did not report its version falls back to the configured one.
     expect(legacy.servedBy, 'apache · PHP 8.4');
   });
 

@@ -24,7 +24,7 @@ func TestSettingsWritesTheWebserverChangeToConfig(t *testing.T) {
 		t.Fatalf("set webserver: %v", err)
 	}
 
-	// Then the change is written to config/wharf.json
+	// INFO: Then the change is written to config/wharf.json
 	raw, err := os.ReadFile(h.root.ConfigFile())
 	if err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func TestSettingsWritesTheWebserverChangeToConfig(t *testing.T) {
 	if onDisk.Services.Webserver.Active != "apache" {
 		t.Fatalf("services.webserver.active = %q, want apache", onDisk.Services.Webserver.Active)
 	}
-	// It must stay hand-editable: indented, one flat file, no stray nulls.
+	// INFO: It must stay hand-editable: indented, one flat file, no stray nulls.
 	if !strings.Contains(string(raw), "\n  \"services\"") {
 		t.Fatalf("wharf.json is not written for humans to read:\n%s", raw)
 	}
@@ -45,7 +45,7 @@ func TestSettingsWritesTheWebserverChangeToConfig(t *testing.T) {
 // features/settings.feature — "Adding a PHP version"
 func TestAddingAPHPVersion(t *testing.T) {
 	h := newHarness(t)
-	// Given PHP "8.1" and "8.3" are offered, and 8.2 is present but not yet
+	// INFO: Given PHP "8.1" and "8.3" are offered, and 8.2 is present but not yet
 	if _, err := h.d.store.Update(func(c *config.Config) error {
 		c.Services.PHP.Available = []string{"8.1", "8.3"}
 		c.Services.PHP.Version = "8.3"
@@ -55,12 +55,12 @@ func TestAddingAPHPVersion(t *testing.T) {
 	}
 	h.mustAdd("my-kirby-site")
 
-	// When the user adds PHP "8.2" via Settings → "Add runtime version"
+	// INFO: When the user adds PHP "8.2" via Settings → "Add runtime version"
 	if err := h.d.AddPHPVersion(h.ctx(), "8.2"); err != nil {
 		t.Fatalf("add PHP version: %v", err)
 	}
 
-	// Then "8.2" is registered along with where it was found. A vendored build
+	// INFO: Then "8.2" is registered along with where it was found. A vendored build
 	// needs no recorded location — the config stays as short as
 	// dev/architecture.md §6 shows it.
 	if _, err := os.Stat(filepath.Join(h.root.PHPBin("8.2"), php.FastCGIName())); err != nil {
@@ -70,7 +70,7 @@ func TestAddingAPHPVersion(t *testing.T) {
 		t.Fatalf("a vendored build recorded a location %q", path)
 	}
 
-	// And "8.2" becomes selectable as a project-level override
+	// INFO: And "8.2" becomes selectable as a project-level override
 	if !contains(h.d.State().Services.PHP.Available, "8.2") {
 		t.Fatalf("8.2 is not offered: %v", h.d.State().Services.PHP.Available)
 	}
@@ -90,7 +90,7 @@ func TestAddingAPHPVersionAdoptsASystemInstall(t *testing.T) {
 	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	f := newFirstRun(t, now, "8.3")
 
-	// A version appears on the machine that first-run detection did not see.
+	// INFO: A version appears on the machine that first-run detection did not see.
 	binDir := filepath.Join(f.root.Dir, "machine", "php8.4", "bin")
 	stubBinary(t, filepath.Join(binDir, php.CLIName()))
 	stubBinary(t, filepath.Join(binDir, php.FastCGIName()))
@@ -117,7 +117,7 @@ func TestAddingAPHPVersionAdoptsASystemInstall(t *testing.T) {
 	if !contains(f.d.State().Services.PHP.Available, "8.4") {
 		t.Fatal("8.4 is not selectable")
 	}
-	// Nothing was copied into the tool's own folder.
+	// INFO: Nothing was copied into the tool's own folder.
 	if _, err := os.Stat(f.root.PHPBin("8.4")); !os.IsNotExist(err) {
 		t.Fatalf("bin/php/8.4 was created: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestAddingAPHPVersionThatIsNotInstalled(t *testing.T) {
 	if err == nil {
 		t.Fatal("registering a version with no binary should fail")
 	}
-	// The message must say where the build belongs, not just that exec failed.
+	// INFO: The message must say where the build belongs, not just that exec failed.
 	if !strings.Contains(err.Error(), filepath.Join("bin", "php", "7.4")) {
 		t.Fatalf("error = %q, want it to name the expected path", err)
 	}
@@ -151,19 +151,19 @@ func TestSettingsExposesOnlyWebserverAndPHP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Then only "Webserver" and "PHP runtime" sections are visible
+	// INFO: Then only "Webserver" and "PHP runtime" sections are visible
 	if len(services) != 2 || services["webserver"] == nil || services["php"] == nil {
 		t.Fatalf("services surface = %v, want exactly webserver and php", keys(services))
 	}
 
-	// And no "MySQL/PostgreSQL" or "Mailpit" section is shown
+	// INFO: And no "MySQL/PostgreSQL" or "Mailpit" section is shown
 	for _, roadmap := range []string{"database", "mysql", "postgres", "mail", "mailpit", "node", "go", "python"} {
 		if _, present := services[roadmap]; present {
 			t.Fatalf("roadmap service %q is surfaced in v1", roadmap)
 		}
 	}
 
-	// The config file must not carry roadmap keys either (architecture §6).
+	// INFO: The config file must not carry roadmap keys either (architecture §6).
 	cfgRaw, err := os.ReadFile(h.root.ConfigFile())
 	if err != nil {
 		t.Fatal(err)
@@ -213,12 +213,12 @@ func TestWebserverStatusWhileNothingIsRunning(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Given no project is running, the process state is "stopped" — the GUI
+	// INFO: Given no project is running, the process state is "stopped" — the GUI
 	// words that as "starts with the first project" (widgets_test.dart).
 	if st := h.d.State().Services.Webserver.State; st != "stopped" {
 		t.Fatalf("state = %q, want stopped", st)
 	}
-	// And each webserver lists the projects it serves
+	// INFO: And each webserver lists the projects it serves
 	if got := h.server("nginx").Projects; !slices.Equal(got, []string{"my-kirby-site"}) {
 		t.Fatalf("nginx serves %v, want [my-kirby-site]", got)
 	}
@@ -259,17 +259,17 @@ func TestChoosingLightOrDarkAppearance(t *testing.T) {
 	if err := h.d.SetAppearance("dark"); err != nil {
 		t.Fatal(err)
 	}
-	// Then the window switches to the dark theme at once — it renders the
+	// INFO: Then the window switches to the dark theme at once — it renders the
 	// snapshot, which now says so (widgets_test.dart covers the switch).
 	if got := h.d.State().Appearance; got != "dark" {
 		t.Fatalf("appearance = %q, want dark", got)
 	}
-	// And "appearance": "dark" is written to config/wharf.json
+	// INFO: And "appearance": "dark" is written to config/wharf.json
 	raw, _ := os.ReadFile(h.root.ConfigFile())
 	if !strings.Contains(string(raw), `"appearance": "dark"`) {
 		t.Fatalf("wharf.json does not record it:\n%s", raw)
 	}
-	// And choosing "System" again removes the key
+	// INFO: And choosing "System" again removes the key
 	if err := h.d.SetAppearance("system"); err != nil {
 		t.Fatal(err)
 	}
@@ -288,11 +288,11 @@ func TestChoosingLightOrDarkAppearance(t *testing.T) {
 func TestGeneralShowsTheVersion(t *testing.T) {
 	h := newHarness(t, func(o *Options) { o.Version = "v1.2.3" })
 
-	// Then the version of the running Wharf is shown, as the daemon reports it
+	// INFO: Then the version of the running Wharf is shown, as the daemon reports it
 	if got := h.d.State().Version; got != "v1.2.3" {
 		t.Fatalf("version = %q, want v1.2.3", got)
 	}
-	// Under the key the GUI reads (gui/lib/models/state.dart).
+	// INFO: Under the key the GUI reads (gui/lib/models/state.dart).
 	raw, err := json.Marshal(h.d.State())
 	if err != nil {
 		t.Fatal(err)
@@ -328,7 +328,7 @@ func TestResettingWharf(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Anything else put in config/ goes as well.
+	// INFO: Anything else put in config/ goes as well.
 	stray := filepath.Join(h.root.Config(), "notes.txt")
 	if err := os.WriteFile(stray, []byte("mine"), 0o644); err != nil {
 		t.Fatal(err)
@@ -349,29 +349,29 @@ func TestResettingWharf(t *testing.T) {
 		t.Fatalf("reset: %v", err)
 	}
 
-	// Then every service is stopped
+	// INFO: Then every service is stopped
 	if h.sup.AnyRunning() {
 		t.Fatal("something still runs after the reset")
 	}
-	// And every folder in "www/" is deleted
+	// INFO: And every folder in "www/" is deleted
 	if entries, _ := os.ReadDir(h.root.WWW()); len(entries) != 0 {
 		t.Fatalf("www/ still holds %v", entries)
 	}
-	// And a folder added from elsewhere is unregistered but left where it is
+	// INFO: And a folder added from elsewhere is unregistered but left where it is
 	if _, err := os.Stat(elsewhere); err != nil {
 		t.Fatalf("a folder outside www/ was deleted: %v", err)
 	}
 	if n := len(h.d.Config().Projects); n != 0 {
 		t.Fatalf("%d projects still registered", n)
 	}
-	// And everything in "config/" is deleted: settings, custom webserver
+	// INFO: And everything in "config/" is deleted: settings, custom webserver
 	// configs and PHP settings
 	for _, gone := range []string{h.root.CustomConfig("my-kirby-site", "nginx"), phpIni, stray} {
 		if _, err := os.Stat(gone); !os.IsNotExist(err) {
 			t.Fatalf("%s survived the reset", gone)
 		}
 	}
-	// And project certificates, generated configs and service logs are deleted
+	// INFO: And project certificates, generated configs and service logs are deleted
 	for _, gone := range []string{
 		cert,
 		filepath.Join(h.root.Data(), "gen", "nginx.conf"),
@@ -382,11 +382,11 @@ func TestResettingWharf(t *testing.T) {
 			t.Fatalf("%s survived the reset", gone)
 		}
 	}
-	// The daemon's own log stays: it is still writing to it.
+	// INFO: The daemon's own log stays: it is still writing to it.
 	if _, err := os.Stat(daemonLog); err != nil {
 		t.Fatalf("the daemon's log was deleted: %v", err)
 	}
-	// And wharf.json is back to what a first start writes
+	// INFO: And wharf.json is back to what a first start writes
 	if _, err := os.Stat(h.root.ConfigFile()); err != nil {
 		t.Fatalf("wharf.json was not written again: %v", err)
 	}
@@ -397,13 +397,13 @@ func TestResettingWharf(t *testing.T) {
 	if st.Services.PHP.Version == "" || st.Services.Webserver.Active == "" {
 		t.Fatalf("first-start defaults missing: %+v", st.Services)
 	}
-	// And downloaded PHP versions and webservers are kept
+	// INFO: And downloaded PHP versions and webservers are kept
 	for _, keep := range []string{filepath.Join(h.root.PHPBin("8.3"), php.FastCGIName()), exeName(filepath.Join(h.root.Bin(), "nginx", "nginx"))} {
 		if _, err := os.Stat(keep); err != nil {
 			t.Fatalf("%s was deleted: %v", keep, err)
 		}
 	}
-	// Nothing of Wharf's is left in the hosts file.
+	// INFO: Nothing of Wharf's is left in the hosts file.
 	if strings.Contains(h.hostsContent(), "# wharf:") {
 		t.Fatalf("old hosts entries survived:\n%s", h.hostsContent())
 	}

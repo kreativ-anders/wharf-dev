@@ -25,12 +25,12 @@ def pier(draw, box, fill):
     w, h = x1 - x0, y1 - y0
     u = lambda fx, fy: (x0 + fx * w, y0 + fy * h)
     t = 0.15  # stroke weight, as a fraction of the box — bold enough for 16 px
-    # deck, reaching past the pilings like planks do
+    # INFO: deck, reaching past the pilings like planks do
     draw.rectangle([u(0, 0.10), u(1, 0.10 + t)], fill=fill)
-    # two pilings, going down into the water
+    # INFO: two pilings, going down into the water
     for fx in (0.16, 0.84 - t):
         draw.rectangle([u(fx, 0.10), u(fx + t, 0.62)], fill=fill)
-    # the water: one full sine period, as a band of even thickness
+    # INFO: the water: one full sine period, as a band of even thickness
     wave = lambda fx: 0.80 + 0.07 * math.sin(fx * 2 * math.pi)
     xs = [i / 200 for i in range(201)]
     top = [u(fx, wave(fx) - t / 2) for fx in xs]
@@ -62,7 +62,7 @@ if __name__ == "__main__":
         render(n, "app").save(f"{out}/app_{n}.png")
     render(256, "tray").save(f"{out}/tray.ico", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64)])
     render(256, "app").save(f"{out}/app.ico", sizes=[(n, n) for n in (16, 24, 32, 48, 64, 128, 256)])
-    # A contact sheet to look at: template on light and dark bars, tile, app.
+    # INFO: A contact sheet to look at: template on light and dark bars, tile, app.
     sheet = Image.new("RGBA", (900, 300), (255, 255, 255, 255))
     dark = Image.new("RGBA", (300, 150), (40, 40, 40, 255))
     sheet.paste(dark, (0, 150))

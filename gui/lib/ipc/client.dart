@@ -54,10 +54,18 @@ class IpcClient {
     final client = IpcClient._(socket, events);
     client._listen();
 
-    // Loopback TCP is not authorisation on its own; the token from the
+    // INFO: Loopback TCP is not authorisation on its own; the token from the
     // endpoint file is.
     if (endpoint.token.isNotEmpty) {
-      await client.call('auth', {'token': endpoint.token});
+      try {
+        await client.call('auth', {'token': endpoint.token});
+      } catch (_) {
+        // WARNING: A refused handshake still holds its socket. The launcher
+        // retries every 50 ms while a daemon starts, and each try would leak
+        // one.
+        await client.close();
+        rethrow;
+      }
     }
     return client;
   }
@@ -71,14 +79,14 @@ class IpcClient {
   }
 
   void _onLine(String line) {
-    // Lines already buffered by the socket can arrive after close; delivering
+    // WARNING: Lines already buffered by the socket can arrive after close; delivering
     // them would add to a closed stream.
     if (_closed || line.trim().isEmpty) return;
     final Map<String, dynamic> frame;
     try {
       frame = jsonDecode(line) as Map<String, dynamic>;
     } on FormatException {
-      return; // A malformed line is not worth tearing the connection down for.
+      return; // INFO: A malformed line is not worth tearing the connection down for.
     }
 
     final event = frame['event'] as String?;
@@ -106,32 +114,22 @@ class IpcClient {
   }
 
   /// Sends one request and returns its result.
-  Future<Map<String, dynamic>> call(String method, [Map<String, dynamic>? params]) async {
-    if (_closed) throw const SocketException('daemon connection closed');
-
-    final id = (++_nextId).toString();
-    final completer = Completer<Map<String, dynamic>>();
-    _pending[id] = completer;
-
-    _socket.write('${jsonEncode({'id': id, 'method': method, 'params': ?params})}\n');
-
-    final frame = await completer.future;
-    final error = frame['error'] as Map<String, dynamic>?;
-    if (error != null) {
-      throw DaemonError(
-        error['code'] as String? ?? 'internal',
-        error['message'] as String? ?? 'unknown error',
-      );
-    }
-    return (frame['result'] as Map<String, dynamic>?) ?? const {};
-  }
+  Future<Map<String, dynamic>> call(String method, [Map<String, dynamic>? params]) async =>
+      (await _request(method, params) as Map<String, dynamic>?) ?? const {};
 
   /// Sends a request whose result is a list rather than an object.
-  Future<List<dynamic>> callList(String method, [Map<String, dynamic>? params]) async {
+  Future<List<dynamic>> callList(String method, [Map<String, dynamic>? params]) async =>
+      (await _request(method, params) as List<dynamic>?) ?? const [];
+
+  /// Sends one request and returns its raw result, or throws the daemon's
+  /// error.
+  Future<Object?> _request(String method, Map<String, dynamic>? params) async {
     if (_closed) throw const SocketException('daemon connection closed');
+
     final id = (++_nextId).toString();
     final completer = Completer<Map<String, dynamic>>();
     _pending[id] = completer;
+
     _socket.write('${jsonEncode({'id': id, 'method': method, 'params': ?params})}\n');
 
     final frame = await completer.future;
@@ -142,7 +140,7 @@ class IpcClient {
         error['message'] as String? ?? 'unknown error',
       );
     }
-    return (frame['result'] as List<dynamic>?) ?? const [];
+    return frame['result'];
   }
 
   Future<void> close() async {

@@ -124,7 +124,7 @@ func (r *Resolver) renderWebserverConf(cfg *config.Config, in webserver.Install,
 			DocRoot:   docRoot,
 			DocRootRe: regexp.QuoteMeta(docRoot),
 			LogDir:    forwardSlash(r.Root.ProjectLogDir(p.Name)),
-			// TLS ends at the front door; the instance behind it speaks
+			// INFO: TLS ends at the front door; the instance behind it speaks
 			// plain HTTP on loopback.
 			SSL:      p.SSL && front,
 			CertFile: forwardSlash(CertPath(r.Root, p.Name)),
@@ -133,7 +133,7 @@ func (r *Resolver) renderWebserverConf(cfg *config.Config, in webserver.Install,
 			Port:     p.Port,
 			Conf:     data,
 		}
-		// Only the file for the webserver actually serving the project is
+		// INFO: Only the file for the webserver actually serving the project is
 		// included; the other one waits until the project switches.
 		if custom := r.Root.CustomConfig(p.Name, in.Name); fileExists(custom) {
 			v.Include = forwardSlash(custom)
@@ -216,7 +216,7 @@ func (r *Resolver) write(mainPath string, conf rendered, in webserver.Install) e
 			return err
 		}
 	}
-	// Apache's ServerRoot and nginx's temp paths live here, and neither
+	// WARNING: Apache's ServerRoot and nginx's temp paths live here, and neither
 	// creates it.
 	for _, dir := range append([]string{conf.RunDir}, conf.LogDirs...) {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -248,7 +248,7 @@ func apacheModules(dir string, ssl bool) []module {
 			break
 		}
 	}
-	// setenvif because Kirby's .htaccess uses SetEnvIf outside any
+	// WARNING: setenvif because Kirby's .htaccess uses SetEnvIf outside any
 	// <IfModule>: without it every request is a 500 (webserver-install
 	// .feature, "A Kirby project needs no webserver configuration").
 	// proxy_http because Apache as the front door forwards to nginx.
@@ -320,6 +320,14 @@ http {
   # Kirby Panel upload before PHP ever saw it.
   client_max_body_size 0;
 {{if .Front}}
+  # The front door listens on every address — macOS lets an unprivileged
+  # process bind a port below 1024 nowhere else — so it answers this machine
+  # only. Anyone on the network could otherwise reach a project by name, and
+  # a project behind it would see the front door's 127.0.0.1 as the client.
+  allow 127.0.0.0/8;
+  allow ::1;
+  deny all;
+
   # A name no project has is refused here, rather than answered by whichever
   # project happens to come first.
   server {
@@ -464,6 +472,14 @@ LogFormat "%h %l %u %t \"%r\" %>s %b" common
 CustomLog "{{.LogDir}}/apache-access.log" common
 DirectoryIndex index.php index.html
 {{if .Front}}
+# The front door listens on every address — macOS lets an unprivileged
+# process bind a port below 1024 nowhere else — so it answers this machine
+# only. Anyone on the network could otherwise reach a project by name, and a
+# project behind it would see the front door's 127.0.0.1 as the client.
+<If "! -R '127.0.0.0/8' && ! -R '::1/128'">
+  Require all denied
+</If>
+
 # A name no project has is refused here, rather than answered by whichever
 # project happens to come first: Apache's first virtual host is its default.
 <VirtualHost *:{{.HTTPPort}}>

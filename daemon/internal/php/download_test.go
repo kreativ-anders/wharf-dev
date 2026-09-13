@@ -58,8 +58,8 @@ func TestTheStaticBuildIsTheNewestPatchForThisPlatform(t *testing.T) {
 		{"name": "php-8.4.9-fpm-macos-aarch64.tar.gz"},
 		{"name": "php-8.4.12-fpm-macos-aarch64.tar.gz"},
 		{"name": "php-8.4.12-cli-macos-aarch64.tar.gz"},
-		{"name": "php-8.4.30-fpm-linux-x86_64.tar.gz"}, // another platform
-		{"name": "php-8.5.1-fpm-macos-aarch64.tar.gz"}, // another version
+		{"name": "php-8.4.30-fpm-linux-x86_64.tar.gz"}, // INFO: another platform
+		{"name": "php-8.5.1-fpm-macos-aarch64.tar.gz"}, // INFO: another version
 	})
 	srv := &files{body: map[string][]byte{
 		"/?format=json":                        index,
@@ -83,7 +83,7 @@ func TestTheStaticBuildIsTheNewestPatchForThisPlatform(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s missing: %v", name, err)
 		}
-		// Windows keeps no executable bit to check.
+		// INFO: Windows keeps no executable bit to check.
 		if runtime.GOOS != "windows" && info.Mode().Perm()&0o100 == 0 {
 			t.Fatalf("%s is not executable", name)
 		}
@@ -94,9 +94,9 @@ func TestLatestNamesTheNewestReleaseOfEachVersion(t *testing.T) {
 	index, _ := json.Marshal([]map[string]string{
 		{"name": "php-8.4.9-fpm-macos-aarch64.tar.gz"},
 		{"name": "php-8.4.12-fpm-macos-aarch64.tar.gz"},
-		{"name": "php-8.4.30-fpm-linux-x86_64.tar.gz"}, // another platform
+		{"name": "php-8.4.30-fpm-linux-x86_64.tar.gz"}, // INFO: another platform
 		{"name": "php-8.5.1-fpm-macos-aarch64.tar.gz"},
-		{"name": "php-8.5.2-cli-macos-aarch64.tar.gz"}, // no FPM: cannot serve
+		{"name": "php-8.5.2-cli-macos-aarch64.tar.gz"}, // INFO: no FPM: cannot serve
 	})
 	releases, _ := json.Marshal(map[string]any{
 		"8.4": map[string]any{"version": "8.4.25"},
@@ -180,7 +180,7 @@ func TestTheWindowsBuildIsVerifiedAndGetsAPHPIni(t *testing.T) {
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	// Windows on ARM runs the x64 build: there is no other.
+	// INFO: Windows on ARM runs the x64 build: there is no other.
 	d := &Downloader{WindowsBase: ts.URL, GOOS: "windows", GOARCH: "arm64"}
 	dest := t.TempDir()
 	full, err := d.Install(context.Background(), "8.4", dest)
@@ -200,7 +200,7 @@ func TestTheWindowsBuildIsVerifiedAndGetsAPHPIni(t *testing.T) {
 		t.Fatalf("php.ini does not load Kirby's extensions:\n%s", ini)
 	}
 
-	// A tampered archive is refused.
+	// INFO: A tampered archive is refused.
 	srv.body["/php-8.4.25-nts-Win32-vs17-x64.zip"] = append(archive, 0)
 	if _, err := d.Install(context.Background(), "8.4", t.TempDir()); err == nil || !strings.Contains(err.Error(), "checksum") {
 		t.Fatalf("err = %v, want a checksum mismatch", err)

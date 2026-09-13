@@ -107,7 +107,7 @@ func (f HTTPFetcher) Fetch(ctx context.Context, url, destDir string) error {
 		return fmt.Errorf("%w: server returned %s", ErrOffline, resp.Status)
 	}
 
-	// zip.NewReader needs random access, so the archive is buffered to a
+	// INFO: zip.NewReader needs random access, so the archive is buffered to a
 	// temp file rather than held in memory.
 	tmp, err := os.CreateTemp("", "wharf-template-*.zip")
 	if err != nil {
@@ -157,7 +157,7 @@ func (s *Scaffolder) Create(ctx context.Context, tpl Template, name string) erro
 		return err
 	}
 
-	// Staged next to the destination so the final move is a rename within one
+	// INFO: Staged next to the destination so the final move is a rename within one
 	// filesystem, not a copy that can fail halfway.
 	staging, err := os.MkdirTemp(s.Root.WWW(), ".wharf-new-"+name+"-*")
 	if err != nil {
@@ -246,7 +246,7 @@ func commonRoot(zr *zip.Reader) string {
 		name := strings.TrimPrefix(f.Name, "./")
 		idx := strings.Index(name, "/")
 		if idx < 0 {
-			// A file at the archive root means there is nothing to strip.
+			// INFO: A file at the archive root means there is nothing to strip.
 			return ""
 		}
 		top := name[:idx]

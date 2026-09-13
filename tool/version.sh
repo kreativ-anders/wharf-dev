@@ -53,7 +53,7 @@ build_number() {
 	echo "${v#*+}"
 }
 
-# The build number keeps counting across every bump: macOS refuses to treat a
+# WARNING: The build number keeps counting across every bump: macOS refuses to treat a
 # bundle as newer when CFBundleVersion went down.
 next() {
 	local want="${1:-}" cur major minor patch new
@@ -73,7 +73,7 @@ next() {
 	echo "$new+$(($(build_number) + 1))"
 }
 
-# newer A B: is A a higher version than B?
+# INFO: newer A B: is A a higher version than B?
 newer() {
 	local a b i
 	IFS=. read -r -a a <<<"$1"
@@ -90,7 +90,7 @@ write() {
 	[[ "$v" =~ $full_re ]] || die "refusing to write \"$v\": not X.Y.Z+B"
 	tmp="$(mktemp)"
 	sed "s/^version:.*/version: $v/" "$pubspec" >"$tmp"
-	# cat, not mv: keeps the file's own permissions and inode.
+	# WARNING: cat, not mv: keeps the file's own permissions and inode.
 	cat "$tmp" >"$pubspec"
 	rm -f "$tmp"
 }
@@ -143,7 +143,7 @@ check_tag() {
 	[ "$tag" = "$want" ] || die "tag \"$tag\" does not match gui/pubspec.yaml ($want). Tag the commit that carries the version, or cut the release with \`make release\`."
 }
 
-# Dated by the tagged commit, not by today: a section written late or re-run
+# INFO: Dated by the tagged commit, not by today: a section written late or re-run
 # must still name the day the release was made.
 section() {
 	local tag="${1:-}" prev range
@@ -152,7 +152,7 @@ section() {
 	if [ -n "$prev" ]; then range="$prev..$tag"; else range="$tag"; fi
 	echo "## $tag - $(git_ log -1 --format=%cs "$tag")"
 	echo
-	# The release bookkeeping itself is not a change anyone needs to read about.
+	# INFO: The release bookkeeping itself is not a change anyone needs to read about.
 	git_ log "$range" --no-merges --format='- %s (%h)' | grep -v -E '^- (🔖 Version |📝 Changelog )' || true
 	echo
 }

@@ -25,7 +25,7 @@ func TestTheHostsWriteAlsoRefreshesTheResolver(t *testing.T) {
 		}
 	}
 
-	// The copy must survive quoting of an awkward path, and a refresh that
+	// INFO: The copy must survive quoting of an awkward path, and a refresh that
 	// fails must not turn a successful write into an error.
 	dry := strings.NewReplacer("/usr/bin/dscacheutil", "/usr/bin/false", "/usr/bin/killall", "/usr/bin/false").Replace(script)
 	if out, err := exec.Command("/bin/sh", "-c", dry).CombinedOutput(); err != nil {

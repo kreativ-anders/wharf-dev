@@ -48,6 +48,13 @@ Feature: Webserver service management
     Then the global webserver starts on port 80 and forwards to it
     And a request for a name no project has is refused, not answered by another project
 
+  Scenario: The front door answers this machine only
+    Given "my-kirby-site" is running
+    When a request for "my-kirby-site.localhost" arrives from another machine on the network
+    Then the front door refuses it
+    And a request from this machine is served as before
+    And a project behind the front door is reached through it alone
+
   Scenario: A project's own instance never takes a port another program holds
     Given project "legacy-app" has "webserver_override: apache" in its config
     And another program listens on the loopback port recorded for "legacy-app"

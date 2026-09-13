@@ -30,7 +30,7 @@ func TestValidateName(t *testing.T) {
 
 // features/quick-app-php.feature — "A typed name becomes a project name"
 func TestSlugRewritesTypedNames(t *testing.T) {
-	// The GUI's field is tested against the same table
+	// INFO: The GUI's field is tested against the same table
 	// (gui/test/project_name_test.dart), so the two cannot drift apart.
 	raw, err := os.ReadFile(filepath.Join("testdata", "slug.json"))
 	if err != nil {
@@ -51,7 +51,7 @@ func TestSlugRewritesTypedNames(t *testing.T) {
 			}
 		}
 	}
-	// A hostname label ends at 63 characters, and never on a hyphen.
+	// INFO: A hostname label ends at 63 characters, and never on a hyphen.
 	if got, want := Slug(strings.Repeat("a", 62)+" b"), strings.Repeat("a", 62); got != want {
 		t.Errorf("a long name was cut to %q, want %q", got, want)
 	}
@@ -112,7 +112,7 @@ func TestScaffoldRefusesPathTraversalInAnArchive(t *testing.T) {
 	if err := root.Ensure(); err != nil {
 		t.Fatal(err)
 	}
-	// A zip that tries to write outside the project folder. Template archives
+	// WARNING: A zip that tries to write outside the project folder. Template archives
 	// come off the internet, so this is untrusted input.
 	s := &Scaffolder{Root: root, Fetcher: zipFetcher(map[string]string{
 		"kit/ok.php":            "<?php",

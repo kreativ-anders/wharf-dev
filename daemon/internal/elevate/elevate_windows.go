@@ -3,6 +3,7 @@ package elevate
 import (
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -18,7 +19,11 @@ func (systemElevator) RequestElevatedWrite(path string, content string) error {
 	}
 	defer cleanup()
 
-	args := fmt.Sprintf(`'/c','copy','/y','%s','%s'`, quoteForPowerShell(tmp), quoteForPowerShell(path))
+	// WARNING: Start-Process joins -ArgumentList verbatim, so each path is
+	// quoted for cmd.exe itself: a user name with a space in it would split
+	// the temp path in two, and copy reads an unquoted "C:/…" as a switch.
+	args := fmt.Sprintf(`'/c','copy','/y','"%s"','"%s"'`,
+		quoteForPowerShell(filepath.FromSlash(tmp)), quoteForPowerShell(path))
 	if err := runAs(args); err != nil {
 		return fmt.Errorf("elevated write to %s: %w", path, err)
 	}
@@ -36,7 +41,10 @@ func (systemElevator) RequestElevatedRun(program string, args []string, env []st
 	for _, a := range args {
 		fmt.Fprintf(&line, ` "%s"`, a)
 	}
-	if err := runAs(fmt.Sprintf(`'/c','%s'`, quoteForPowerShell(line.String()))); err != nil {
+	// WARNING: The outer quotes are for cmd.exe, which strips the first and
+	// the last quote of a /c line that holds more than two. Without them a
+	// line that starts with the quoted program would lose its own quotes.
+	if err := runAs(fmt.Sprintf(`'/c','"%s"'`, quoteForPowerShell(line.String()))); err != nil {
 		return fmt.Errorf("elevated run of %s: %w", program, err)
 	}
 	return nil

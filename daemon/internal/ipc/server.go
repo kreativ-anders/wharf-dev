@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 // Handler serves one method. Returning an *Error sends that code to the
@@ -30,6 +31,8 @@ type Server struct {
 	transport Transport
 	token     string
 	endpoint  Endpoint
+	// authTimeout is how long a TCP client has to present the token.
+	authTimeout time.Duration
 
 	ln net.Listener
 
@@ -45,11 +48,12 @@ func NewServer(socketPath string, log *slog.Logger) *Server {
 		log = slog.Default()
 	}
 	return &Server{
-		path:      socketPath,
-		log:       log,
-		transport: DefaultTransport(),
-		handlers:  map[string]Handler{},
-		clients:   map[*client]struct{}{},
+		path:        socketPath,
+		log:         log,
+		authTimeout: 10 * time.Second,
+		transport:   DefaultTransport(),
+		handlers:    map[string]Handler{},
+		clients:     map[*client]struct{}{},
 	}
 }
 
@@ -69,7 +73,7 @@ func (s *Server) Listen() error {
 	if s.transport == TransportTCP {
 		return s.listenTCP()
 	}
-	// A path that will not fit in sun_path cannot be bound at all. Falling
+	// INFO: A path that will not fit in sun_path cannot be bound at all. Falling
 	// back to the transport Windows already uses keeps the daemon working;
 	// clients read the endpoint file and never notice.
 	if SocketPathTooLong(s.path) {
@@ -101,7 +105,7 @@ func (s *Server) listenUnix() error {
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", s.path, err)
 	}
-	// The socket is the daemon's whole authorisation model: only the user who
+	// WARNING: The socket is the daemon's whole authorisation model: only the user who
 	// owns the root folder may talk to it.
 	if err := os.Chmod(s.path, 0o600); err != nil {
 		ln.Close()
@@ -154,6 +158,12 @@ func (s *Server) Serve(ctx context.Context) error {
 			return err
 		}
 		c := &client{conn: conn, out: make(chan []byte, 32), log: s.log, authorised: s.token == ""}
+		if !c.authorised {
+			// WARNING: Loopback admits every local process. Without a
+			// deadline, one that never presents the token could hold any
+			// number of the daemon's connections open for good.
+			_ = conn.SetReadDeadline(time.Now().Add(s.authTimeout))
+		}
 		s.mu.Lock()
 		s.clients[c] = struct{}{}
 		s.mu.Unlock()
@@ -179,7 +189,7 @@ func (s *Server) Broadcast(event string, data any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for c := range s.clients {
-		// A client that is disconnecting has closed its queue but is still
+		// WARNING: A client that is disconnecting has closed its queue but is still
 		// listed until its handler returns; push checks, a bare send would
 		// panic and take the daemon — and every service it manages — down.
 		if !c.push(line) {
@@ -238,7 +248,7 @@ func (s *Server) serveClient(ctx context.Context, c *client) {
 	}()
 
 	dec := bufio.NewScanner(c.conn)
-	// Requests are small; a project name is the largest field.
+	// INFO: Requests are small; a project name is the largest field.
 	dec.Buffer(make([]byte, 0, 4096), 1<<20)
 	for dec.Scan() {
 		var req Request
@@ -246,66 +256,79 @@ func (s *Server) serveClient(ctx context.Context, c *client) {
 			c.send(errorResponse("", CodeBadRequest, "malformed request: "+err.Error()))
 			continue
 		}
-		s.dispatch(ctx, c, req)
+		if !s.dispatch(ctx, c, req) {
+			return
+		}
 	}
 	if err := dec.Err(); err != nil && !errors.Is(err, io.EOF) {
 		s.log.Debug("client read ended", "err", err)
 	}
 }
 
-// dispatch runs one request. Requests are handled in order on the connection:
-// starting a service then reading state must not race, and a single GUI has no
-// use for concurrent calls.
-func (s *Server) dispatch(ctx context.Context, c *client, req Request) {
+// dispatch runs one request and reports whether the connection may stay
+// open. Requests are handled in order on the connection: starting a service
+// then reading state must not race, and a single GUI has no use for
+// concurrent calls.
+func (s *Server) dispatch(ctx context.Context, c *client, req Request) bool {
 	if s.token != "" && !c.authorised {
-		if req.Method != MethodAuth {
-			c.send(errorResponse(req.ID, CodeUnauthorized, "authenticate first: call "+MethodAuth+" with the token from "+EndpointFileName))
-			return
-		}
-		var p struct {
-			Token string `json:"token"`
-		}
-		if err := json.Unmarshal(req.Params, &p); err != nil || subtle.ConstantTimeCompare([]byte(p.Token), []byte(s.token)) != 1 {
-			c.send(errorResponse(req.ID, CodeUnauthorized, "invalid token"))
-			return
-		}
-		c.authorised = true
-		c.send(Response{ID: req.ID, OK: true, Result: json.RawMessage(`{"ok":true}`)})
-		return
+		return s.authorise(c, req)
 	}
 	if req.Method == MethodAuth {
-		// Already authorised, or on a transport that needs no token.
+		// INFO: Already authorised, or on a transport that needs no token.
 		c.send(Response{ID: req.ID, OK: true, Result: json.RawMessage(`{"ok":true}`)})
-		return
+		return true
 	}
 
 	h, ok := s.handlers[req.Method]
 	if !ok {
 		c.send(errorResponse(req.ID, CodeUnknownMethod, "unknown method "+req.Method))
-		return
+		return true
 	}
 
 	result, err := h(ctx, req.Params)
 	if err != nil {
 		var ipcErr *Error
 		if errors.As(err, &ipcErr) {
-			// A coded error is an answer, not a fault: a project that does not
-			// exist is the user's typo, not the daemon's problem.
+			// INFO: A coded error is an answer, not a fault: a project that
+			// does not exist is the user's typo, not the daemon's problem.
 			s.log.Debug("request refused", "method", req.Method, "code", ipcErr.Code)
 			c.send(Response{ID: req.ID, OK: false, Error: ipcErr})
-			return
+			return true
 		}
 		s.log.Error("handler failed", "method", req.Method, "err", err)
 		c.send(errorResponse(req.ID, CodeInternal, err.Error()))
-		return
+		return true
 	}
 
 	body, err := json.Marshal(result)
 	if err != nil {
 		c.send(errorResponse(req.ID, CodeInternal, "encode result: "+err.Error()))
-		return
+		return true
 	}
 	c.send(Response{ID: req.ID, OK: true, Result: body})
+	return true
+}
+
+// authorise handles a TCP client's requests until it has presented the
+// token, and reports whether the connection may stay open.
+func (s *Server) authorise(c *client, req Request) bool {
+	if req.Method != MethodAuth {
+		c.send(errorResponse(req.ID, CodeUnauthorized, "authenticate first: call "+MethodAuth+" with the token from "+EndpointFileName))
+		return true
+	}
+	var p struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(req.Params, &p); err != nil || subtle.ConstantTimeCompare([]byte(p.Token), []byte(s.token)) != 1 {
+		c.send(errorResponse(req.ID, CodeUnauthorized, "invalid token"))
+		// WARNING: A wrong token ends the connection, so no local process
+		// can try one token after another on it.
+		return false
+	}
+	c.authorised = true
+	_ = c.conn.SetReadDeadline(time.Time{})
+	c.send(Response{ID: req.ID, OK: true, Result: json.RawMessage(`{"ok":true}`)})
+	return true
 }
 
 type client struct {

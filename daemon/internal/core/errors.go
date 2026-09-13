@@ -2,7 +2,7 @@ package core
 
 import "fmt"
 
-// The daemon distinguishes what the user did wrong from what the daemon got
+// INFO: The daemon distinguishes what the user did wrong from what the daemon got
 // wrong. Only the latter is worth a stack in the log; the former is an ordinary
 // answer the GUI turns into a sentence.
 

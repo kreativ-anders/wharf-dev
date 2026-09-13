@@ -1,6 +1,6 @@
 name: Release
 
-# The repository's only workflow: gate → (bump) → build on each OS → one
+# INFO: The repository's only workflow: gate → (bump) → build on each OS → one
 # atomic release. There is deliberately no push/PR CI — `make check` runs
 # locally before a commit (CLAUDE.md §4). The why behind each part, and the
 # two ways to cut a release, are in dev/releasing.md:
@@ -32,19 +32,19 @@ on:
 permissions:
   contents: write
 
-# Two runs bumping from the same gui/pubspec.yaml would claim the same version.
+# WARNING: Two runs bumping from the same gui/pubspec.yaml would claim the same version.
 concurrency:
   group: release
   cancel-in-progress: false
 
 env:
-  # Pinned, not floating: a new Flutter can change what a tagged build
+  # WARNING: Pinned, not floating: a new Flutter can change what a tagged build
   # produces without a commit here. Raise it deliberately, after `make check`
   # passes locally on the new version. Go is pinned by daemon/go.mod.
   FLUTTER_VERSION: "3.47.4"
 
 jobs:
-  # Nothing is bumped, built or released unless this is green.
+  # INFO: Nothing is bumped, built or released unless this is green.
   gate:
     runs-on: ubuntu-latest
     steps:
@@ -60,7 +60,7 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
 
-      # A tag that disagrees with the pubspec would ship assets named after
+      # WARNING: A tag that disagrees with the pubspec would ship assets named after
       # one version and an app that reports another.
       - name: Tag matches gui/pubspec.yaml
         if: startsWith(github.ref, 'refs/tags/')
@@ -74,11 +74,11 @@ jobs:
             exit 1
           fi
 
-      # Both halves, both sync guards, the GUI against the real daemon, and
+      # INFO: Both halves, both sync guards, the GUI against the real daemon, and
       # every OS the daemon must still compile for.
       - run: make check cross
 
-  # Only for a dispatch with a bump or an exact version.
+  # INFO: Only for a dispatch with a bump or an exact version.
   bump:
     needs: gate
     if: github.event_name == 'workflow_dispatch' && (inputs.bump != 'none' || inputs.version != '')
@@ -96,7 +96,7 @@ jobs:
         with:
           fetch-depth: 0 # the tags, so an existing one is refused
 
-      # The input goes through env, never into the script text: a version
+      # WARNING: The input goes through env, never into the script text: a version
       # field is free text, and ${{ }} in `run:` is pasted in unquoted.
       - name: Bump, commit and tag
         id: bump
@@ -106,13 +106,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           tag="$(bash tool/version.sh release "$WANT")"
-          # Atomic: never a pushed tag whose version commit did not land.
+          # WARNING: Atomic: never a pushed tag whose version commit did not land.
           git push --atomic origin HEAD:main "$tag"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
   build:
     needs: [gate, bump]
-    # `!cancelled()` is load-bearing, not decoration. `bump` is skipped on a
+    # WARNING: `!cancelled()` is load-bearing, not decoration. `bump` is skipped on a
     # tag push and on "bump: none", and GitHub skips every job that `needs` a
     # skipped one — unless the condition contains a status-check function.
     # `needs.bump.result == 'skipped'` alone reads right and does not work:
@@ -151,7 +151,7 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
 
-      # Read once, before anything builds: a build step that touches a
+      # WARNING: Read once, before anything builds: a build step that touches a
       # tracked file would otherwise stamp a release as ".dirty". Make, the
       # Xcode build phase and the Windows CMake target all read VERSION.
       - name: Version
@@ -166,7 +166,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libayatana-appindicator3-dev
 
-      # macOS and Windows build wharfd inside the Flutter build (the "Embed
+      # INFO: macOS and Windows build wharfd inside the Flutter build (the "Embed
       # wharfd" Xcode phase, universal for a release build; the CMake target in
       # gui/windows/runner). Linux has no such hook yet, so the bundle gets it
       # copied in below.
@@ -179,7 +179,7 @@ jobs:
         if: matrix.platform == 'linux'
         run: cp build/wharfd gui/build/linux/x64/release/bundle/
 
-      # Flutter's Windows template links the VC++ runtime dynamically. Without
+      # WARNING: Flutter's Windows template links the VC++ runtime dynamically. Without
       # these three DLLs next to the exe, a machine that lacks the
       # redistributable fails at start with STATUS_DLL_NOT_FOUND — which
       # finanzgecko learned from winget's validation VM. App-local copies
@@ -199,7 +199,7 @@ jobs:
             Copy-Item $src $dest
           }
 
-      # The release must ship the daemon it claims: stamped with this version,
+      # INFO: The release must ship the daemon it claims: stamped with this version,
       # and on macOS for both architectures the app itself runs on.
       - name: Check the embedded wharfd
         run: |
@@ -214,7 +214,7 @@ jobs:
           got="$("$bin" --version | tr -d '\r')"
           [ "$got" = "wharfd $VERSION" ] || { echo "::error::$bin reports \"$got\", expected \"wharfd $VERSION\""; exit 1; }
 
-      # A temporary keychain rather than the login one: deleted at the end of
+      # INFO: A temporary keychain rather than the login one: deleted at the end of
       # the job (below, `always()`), and its random password is never logged.
       # Without the secrets — a fork — this is skipped and build_dmg.sh makes
       # an unsigned DMG instead of blocking the release.
@@ -238,11 +238,11 @@ jobs:
           security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$MACOS_CERT_PASSWORD" \
             -T /usr/bin/codesign -T /usr/bin/security
           rm -f "$RUNNER_TEMP/cert.p12"
-          # Without the partition list codesign asks the keychain interactively
+          # WARNING: Without the partition list codesign asks the keychain interactively
           # and the job hangs silently until it times out.
           security set-key-partition-list -S apple-tool:,apple:,codesign: \
             -s -k "$keychain_pw" "$keychain" >/dev/null
-          # Without this, `security find-identity` does not see the keychain.
+          # WARNING: Without this, `security find-identity` does not see the keychain.
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
           if [ -n "$APPLE_API_KEY_P8_BASE64" ]; then
             mkdir -p "$RUNNER_TEMP/private_keys"
@@ -250,7 +250,7 @@ jobs:
             echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/private_keys/AuthKey.p8" >> "$GITHUB_ENV"
           fi
 
-      # One versioned file per platform, and no unversioned copy beside it:
+      # INFO: One versioned file per platform, and no unversioned copy beside it:
       # a duplicate doubles every upload for nothing. The file-name suffixes
       # are what a future update check will look for — rename them together.
       # macOS goes through the same script `make dmg` runs locally.
@@ -260,7 +260,7 @@ jobs:
         env:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
-          # A real release from this repository must be notarised: an unsigned
+          # WARNING: A real release from this repository must be notarised: an unsigned
           # DMG on a release page is an app Gatekeeper refuses on every other
           # Mac. Forks and test builds keep the unsigned fallback.
           REQUIRE_NOTARIZED: >-
@@ -277,7 +277,7 @@ jobs:
               pwsh -NoProfile -Command "Compress-Archive -Path gui/build/windows/x64/runner/Release/* -DestinationPath '$name-windows-x64.zip'" ;;
           esac
 
-      # `always()`: no decrypted key may stay on the runner after a failure.
+      # WARNING: `always()`: no decrypted key may stay on the runner after a failure.
       - name: Remove the keychain and the notarisation key
         if: always() && matrix.platform == 'macos'
         run: |
@@ -290,7 +290,7 @@ jobs:
           path: Wharf-*
           if-no-files-found: error
 
-  # Published only once every platform built: one step, so there is never a
+  # INFO: Published only once every platform built: one step, so there is never a
   # release missing a platform's file. A test build ("bump: none") stops
   # before this.
   release:
@@ -308,7 +308,7 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      # CHANGELOG.md is written here and nowhere else.
+      # INFO: CHANGELOG.md is written here and nowhere else.
       - name: CHANGELOG.md
         run: |
           git config user.name "github-actions[bot]"
@@ -323,7 +323,7 @@ jobs:
           path: dist
           merge-multiple: true
 
-      # `sha256sum Wharf-*`, not `*`: the redirect creates SHA256SUMS before
+      # WARNING: `sha256sum Wharf-*`, not `*`: the redirect creates SHA256SUMS before
       # the command runs, and `*` would hash the empty file into itself. The
       # notes claim integrity, not authenticity — SHA256SUMS is unsigned.
       - name: Checksums and release notes

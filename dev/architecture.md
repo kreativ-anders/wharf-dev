@@ -112,6 +112,15 @@ browser ──► nginx :80/:443 (active) ──► my-kirby-site   served direc
   is served by the front door like any other, with no second process.
 - A name no project has is refused by a default server, never answered by
   whichever project comes first.
+- It answers this machine only. It has to listen on every address — macOS
+  lets an unprivileged process bind a port below 1024 on the wildcard
+  address alone — so nginx allows loopback and denies the rest, and Apache
+  denies every client that is not loopback. Without that, anyone on the same
+  network could reach a project by sending its name, and a project behind
+  the front door would see the front door's own `127.0.0.1` as the client,
+  which is what Kirby checks before it lets the Panel be installed
+  (`features/service-management.feature`, "The front door answers this
+  machine only").
 - It serves the *started* projects only. Starting one project adds it and
   restarts the front door; stopping one removes it and leaves every other
   started project running; the front door stops once none is left. Which
@@ -134,7 +143,9 @@ connect is not a working tool, so:
 | Windows | loopback TCP on an OS-assigned port | a random token |
 
 Loopback is not authorisation on its own — any local process can connect — so
-the TCP transport requires a token as its first call. The token lives in
+the TCP transport requires a token as its first call. A client has ten
+seconds to present it, and a wrong one ends the connection, so no local
+process can hold connections open or try one token after another. The token lives in
 `data/wharf.endpoint`, written mode `0600`, which is also how *every* client on
 *every* OS finds the daemon: read the endpoint file, connect to whatever it
 names. No client hard-codes a socket path or a port, and nothing above the
@@ -266,6 +277,14 @@ them surviving a restart:
   a PHP it did not download; removing one it did deletes `bin/php/<version>`
   instead, so neither needs elevation on any OS
   (`features/php-runtime.feature`).
+
+A project's `name` becomes a folder in `www/`, files in `config/vhosts/` and
+`data/certs/`, and a `server_name` line, so a hand-edited one must be usable
+as all of them: letters, digits, dots, hyphens and underscores, starting
+with a letter or digit. A `path` must not hold a quote or a line break, which
+no webserver config can name. A file that breaks either rule is refused on
+load the way a file that does not parse is — a reload keeps the config in
+use — and the message names the project and the fix.
 
 Custom webserver directives are deliberately *not* keys in this file: they
 are nginx or Apache syntax, which belongs in a file of its own that an editor

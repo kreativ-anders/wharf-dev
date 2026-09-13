@@ -31,10 +31,10 @@ void main() {
     daemon = await Process.start(binary, [
       '--root', root.path,
       '--hosts', hostsPath,
-      // No password prompt, and the real /etc/hosts is never touched.
+      // WARNING: No password prompt, and the real /etc/hosts is never touched.
       '--elevator', 'direct',
     ]);
-    // Keep the daemon's stderr drained; a full pipe would block it.
+    // WARNING: Keep the daemon's stderr drained; a full pipe would block it.
     daemon.stderr.drain<void>();
   });
 
@@ -74,7 +74,7 @@ void main() {
     final php = gui.state.services.php;
     expect(php.recommended, isNotEmpty);
     expect(php.version, isNotEmpty, reason: 'a default must be chosen even with nothing installed');
-    // Whatever this machine has, the picker and the selection agree about it.
+    // INFO: Whatever this machine has, the picker and the selection agree about it.
     for (final install in php.installs) {
       expect(install.version, isNotEmpty);
       expect(install.status, isNotEmpty);
@@ -100,7 +100,7 @@ void main() {
     expect(hosts, isNot(contains('my-kirby-site')), reason: '.localhost needs no hosts entry');
     expect(hosts, contains('localhost'), reason: 'the rest of the file must survive');
 
-    // The config the daemon wrote stays readable by hand.
+    // INFO: The config the daemon wrote stays readable by hand.
     final config = await File('${root.path}/config/wharf.json').readAsString();
     expect(config, contains('"my-kirby-site"'));
     expect(config, isNot(contains('null')));

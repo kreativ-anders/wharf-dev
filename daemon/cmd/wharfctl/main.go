@@ -105,7 +105,7 @@ func run() error {
 		if len(args) < 2 {
 			return fmt.Errorf("add needs a project name or a folder path")
 		}
-		// Anything that looks like a path is a folder from anywhere; a bare
+		// INFO: Anything that looks like a path is a folder from anywhere; a bare
 		// name is a folder in www/ (project-folders.feature).
 		params := map[string]string{"name": args[1]}
 		if strings.ContainsAny(args[1], `/\`) || args[1] == "." {

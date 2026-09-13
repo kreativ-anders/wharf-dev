@@ -34,7 +34,7 @@ func TestMain(m *testing.M) {
 			time.Sleep(time.Minute)
 		}
 	case "owner":
-		// A stand-in for the daemon: it starts a tree of its own and reports
+		// INFO: A stand-in for the daemon: it starts a tree of its own and reports
 		// that tree's worker.
 		_, worker, err := startMaster("master")
 		if err != nil {

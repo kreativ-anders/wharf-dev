@@ -83,7 +83,7 @@ func Start(cmd *exec.Cmd) (*Tree, error) {
 		return nil, err
 	}
 	if err := adopt(job, cmd.Process.Pid); err != nil {
-		// Still suspended, so it has started nothing that could be left behind.
+		// INFO: Still suspended, so it has started nothing that could be left behind.
 		cmd.Process.Kill()
 		cmd.Wait()
 		syscall.CloseHandle(job)
@@ -134,7 +134,7 @@ func adopt(job syscall.Handle, pid int) error {
 func Alive(pid int) bool {
 	h, err := syscall.OpenProcess(syscall.SYNCHRONIZE, false, uint32(pid))
 	if err != nil {
-		// Denied means it exists but is not ours to open.
+		// INFO: Denied means it exists but is not ours to open.
 		return errors.Is(err, syscall.ERROR_ACCESS_DENIED)
 	}
 	defer syscall.CloseHandle(h)

@@ -119,7 +119,7 @@ func (s *Supervisor) Start(ctx context.Context, spec Spec) error {
 	s.mu.Unlock()
 	s.emit(status)
 
-	// The previous occupant of this port may not have released it yet.
+	// INFO: The previous occupant of this port may not have released it yet.
 	waitCtx, cancel := context.WithTimeout(ctx, s.StopTimeout)
 	err := WaitPortFree(waitCtx, s.prober, spec.Port, s.Poll)
 	cancel()
@@ -127,7 +127,7 @@ func (s *Supervisor) Start(ctx context.Context, spec Spec) error {
 		return s.fail(spec.ID, gen, err)
 	}
 
-	// Only what this run writes explains a failed start; earlier runs' lines
+	// INFO: Only what this run writes explains a failed start; earlier runs' lines
 	// in the same log would name problems long since fixed.
 	logFrom := logSize(spec.LogPath)
 	h, err := s.runner.Start(spec)
@@ -137,7 +137,7 @@ func (s *Supervisor) Start(ctx context.Context, spec Spec) error {
 
 	s.mu.Lock()
 	if s.procs[spec.ID] != m || m.gen != gen {
-		// A concurrent stop replaced this entry while we were starting.
+		// INFO: A concurrent stop replaced this entry while we were starting.
 		s.mu.Unlock()
 		terminate(ctx, h, spec)
 		return nil
@@ -147,7 +147,7 @@ func (s *Supervisor) Start(ctx context.Context, spec Spec) error {
 
 	go s.watch(spec.ID, gen, h)
 
-	// A process that exits before it binds — a config it refuses, most often
+	// INFO: A process that exits before it binds — a config it refuses, most often
 	// — ends the wait at once rather than after StartTimeout, and its own last
 	// words become the error (app-configuration.feature, "A custom config the
 	// webserver refuses names the problem").
@@ -178,7 +178,7 @@ func (s *Supervisor) Start(ctx context.Context, spec Spec) error {
 		s.mu.Unlock()
 		return nil
 	}
-	// A process that already exited during the bind wait must not be
+	// WARNING: A process that already exited during the bind wait must not be
 	// reported as running.
 	if m.state == StateFailed || m.state == StateStopped {
 		err := m.err
@@ -216,7 +216,7 @@ func (s *Supervisor) Stop(ctx context.Context, id string) error {
 
 	terminate(ctx, h, spec)
 
-	// os/exec has reaped the process, but the kernel may hold its listening
+	// INFO: os/exec has reaped the process, but the kernel may hold its listening
 	// socket a moment longer.
 	relCtx, cancel := context.WithTimeout(ctx, s.StopTimeout)
 	relErr := WaitPortFree(relCtx, s.prober, spec.Port, s.Poll)
@@ -254,7 +254,7 @@ func terminate(ctx context.Context, h Handle, spec Spec) {
 	exited := make(chan struct{})
 	go func() { h.Wait(); close(exited) }()
 
-	// Windows cannot deliver a signal at all; waiting out the grace period
+	// INFO: Windows cannot deliver a signal at all; waiting out the grace period
 	// there would only delay a kill that is coming anyway.
 	if err := h.Signal(sig); err != nil {
 		_ = h.Kill()
@@ -361,7 +361,7 @@ func (s *Supervisor) watch(id string, gen uint64, h Handle) {
 		return
 	}
 	if m.state == StateStopping || m.state == StateStopped {
-		// Expected exit; Stop owns the transition.
+		// INFO: Expected exit; Stop owns the transition.
 		s.mu.Unlock()
 		return
 	}

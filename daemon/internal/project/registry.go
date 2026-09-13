@@ -98,7 +98,7 @@ func Slug(typed string) string {
 			return base
 		}
 		if r >= 0x300 && r <= 0x36f {
-			return -1 // a combining accent, as in a decomposed "é"
+			return -1 // INFO: a combining accent, as in a decomposed "é"
 		}
 		return r
 	}, s)

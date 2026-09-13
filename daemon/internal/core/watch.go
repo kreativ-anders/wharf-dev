@@ -27,7 +27,7 @@ func (d *Daemon) WatchConfig(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// Custom webserver directives live beside wharf.json and are
+			// INFO: Custom webserver directives live beside wharf.json and are
 			// hand-edited the same way (app-configuration.feature).
 			d.ApplyCustomConfigs(ctx)
 			d.ApplyPHPSettings(ctx)
@@ -43,12 +43,12 @@ func (d *Daemon) WatchConfig(ctx context.Context) {
 			cfg, err := d.store.Reload()
 			d.mu.Unlock()
 			if err != nil {
-				// A half-saved file is normal during an editor write; the
+				// INFO: A half-saved file is normal during an editor write; the
 				// next tick picks up the finished one.
 				d.log.Warn("config reload failed, keeping previous config", "err", err)
 				continue
 			}
-			// Hidden PHP folders decide what detection finds, so a hand-edit
+			// INFO: Hidden PHP folders decide what detection finds, so a hand-edit
 			// of that list re-scans like the GUI's hide and show do.
 			if !slices.Equal(prev.Services.PHP.Hidden, cfg.Services.PHP.Hidden) {
 				d.RefreshPHP(ctx)

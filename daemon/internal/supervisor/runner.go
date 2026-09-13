@@ -91,7 +91,7 @@ func (ExecRunner) Start(s Spec) (Handle, error) {
 		return nil, fmt.Errorf("start %s: %w", s.Label, err)
 	}
 	h := &execHandle{cmd: cmd, tree: tree, done: make(chan struct{})}
-	// Reap in the background so Wait is safe to call from several goroutines
+	// WARNING: Reap in the background so Wait is safe to call from several goroutines
 	// and from none at all: os/exec requires exactly one Wait per process.
 	go func() {
 		h.err = cmd.Wait()
@@ -121,7 +121,7 @@ func (h *execHandle) Signal(sig os.Signal) error {
 		return errors.New("supervisor: process not started")
 	}
 	err := h.cmd.Process.Signal(sig)
-	// A process that already exited is the outcome the caller wanted.
+	// INFO: A process that already exited is the outcome the caller wanted.
 	if errors.Is(err, os.ErrProcessDone) || errors.Is(err, syscall.ESRCH) {
 		return nil
 	}

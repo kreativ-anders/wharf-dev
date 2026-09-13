@@ -50,7 +50,7 @@ void main() {
           }
         });
 
-        // The icon sits on its own tint, over the page or a hovered row.
+        // INFO: The icon sits on its own tint, over the page or a hovered row.
         test('project actions stand out on their tint over the ${bg.key}', () {
           for (final (name, color) in [
             ('start', c.start),

@@ -57,11 +57,25 @@ class TrayController with TrayListener {
     return 'assets/tray/icon_32.png';
   }
 
+  /// What the menu showed when it was last built. The daemon notifies on
+  /// every snapshot and every pending click, and most change nothing here.
+  String? _shown;
+
   Future<void> rebuildMenu() async {
     final state = daemon.state;
+    final connected = daemon.connection == Connection.connected;
+    // INFO: The native menu is rebuilt only when something it shows changed.
+    final shown = [
+      connected,
+      state.anyRunning,
+      for (final p in state.projects) '${p.name} ${_marker(p)} ${p.actions} ${p.url} ${p.isRunning}',
+    ].join('\n');
+    if (shown == _shown) return;
+    _shown = shown;
+
     final items = <MenuItem>[MenuItem(key: _open, label: 'Open Wharf'), MenuItem.separator()];
 
-    if (daemon.connection != Connection.connected) {
+    if (!connected) {
       items.add(MenuItem(label: 'Starting…', disabled: true));
     } else if (state.projects.isEmpty) {
       items.add(MenuItem(label: 'No projects yet', disabled: true));
@@ -85,7 +99,7 @@ class TrayController with TrayListener {
     ]);
 
     await trayManager.setContextMenu(Menu(items: items));
-    // The icon's tooltip is the whole of the idle-versus-active signal.
+    // INFO: The icon's tooltip is the whole of the idle-versus-active signal.
     await trayManager.setToolTip(state.anyRunning ? 'Wharf — running' : 'Wharf — idle');
   }
 

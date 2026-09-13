@@ -234,7 +234,7 @@ func (m *Mkcert) Setup(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// The authority is created unprivileged, so its files belong to the user
+	// WARNING: The authority is created unprivileged, so its files belong to the user
 	// and later certificates can be issued without a prompt. Limiting the
 	// trust stores to NSS (Firefox's, per user) keeps mkcert from reaching
 	// for sudo at this step.

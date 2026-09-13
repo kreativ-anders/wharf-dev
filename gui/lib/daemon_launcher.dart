@@ -46,12 +46,12 @@ class DaemonLauncher {
 
     final process = await Process.start(binary, [
       '--root', root,
-      // If the app dies without stopping the daemon, the daemon stops itself.
+      // INFO: If the app dies without stopping the daemon, the daemon stops itself.
       '--parent-pid', '$pid',
       ...extraArgs,
     ]);
     _owned = process;
-    // Nothing reads the daemon's log here, but an undrained pipe fills and
+    // WARNING: Nothing reads the daemon's log here, but an undrained pipe fills and
     // blocks it.
     process.stdout.drain<void>();
     final stderr = StringBuffer();
@@ -62,7 +62,7 @@ class DaemonLauncher {
     var exited = false;
     unawaited(process.exitCode.then((_) => exited = true));
 
-    // The endpoint file may be a stale one from a crashed daemon until the new
+    // INFO: The endpoint file may be a stale one from a crashed daemon until the new
     // one rewrites it, so keep trying until a connection actually works.
     final deadline = DateTime.now().add(startTimeout);
     while (DateTime.now().isBefore(deadline)) {
@@ -110,7 +110,7 @@ class DaemonLauncher {
     try {
       await client.call('daemon.shutdown').timeout(const Duration(seconds: 5));
     } catch (_) {
-      // The daemon drops its connections as it goes down; the reply can be lost.
+      // INFO: The daemon drops its connections as it goes down; the reply can be lost.
     }
     await client.close().catchError((_) {});
     return true;

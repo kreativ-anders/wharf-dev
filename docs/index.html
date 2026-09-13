@@ -310,8 +310,10 @@
           <p>HTTPS ends at the front door, so it works the same either way. A
           name no project has is turned away, never answered by the wrong
           project.</p>
+          <p>The front door answers your computer only: nobody else on the
+          network reaches your projects.</p>
         </div>
-        <pre class="code diagram" aria-label="Diagram: the browser reaches nginx on ports 80 and 443. nginx serves my-kirby-site and client-site directly and passes legacy-app to Apache on 127.0.0.1 port 8081."><span class="dim">browser</span>
+        <pre class="code diagram" role="img" aria-label="Diagram: the browser reaches nginx on ports 80 and 443. nginx serves my-kirby-site and client-site directly and passes legacy-app to Apache on 127.0.0.1 port 8081."><span class="dim">browser</span>
    │
    ▼
 nginx  :80  :443      <span class="dim">the front door</span>
@@ -372,7 +374,7 @@ nginx  :80  :443      <span class="dim">the front door</span>
           moment the two disagree.</p>
           <p><a href="https://github.com/kreativ-anders/wharf-dev/tree/main/features">Read all the scenarios</a></p>
         </div>
-<pre class="code gherkin" aria-label="Example scenario from pretty-urls.feature"><span class="dim"># features/pretty-urls.feature</span>
+<pre class="code gherkin"><span class="dim"># features/pretty-urls.feature</span>
 <b>Scenario:</b> Adding a project never asks for a password
   <b>When</b> the user adds or scaffolds a project
   <b>Then</b> the hosts file is not written

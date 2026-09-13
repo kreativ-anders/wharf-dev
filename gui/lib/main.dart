@@ -13,7 +13,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
 
-  // One window, no multi-window layouts (dev/design-principles.md §3). It is
+  // INFO: One window, no multi-window layouts (dev/design-principles.md §3). It is
   // narrow on purpose: the content is a list of names.
   await windowManager.waitUntilReadyToShow(
     const WindowOptions(
@@ -47,6 +47,11 @@ List<String> _daemonArgsFromEnv() {
 }
 
 class _WharfAppState extends State<WharfApp> with WindowListener {
+  // INFO: Built once. The app rebuilds on every snapshot, and a fresh
+  // ThemeData each time would be compared and resolved anew each time.
+  static final _lightTheme = wharfTheme(Brightness.light);
+  static final _darkTheme = wharfTheme(Brightness.dark);
+
   final _daemon = Daemon(daemonArgs: _daemonArgsFromEnv());
   final _navigator = GlobalKey<NavigatorState>();
   TrayController? _tray;
@@ -55,7 +60,7 @@ class _WharfAppState extends State<WharfApp> with WindowListener {
   void initState() {
     super.initState();
     windowManager.addListener(this);
-    // Closing the window leaves the tray running: this is a tray-resident app,
+    // INFO: Closing the window leaves the tray running: this is a tray-resident app,
     // and quitting is an explicit choice in the tray menu.
     windowManager.setPreventClose(true);
     _daemon.start();
@@ -114,7 +119,7 @@ class _WharfAppState extends State<WharfApp> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
-    // The theme follows the snapshot like everything else, so choosing Dark
+    // INFO: The theme follows the snapshot like everything else, so choosing Dark
     // in Settings switches the window at once (features/settings.feature).
     return ListenableBuilder(
       listenable: _daemon,
@@ -123,8 +128,8 @@ class _WharfAppState extends State<WharfApp> with WindowListener {
         themeMode: themeModeFor(_daemon.state.appearance),
         navigatorKey: _navigator,
         debugShowCheckedModeBanner: false,
-        theme: wharfTheme(Brightness.light),
-        darkTheme: wharfTheme(Brightness.dark),
+        theme: _lightTheme,
+        darkTheme: _darkTheme,
         home: ProjectsPage(daemon: _daemon, onCastOff: _castOff),
       ),
     );

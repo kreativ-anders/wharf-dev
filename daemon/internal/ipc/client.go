@@ -95,24 +95,6 @@ func DialFileWait(endpointPath string, timeout time.Duration) (*Client, error) {
 	}
 }
 
-// DialWait retries until the daemon's socket accepts a connection or the
-// timeout expires. The GUI uses the same pattern when it starts the daemon.
-func DialWait(path string, timeout time.Duration) (*Client, error) {
-	deadline := time.Now().Add(timeout)
-	var lastErr error
-	for {
-		c, err := Dial(path)
-		if err == nil {
-			return c, nil
-		}
-		lastErr = err
-		if time.Now().After(deadline) {
-			return nil, lastErr
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-}
-
 // Events yields pushed events. It is closed when the connection ends.
 func (c *Client) Events() <-chan Event { return c.events }
 
@@ -191,7 +173,7 @@ func (c *Client) readLoop() {
 		if f.Event != "" {
 			select {
 			case c.events <- Event{Event: f.Event, Data: f.Data}:
-			default: // A consumer that is not reading events gets the next one.
+			default: // INFO: A consumer that is not reading events gets the next one.
 			}
 			continue
 		}

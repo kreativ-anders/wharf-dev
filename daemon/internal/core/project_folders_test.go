@@ -33,18 +33,18 @@ func TestAddingAFolderFromAnywhere(t *testing.T) {
 		t.Fatalf("add folder: %v", err)
 	}
 
-	// Then a project "client-site" is registered
+	// INFO: Then a project "client-site" is registered
 	if p.Name != "client-site" {
 		t.Fatalf("name = %q, want client-site", p.Name)
 	}
-	// And its files stay where they are
+	// INFO: And its files stay where they are
 	if _, err := os.Stat(filepath.Join(dir, "index.php")); err != nil {
 		t.Fatalf("the folder's files moved: %v", err)
 	}
 	if _, err := os.Stat(h.root.ProjectDir("client-site")); !os.IsNotExist(err) {
 		t.Fatal("a folder was created in www/")
 	}
-	// And the project's config entry records the folder's location as "path"
+	// INFO: And the project's config entry records the folder's location as "path"
 	entry, _ := h.d.Config().Project("client-site")
 	if entry.Path != dir {
 		t.Fatalf("path = %q, want %q", entry.Path, dir)
@@ -52,7 +52,7 @@ func TestAddingAFolderFromAnywhere(t *testing.T) {
 	if !p.Linked || p.Dir != dir {
 		t.Fatalf("snapshot dir = %q linked = %v, want %q linked", p.Dir, p.Linked, dir)
 	}
-	// And its document root is that folder
+	// INFO: And its document root is that folder
 	if err := h.d.StartProject(h.ctx(), "client-site"); err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestAddingAFolderFromAnywhere(t *testing.T) {
 		t.Fatalf("document root is not the added folder:\n%s", block)
 	}
 
-	// And a folder named "Müller & Söhne" is registered as "mueller-soehne"
+	// INFO: And a folder named "Müller & Söhne" is registered as "mueller-soehne"
 	umlauts, err := h.d.AddFolder(h.ctx(), outsideFolder(t, "Code", "Müller & Söhne"))
 	if err != nil {
 		t.Fatalf("add folder: %v", err)
@@ -84,7 +84,7 @@ func TestChoosingAFolderInsideWWWRegistersItByName(t *testing.T) {
 	if p.Name != "my-kirby-site" || p.Linked {
 		t.Fatalf("got %q linked=%v, want my-kirby-site from www/", p.Name, p.Linked)
 	}
-	// And no "path" key is written
+	// INFO: And no "path" key is written
 	raw, err := os.ReadFile(h.root.ConfigFile())
 	if err != nil {
 		t.Fatal(err)
@@ -111,12 +111,12 @@ func TestAFolderWhoseNameIsAlreadyTaken(t *testing.T) {
 	if !strings.Contains(err.Error(), "client-site") {
 		t.Fatalf("the error does not name the project: %v", err)
 	}
-	// And nothing is registered
+	// INFO: And nothing is registered
 	if n := len(h.d.Config().Projects); n != 1 {
 		t.Fatalf("%d projects registered, want 1", n)
 	}
 
-	// A folder in www/ with the same name would share its hostname too.
+	// INFO: A folder in www/ with the same name would share its hostname too.
 	h.mkProject("taken")
 	if _, err := h.d.AddFolder(h.ctx(), outsideFolder(t, "three", "Taken")); !errors.As(err, &c) {
 		t.Fatalf("err = %v, want a conflict with www/taken", err)

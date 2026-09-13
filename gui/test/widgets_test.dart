@@ -145,7 +145,7 @@ void main() {
     await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
 
     expect(find.text('nginx 1.27.3 · PHP 8.4.3'), findsOneWidget);
-    // legacy-app carries the same versions but is stopped: nothing serves it.
+    // INFO: legacy-app carries the same versions but is stopped: nothing serves it.
     expect(find.textContaining('· PHP'), findsOneWidget);
   });
 
@@ -157,7 +157,7 @@ void main() {
     expect(find.text('http://my-kirby-site.localhost'), findsOneWidget);
     expect(find.byType(StatusDot), findsNWidgets(2));
 
-    // A running project offers Stop, Restart and an Open action; a stopped
+    // INFO: A running project offers Stop, Restart and an Open action; a stopped
     // one offers Start. Each offers its settings. Nothing else is on the row.
     expect(find.byIcon(Icons.stop), findsNWidgets(2), reason: 'the row, and Stop all');
     expect(find.byIcon(Icons.restart_alt), findsOneWidget);
@@ -174,7 +174,7 @@ void main() {
     final mark = find.descendant(of: find.byType(AppBar), matching: find.byType(Image));
     expect(mark, findsOneWidget);
     expect(tester.getCenter(mark).dx, lessThan(tester.getCenter(find.text('Wharf')).dx));
-    // It repeats the name, so a screen reader hears "Wharf" once.
+    // INFO: It repeats the name, so a screen reader hears "Wharf" once.
     expect(tester.widget<Image>(mark).excludeFromSemantics, isTrue);
     semantics.dispose();
   });
@@ -196,7 +196,7 @@ void main() {
       final project = withState(state);
       expect(project.actions, actions, reason: state);
 
-      // The tray lists every action, enabling exactly the ones the row shows.
+      // INFO: The tray lists every action, enabling exactly the ones the row shows.
       final enabled = projectMenuItems(project)
           .where((i) => i.key != null && !i.key!.startsWith('open:') && !i.disabled)
           .map((i) => i.label)
@@ -204,7 +204,7 @@ void main() {
       expect(enabled, actions.map((a) => a.label).toList(), reason: 'tray, $state');
     }
 
-    // The row shows them as labelled buttons: a failed project can be
+    // INFO: The row shows them as labelled buttons: a failed project can be
     // started again or restarted, and says why it failed.
     final daemon = fixture(_twoProjects.replaceFirst('"state": "stopped"', '"state": "failed"'));
     await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
@@ -223,7 +223,7 @@ void main() {
     await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
     double x(String tooltip) => tester.getCenter(find.byTooltip(tooltip)).dx;
 
-    // Open, Restart, Settings, then Stop, left to right.
+    // INFO: Open, Restart, Settings, then Stop, left to right.
     final running = [
       x('Open http://my-kirby-site.localhost'),
       x('Restart my-kirby-site'),
@@ -231,7 +231,7 @@ void main() {
       x('Stop my-kirby-site'),
     ];
     expect(running, orderedEquals(List.of(running)..sort()));
-    // A stopped project leaves Open and Restart empty, so its Settings and
+    // INFO: A stopped project leaves Open and Restart empty, so its Settings and
     // Start stand exactly under the running project's Settings and Stop.
     expect(x('Settings for legacy-app'), running[2]);
     expect(x('Start legacy-app'), running[3]);
@@ -243,7 +243,7 @@ void main() {
     expect(button('Start legacy-app').color, c.start);
     expect(button('Stop my-kirby-site').color, c.stop);
     expect(button('Restart my-kirby-site').color, c.restart);
-    // Neutral actions stay ink.
+    // INFO: Neutral actions stay ink.
     expect(button('Settings for my-kirby-site').color, isNull);
   });
 
@@ -286,7 +286,7 @@ void main() {
     expect(tester.getCenter(castOff).dy, closeTo(tester.getCenter(newProject).dy, 0.01));
     expect(tester.widget<FloatingActionButton>(castOff).backgroundColor, WharfColors.light.castOff);
 
-    // Staying moored leaves everything as it was.
+    // INFO: Staying moored leaves everything as it was.
     await tester.tap(castOff);
     await tester.pumpAndSettle();
     expect(find.text('Cast off?'), findsOneWidget);
@@ -295,7 +295,7 @@ void main() {
     expect(daemon.calls, isEmpty);
     expect(quit, 0);
 
-    // Confirmed: everything stops before the daemon and the app go.
+    // INFO: Confirmed: everything stops before the daemon and the app go.
     await tester.tap(castOff);
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Cast off'));
@@ -321,7 +321,7 @@ void main() {
     ]) {
       expect(find.text(label), findsOneWidget, reason: label);
     }
-    // One custom config per webserver, the one in use marked as such.
+    // INFO: One custom config per webserver, the one in use marked as such.
     expect(find.text('nginx · in use'), findsOneWidget);
     expect(find.text('apache'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Edit'), findsOneWidget);
@@ -392,7 +392,7 @@ void main() {
     await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
 
     expect(find.text('http://my-kirby-site.localhost'), findsOneWidget);
-    // legacy-app runs on Apache behind the nginx front door: still no port.
+    // INFO: legacy-app runs on Apache behind the nginx front door: still no port.
     expect(find.text('https://legacy-app.localhost'), findsOneWidget);
     expect(find.textContaining(':80'), findsNothing);
   });
@@ -411,7 +411,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.widgetWithText(TextField, 'Name'), findsOneWidget);
     expect(find.text('Kirby'), findsOneWidget);
-    // The active webserver is picked to begin with; there is no "Default".
+    // INFO: The active webserver is picked to begin with; there is no "Default".
     expect(find.text('nginx'), findsOneWidget);
     expect(find.textContaining('Default'), findsNothing);
 
@@ -424,7 +424,7 @@ void main() {
 
     await tester.enterText(find.widgetWithText(TextField, 'Name'), 'blog');
     await tester.pump();
-    // The address does not depend on the webserver picked.
+    // INFO: The address does not depend on the webserver picked.
     expect(find.text('http://blog.localhost'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Create'), findsOneWidget);
   });
@@ -440,7 +440,7 @@ void main() {
     final field = find.widgetWithText(TextField, 'Name');
     await tester.enterText(field, 'Müller & Söhne');
     await tester.pump();
-    // While typing, the field keeps what was typed; the address already
+    // INFO: While typing, the field keeps what was typed; the address already
     // shows the rewritten name.
     expect(find.text('Müller & Söhne'), findsOneWidget);
     expect(find.text('http://mueller-soehne.localhost'), findsOneWidget);
@@ -450,7 +450,7 @@ void main() {
     expect(find.text('Müller & Söhne'), findsNothing);
     expect(find.text('mueller-soehne'), findsOneWidget);
 
-    // A name with no letter or digit in it is refused, asking for at least one
+    // INFO: A name with no letter or digit in it is refused, asking for at least one
     await tester.enterText(field, '!!!');
     await tester.pump();
     expect(find.text('Use at least one letter or digit'), findsOneWidget);
@@ -468,15 +468,15 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.text('Reset Wharf?'), findsOneWidget);
-    // legacy-app lives in www/, and so does the unregistered folder: both go.
+    // INFO: legacy-app lives in www/, and so does the unregistered folder: both go.
     expect(find.text('•  legacy-app'), findsOneWidget);
     expect(find.text('•  dropped-in'), findsOneWidget);
-    // my-kirby-site was added from elsewhere: it stays where it is.
+    // INFO: my-kirby-site was added from elsewhere: it stays where it is.
     expect(find.textContaining('/Users/x/Code/my-kirby-site'), findsOneWidget);
-    // The whole config folder goes.
+    // INFO: The whole config folder goes.
     expect(find.textContaining('Everything in /Users/x/Wharf/config goes too'), findsOneWidget);
 
-    // And nothing is deleted unless the user confirms
+    // INFO: And nothing is deleted unless the user confirms
     await tester.tap(find.text('Cancel'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
@@ -500,7 +500,7 @@ void main() {
 
     expect(find.text('No projects yet'), findsOneWidget);
     expect(find.textContaining('/Users/x/Wharf/www/'), findsOneWidget);
-    // No drag-and-drop wording: it is a folder picker, and the folder can be
+    // INFO: No drag-and-drop wording: it is a folder picker, and the folder can be
     // anywhere.
     expect(find.textContaining('Drop'), findsNothing);
     expect(find.widgetWithText(OutlinedButton, 'Add folder…'), findsOneWidget);
@@ -540,7 +540,7 @@ void main() {
   testWidgets('settings pages are chosen from a navigation on the left', (tester) async {
     await showSettings(tester, fixture(_twoProjects));
 
-    // General holds the appearance, the config folder, the version and the reset.
+    // INFO: General holds the appearance, the config folder, the version and the reset.
     expect(find.text('Appearance'), findsOneWidget);
     expect(find.text('Open config folder'), findsOneWidget);
     expect(find.text('Version'), findsOneWidget);
@@ -548,14 +548,14 @@ void main() {
     final php = find.byKey(const ValueKey('nav:php'));
     expect(tester.getCenter(php).dx, lessThan(tester.getCenter(find.text('Appearance')).dx));
 
-    // Choosing a page shows that page alone.
+    // INFO: Choosing a page shows that page alone.
     await tester.tap(php);
     await tester.pump();
     expect(find.text('PHP 8.4.3'), findsOneWidget);
     expect(find.text('Appearance'), findsNothing);
     expect(find.text('Reset Wharf…'), findsNothing);
 
-    // The narrowest window Wharf allows keeps the icons, each still named,
+    // INFO: The narrowest window Wharf allows keeps the icons, each still named,
     // and nothing on the page is cut off.
     tester.view.physicalSize = const Size(420, 1600);
     await tester.pump();
@@ -574,7 +574,7 @@ void main() {
     expect(check.onPressed, isNull, reason: 'the update check is not built yet');
     expect(find.textContaining('only look when you ask'), findsOneWidget);
 
-    // A GUI no daemon has answered yet says so, rather than showing "Wharf ".
+    // INFO: A GUI no daemon has answered yet says so, rather than showing "Wharf ".
     await showSettings(tester, fixture('{}'));
     expect(find.text('Version unknown'), findsOneWidget);
   });
@@ -601,7 +601,7 @@ void main() {
     final opened = captureOpened();
     await showSettings(tester, fixture(_twoProjects), SettingsSection.php);
 
-    await tester.tap(find.byTooltip('Open folder').first);
+    await tester.tap(find.byTooltip('Open /opt/php84'));
 
     expect(opened, ['/opt/php84']);
   });
@@ -623,7 +623,7 @@ void main() {
       reason: 'the dialog names the folder it deletes',
     );
 
-    // Cancelling removes nothing.
+    // INFO: Cancelling removes nothing.
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(daemon.calls, isEmpty);
@@ -670,9 +670,9 @@ void main() {
   testWidgets('supported versions that are not installed can be downloaded', (tester) async {
     await showSettings(tester, fixture(_twoProjects), SettingsSection.php);
 
-    // Named by the release it fetches where that has been looked up…
+    // INFO: Named by the release it fetches where that has been looked up…
     expect(find.text('PHP 8.5.1'), findsOneWidget);
-    // …and by its minor version where it has not.
+    // INFO: …and by its minor version where it has not.
     expect(find.text('PHP 8.3'), findsOneWidget);
     expect(find.text('Downloading…'), findsOneWidget, reason: '8.3 is downloading');
     expect(
@@ -707,11 +707,11 @@ void main() {
 
     expect(find.text('Starts with the first project'), findsOneWidget);
     expect(find.text('stopped'), findsNothing);
-    // Name and version, not where the copy came from.
+    // INFO: Name and version, not where the copy came from.
     expect(find.text('nginx 1.27.3'), findsOneWidget);
     expect(find.textContaining('Homebrew'), findsNothing);
     expect(find.textContaining('on this machine'), findsNothing);
-    // The projects it serves are in its tooltip, not in the list.
+    // INFO: The projects it serves are in its tooltip, not in the list.
     expect(find.textContaining('my-kirby-site'), findsNothing);
     expect(find.byTooltip('Serves my-kirby-site'), findsOneWidget);
     expect(find.byTooltip('Serves no project'), findsOneWidget);
@@ -727,14 +727,14 @@ void main() {
       find.text('Not installed — expected at /Users/x/Wharf/bin/apache/httpd'),
       findsOneWidget,
     );
-    await tester.tap(find.byTooltip('Open the folder it belongs in'));
+    await tester.tap(find.byTooltip('Open the folder apache belongs in'));
     expect(opened, ['/Users/x/Wharf/bin/apache']);
   });
 
   testWidgets('a selected version that is not installed is called out', (tester) async {
     await showSettings(tester, fixture(_selectedNotInstalled), SettingsSection.php);
 
-    // The list renders, but nothing in it is selected — so say why.
+    // INFO: The list renders, but nothing in it is selected — so say why.
     expect(find.textContaining('PHP 8.5 is selected but is not installed'), findsOneWidget);
     expect(find.text('PHP 8.4.3'), findsOneWidget);
   });
@@ -754,7 +754,7 @@ void main() {
     final daemon = fixture(_twoProjects);
     await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
 
-    // Each row reads as one item that says its status in words.
+    // INFO: Each row reads as one item that says its status in words.
     expect(find.bySemanticsLabel(RegExp(r'Running[\s\S]*my-kirby-site')), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp(r'Stopped[\s\S]*legacy-app')), findsOneWidget);
     semantics.dispose();

@@ -38,7 +38,7 @@ func newMkcertWorld(t *testing.T, offline bool) *mkcertWorld {
 	if goruntime.GOOS == "windows" {
 		t.Skip("the stand-in mkcert is a shell script")
 	}
-	// mkcert is neither in bin/mkcert/ nor on the PATH — the script below
+	// INFO: mkcert is neither in bin/mkcert/ nor on the PATH — the script below
 	// uses absolute paths so it still runs.
 	t.Setenv("PATH", "")
 
@@ -77,7 +77,7 @@ exit 0
 		}
 		o.Certs = m
 	})
-	// An approved prompt runs the program, as the real adapters do.
+	// INFO: An approved prompt runs the program, as the real adapters do.
 	w.h.el.OnRun = func(program string, args, env []string) error {
 		cmd := exec.Command(program, args...)
 		cmd.Env = env
@@ -104,14 +104,14 @@ func TestEnablingSSLWhenMkcertIsNotInstalled(t *testing.T) {
 		t.Fatalf("enable ssl: %v", err)
 	}
 
-	// Then mkcert is downloaded into "bin/mkcert/" and its checksum verified
+	// INFO: Then mkcert is downloaded into "bin/mkcert/" and its checksum verified
 	if w.served != 1 {
 		t.Fatalf("mkcert downloaded %d times, want 1", w.served)
 	}
 	if _, err := os.Stat(filepath.Join(h.root.MkcertBin(), "mkcert")); err != nil {
 		t.Fatalf("mkcert not in bin/mkcert/: %v", err)
 	}
-	// And a certificate for "my-kirby-site.localhost" is issued
+	// INFO: And a certificate for "my-kirby-site.localhost" is issued
 	if _, err := os.Stat(runtime.CertPath(h.root, "my-kirby-site")); err != nil {
 		t.Fatalf("no certificate issued: %v", err)
 	}
@@ -147,24 +147,24 @@ func TestTrustingTheLocalCertificateAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Then an elevation prompt asks to trust the local certificate authority
+	// INFO: Then an elevation prompt asks to trust the local certificate authority
 	if h.el.RunCount() != 1 {
 		t.Fatalf("%d elevated runs, want 1", h.el.RunCount())
 	}
 	if run := h.el.Runs[0]; !slices.Contains(run, "-install") {
 		t.Fatalf("elevated run = %v, want mkcert -install", run)
 	}
-	// The authority itself was created unprivileged, so it belongs to the user.
+	// INFO: The authority itself was created unprivileged, so it belongs to the user.
 	owner, _ := os.ReadFile(filepath.Join(w.caRoot, "rootCA.pem"))
 	if strings.TrimSpace(string(owner)) != "owner=nss" {
 		t.Fatalf("authority created by %q, want the unprivileged nss-only run", owner)
 	}
-	// And, once approved, browsers accept the project's certificate
+	// INFO: And, once approved, browsers accept the project's certificate
 	if !h.d.State().SSL.Trusted {
 		t.Fatal("authority not reported as trusted")
 	}
 
-	// Once trusted, no project asks again.
+	// INFO: Once trusted, no project asks again.
 	if _, err := enableSSL(h, "other-site"); err != nil {
 		t.Fatal(err)
 	}
@@ -182,19 +182,19 @@ func TestTrustIsDeclined(t *testing.T) {
 
 	updated, err := enableSSL(h, "my-kirby-site")
 
-	// Then SSL is still enabled for "my-kirby-site"
+	// INFO: Then SSL is still enabled for "my-kirby-site"
 	if err != nil {
 		t.Fatalf("a declined trust prompt failed the change: %v", err)
 	}
 	if !updated.SSL || !strings.HasPrefix(updated.URL, "https://") {
 		t.Fatalf("ssl = %v url = %q, want SSL on", updated.SSL, updated.URL)
 	}
-	// And the GUI says browsers will warn until the authority is trusted
+	// INFO: And the GUI says browsers will warn until the authority is trusted
 	st := h.d.State().SSL
 	if !st.Installed || st.Trusted {
 		t.Fatalf("ssl status = %+v, want installed but not trusted", st)
 	}
-	// And Settings offers to ask again
+	// INFO: And Settings offers to ask again
 	h.el.Decline = false
 	if err := h.d.SetupSSL(h.ctx()); err != nil {
 		t.Fatalf("asking again: %v", err)
@@ -212,11 +212,11 @@ func TestMkcertCannotBeDownloaded(t *testing.T) {
 
 	_, err := enableSSL(h, "my-kirby-site")
 
-	// Then SSL stays off for "my-kirby-site"
+	// INFO: Then SSL stays off for "my-kirby-site"
 	if h.project("my-kirby-site").SSL {
 		t.Fatal("SSL turned on without mkcert")
 	}
-	// And the GUI reports that mkcert could not be fetched
+	// INFO: And the GUI reports that mkcert could not be fetched
 	if !errors.Is(err, certs.ErrFetch) {
 		t.Fatalf("err = %v, want ErrFetch", err)
 	}
@@ -245,14 +245,14 @@ func TestHTTPSForAProjectOnTheOtherWebserverEndsAtTheFrontDoor(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Then the global nginx serves "legacy-app.localhost" on port 443 with its
+	// INFO: Then the global nginx serves "legacy-app.localhost" on port 443 with its
 	// certificate
 	front := h.readGenerated("nginx.conf")
 	cert := filepath.ToSlash(runtime.CertPath(h.root, "legacy-app"))
 	if !strings.Contains(front, "listen 443 ssl;") || !strings.Contains(front, cert) {
 		t.Fatalf("nginx does not terminate HTTPS for legacy-app:\n%s", front)
 	}
-	// And forwards each request to "legacy-app"'s own apache, which tells PHP
+	// INFO: And forwards each request to "legacy-app"'s own apache, which tells PHP
 	// it was HTTPS on port 443
 	if !strings.Contains(front, "proxy_set_header X-Forwarded-Proto $scheme;") {
 		t.Fatalf("nginx does not forward the scheme:\n%s", front)
@@ -264,7 +264,7 @@ func TestHTTPSForAProjectOnTheOtherWebserverEndsAtTheFrontDoor(t *testing.T) {
 	if !strings.Contains(own, `ProxyFCGISetEnvIf "%{HTTP:X-Forwarded-Proto} == 'https'" HTTPS "on"`) {
 		t.Fatalf("PHP is not told the request was HTTPS:\n%s", own)
 	}
-	// And its URL is "https://legacy-app.localhost"
+	// INFO: And its URL is "https://legacy-app.localhost"
 	if updated.URL != "https://legacy-app.localhost" {
 		t.Fatalf("URL = %q, want https://legacy-app.localhost", updated.URL)
 	}

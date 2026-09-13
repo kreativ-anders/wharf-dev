@@ -180,7 +180,7 @@ func (d *Downloader) brewInstall(ctx context.Context, formula string) error {
 
 func runQuiet(ctx context.Context, program string, args ...string) error {
 	cmd := exec.CommandContext(ctx, program, args...)
-	// Homebrew's hints are for a terminal nobody is looking at.
+	// INFO: Homebrew's hints are for a terminal nobody is looking at.
 	cmd.Env = append(os.Environ(), "HOMEBREW_NO_ENV_HINTS=1", "HOMEBREW_NO_INSTALL_CLEANUP=1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -272,7 +272,7 @@ func (d *Downloader) downloadApache(ctx context.Context, dest string) error {
 	if err := download.Unzip(archive, unpacked); err != nil {
 		return err
 	}
-	// The archive wraps everything in Apache24/; its bin/ and modules/ become
+	// INFO: The archive wraps everything in Apache24/; its bin/ and modules/ become
 	// bin/apache/bin and bin/apache/modules.
 	root := filepath.Join(unpacked, "Apache24")
 	entries, err := os.ReadDir(root)

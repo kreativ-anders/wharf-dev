@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -38,7 +39,7 @@ func get(ctx context.Context, client *http.Client, url string) (*http.Response, 
 	if err != nil {
 		return nil, err
 	}
-	// Some download sites turn away Go's default agent as a bot.
+	// INFO: Some download sites turn away Go's default agent as a bot.
 	req.Header.Set("User-Agent", "Wharf (+https://github.com/kreativ-anders/wharf-dev)")
 	resp, err := client.Do(req)
 	if err != nil {
@@ -125,7 +126,12 @@ func UntarGz(archive, destDir string, keep ...string) error {
 			continue
 		}
 		name := filepath.Base(hdr.Name)
-		if len(keep) > 0 && !contains(keep, name) {
+		// WARNING: An entry named "x/.." flattens to "..", which would write
+		// beside destDir rather than into it.
+		if name == "." || name == ".." || name == string(filepath.Separator) {
+			continue
+		}
+		if len(keep) > 0 && !slices.Contains(keep, name) {
 			continue
 		}
 		if err := writeFile(filepath.Join(destDir, name), tr, os.FileMode(hdr.Mode).Perm()|0o600); err != nil {
@@ -185,13 +191,4 @@ func writeFile(path string, r io.Reader, mode os.FileMode) error {
 		return err
 	}
 	return out.Close()
-}
-
-func contains(hay []string, needle string) bool {
-	for _, s := range hay {
-		if s == needle {
-			return true
-		}
-	}
-	return false
 }

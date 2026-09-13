@@ -268,7 +268,7 @@ func (d *Daemon) projectState(cfg *config.Config, p config.Project) Project {
 		})
 	}
 
-	// The front door serves every project on ports 80 and 443, forwarding
+	// INFO: The front door serves every project on ports 80 and 443, forwarding
 	// those on the other webserver, so no URL carries a port.
 	out.URL = scheme + "://" + host
 
@@ -342,7 +342,7 @@ func downloadable(installs []php.Install, now time.Time, latest map[string]strin
 // it: its own instance when it overrides the webserver, the global one
 // otherwise.
 func (d *Daemon) projectStatus(cfg *config.Config, p config.Project) (supervisor.State, string) {
-	// A project nobody started is stopped, whatever the shared webserver does
+	// INFO: A project nobody started is stopped, whatever the shared webserver does
 	// for the others (tray-actions.feature).
 	if !d.isStarted(p.Name) {
 		if msg, ok := d.startFailure(p.Name); ok {
@@ -359,7 +359,7 @@ func (d *Daemon) projectStatus(cfg *config.Config, p config.Project) (supervisor
 	if !ok {
 		return supervisor.StateStopped, ""
 	}
-	// An own instance is reachable only through the front door: while that is
+	// INFO: An own instance is reachable only through the front door: while that is
 	// down, the project is not being served, whatever its instance does.
 	if own && s.State == supervisor.StateRunning && !d.sup.Running(runtimeWebserverID) {
 		if front, ok := d.sup.Status(runtimeWebserverID); ok && front.State == supervisor.StateFailed {

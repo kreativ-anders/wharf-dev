@@ -34,7 +34,7 @@ class ProjectsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Desktop conventions: ⌘, opens settings, ⌘O adds a folder, ⌘N starts a
+    // INFO: Desktop conventions: ⌘, opens settings, ⌘O adds a folder, ⌘N starts a
     // new project — so the keyboard reaches everything the pointer does.
     return CallbackShortcuts(
       bindings: {
@@ -51,7 +51,7 @@ class ProjectsPage extends StatelessWidget {
     final stop = WharfColors.of(context).stop;
     return Scaffold(
       appBar: AppBar(
-        // The mark on its dark tile — the image the Windows and Linux tray
+        // INFO: The mark on its dark tile — the image the Windows and Linux tray
         // shows — beside the name. It says nothing the name does not, so a
         // screen reader skips it.
         title: Row(
@@ -69,7 +69,7 @@ class ProjectsPage extends StatelessWidget {
           ],
         ),
         actions: [
-          // A button, not a word in the bar: it stops everything
+          // INFO: A button, not a word in the bar: it stops everything
           // (features/tray-actions.feature, "Stopping all from the main
           // window").
           if (state.anyRunning)
@@ -90,7 +90,7 @@ class ProjectsPage extends StatelessWidget {
           IconButton(
             tooltip: 'Open www folder',
             icon: const Icon(Icons.folder_open, size: 20),
-            onPressed: state.www.isEmpty ? null : () => daemon.open(openFolder,state.www),
+            onPressed: state.www.isEmpty ? null : () => daemon.open(openFolder, state.www),
           ),
           IconButton(
             tooltip: 'Add folder…',
@@ -113,7 +113,7 @@ class ProjectsPage extends StatelessWidget {
           Expanded(child: _body(context, state)),
         ],
       ),
-      // Leaving stands opposite arriving: Cast off bottom left, New project
+      // INFO: Leaving stands opposite arriving: Cast off bottom left, New project
       // bottom right (features/single-application.feature, "Casting off from
       // the main window"). The row between them lets taps through to the list.
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
@@ -123,7 +123,7 @@ class ProjectsPage extends StatelessWidget {
           children: [
             if (onCastOff != null)
               FloatingActionButton.extended(
-                // Two buttons on one page need distinct hero tags.
+                // WARNING: Two buttons on one page need distinct hero tags.
                 heroTag: null,
                 tooltip: 'Stop everything and quit Wharf',
                 backgroundColor: WharfColors.of(context).castOff,
@@ -221,7 +221,7 @@ class _ProjectRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         child: Row(
           children: [
-            // Name, status and URL read as one item: "my-kirby-site,
+            // INFO: Name, status and URL read as one item: "my-kirby-site,
             // Running, http://…" rather than three stops for a screen reader.
             Expanded(
               child: MergeSemantics(
@@ -249,7 +249,7 @@ class _ProjectRow extends StatelessWidget {
                               ),
                             ],
                           ),
-                          // Only a running project has something serving it
+                          // INFO: Only a running project has something serving it
                           // (features/app-configuration.feature).
                           if (project.isRunning) ...[
                             const SizedBox(height: 2),
@@ -306,8 +306,17 @@ class _Actions extends StatelessWidget {
 
     final Widget? toggle;
     if (project.isBusy) {
-      toggle = const Center(
-        child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+      toggle = Center(
+        child: SizedBox(
+          width: 16,
+          height: 16,
+          // INFO: Named, or a screen reader meets a bare progress indicator
+          // where the Start or Stop button was.
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            semanticsLabel: '${statusLabel(project.state)} ${project.name}',
+          ),
+        ),
       );
     } else if (offers.contains(ProjectAction.stop)) {
       toggle = action(ProjectAction.stop, Icons.stop, c.stop);
@@ -334,7 +343,7 @@ class _Actions extends StatelessWidget {
               ? action(ProjectAction.restart, Icons.restart_alt, c.restart)
               : null,
         ),
-        // The row itself opens the settings too, but nothing about a row
+        // INFO: The row itself opens the settings too, but nothing about a row
         // says so; this does (features/app-configuration.feature).
         _place(
           IconButton(
@@ -376,7 +385,11 @@ class _Unregistered extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(child: Text(name)),
-                TextButton(onPressed: () => daemon.addProject(name), child: const Text('Add')),
+                // INFO: "Add" alone does not tell a screen reader what it adds.
+                Tooltip(
+                  message: 'Add $name as a project',
+                  child: TextButton(onPressed: () => daemon.addProject(name), child: const Text('Add')),
+                ),
               ],
             ),
           ),
@@ -419,7 +432,7 @@ class _Empty extends StatelessWidget {
                   label: const Text('Add folder…'),
                 ),
                 TextButton.icon(
-                  onPressed: www.isEmpty ? null : () => daemon.open(openFolder,www),
+                  onPressed: www.isEmpty ? null : () => daemon.open(openFolder, www),
                   icon: const Icon(Icons.folder_open, size: 18),
                   label: const Text('Open www folder'),
                 ),
@@ -438,7 +451,7 @@ class _Notice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // A live region, so a screen reader announces what went wrong without
+    // INFO: A live region, so a screen reader announces what went wrong without
     // the user having to find it.
     return Semantics(
       liveRegion: true,
@@ -467,13 +480,17 @@ class _Disconnected extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: Theme.of(context).colorScheme.errorContainer,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-      child: Text(
-        'Wharf is starting…',
-        style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer, fontSize: 12),
+    // INFO: A live region, like a notice: a lost connection is news.
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        width: double.infinity,
+        color: Theme.of(context).colorScheme.errorContainer,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+        child: Text(
+          'Wharf is starting…',
+          style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer, fontSize: 12),
+        ),
       ),
     );
   }
@@ -516,7 +533,7 @@ class _NewProjectDialogState extends State<_NewProjectDialog> {
     super.dispose();
   }
 
-  // The field becomes the project name once the user is done with it, never
+  // INFO: The field becomes the project name once the user is done with it, never
   // under the cursor while they type (features/quick-app-php.feature, "A
   // typed name becomes a project name").
   void _rewriteOnLeave() {
@@ -525,7 +542,7 @@ class _NewProjectDialogState extends State<_NewProjectDialog> {
 
   void _rewrite() {
     final name = projectName(_controller.text);
-    // Input with nothing usable stays as typed, next to the error explaining it.
+    // INFO: Input with nothing usable stays as typed, next to the error explaining it.
     if (name.isEmpty || name == _controller.text) return;
     _controller.value = TextEditingValue(
       text: name,
@@ -537,7 +554,7 @@ class _NewProjectDialogState extends State<_NewProjectDialog> {
     final name = projectName(_controller.text);
     if (name.isEmpty) return;
     _rewrite();
-    // The active webserver is what every project gets anyway; only the other
+    // INFO: The active webserver is what every project gets anyway; only the other
     // one is an override.
     final pinned = _webserver == widget.activeWebserver ? '' : _webserver;
     Navigator.pop(context, _NewProject(_template, name, pinned));
@@ -588,7 +605,7 @@ class _NewProjectDialogState extends State<_NewProjectDialog> {
               onChanged: (v) => setState(() => _webserver = v ?? _webserver),
             ),
             const SizedBox(height: 16),
-            // The URL is the same whichever webserver is picked: the front
+            // INFO: The URL is the same whichever webserver is picked: the front
             // door forwards, so it never needs a port.
             Text(
               name.isEmpty ? 'Its address will be http://<name>.localhost' : 'http://$name.localhost',

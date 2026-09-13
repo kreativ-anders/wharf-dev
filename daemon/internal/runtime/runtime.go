@@ -191,7 +191,7 @@ func (r *Resolver) PHPSpec(cfg *config.Config, version string) (supervisor.Spec,
 		Port:    port,
 		Dir:     r.Root.Dir,
 		LogPath: filepath.Join(r.Root.LogDir(), fmt.Sprintf("php-%s.log", version)),
-		// PHP reads the user's config/php.ini after its own php.ini, so its
+		// WARNING: PHP reads the user's config/php.ini after its own php.ini, so its
 		// values win (php-settings.feature). The empty first entry keeps the
 		// scan directory PHP was built with: a Homebrew PHP loads its
 		// extensions from there.
@@ -204,7 +204,7 @@ func (r *Resolver) PHPSpec(cfg *config.Config, version string) (supervisor.Spec,
 	// xdebug.start_with_request=trigger. Needs an Xdebug build matching each
 	// PHP build Wharf runs, adopted or downloaded.
 	if runtime.GOOS == "windows" {
-		// php-cgi has no config file of its own; it is told where to listen,
+		// INFO: php-cgi has no config file of its own; it is told where to listen,
 		// and where its extension DLLs are — relative to the binary, which
 		// php.ini cannot express.
 		spec.Args = []string{
@@ -289,7 +289,7 @@ func (r *Resolver) ProjectSpec(cfg *config.Config, p config.Project) (supervisor
 		Args:  webserverArgs(name, confPath, r.Root),
 		Dir:   r.Root.Dir,
 		Port:  p.Port,
-		// Its own instance's output — startup errors above all — belongs with
+		// INFO: Its own instance's output — startup errors above all — belongs with
 		// the project's other logs (project-logs.feature).
 		LogPath: filepath.Join(r.Root.ProjectLogDir(p.Name), name+".log"),
 	}, nil
@@ -301,7 +301,7 @@ func (r *Resolver) ProjectSpec(cfg *config.Config, p config.Project) (supervisor
 func webserverArgs(name, confPath string, root layout.Root) []string {
 	switch name {
 	case "nginx":
-		// -e sends startup errors to stderr — the service log — instead of
+		// INFO: -e sends startup errors to stderr — the service log — instead of
 		// the log path compiled into the binary, which may not exist.
 		return []string{"-c", confPath, "-p", root.Dir, "-e", "stderr", "-g", "daemon off;"}
 	case "apache":

@@ -137,7 +137,7 @@ func parseFeatureFile(path, name string) ([]Scenario, error) {
 			continue
 		}
 		if trimmed != "" && !strings.HasPrefix(trimmed, "#") {
-			// Any other content ends a tag block that was not consumed.
+			// INFO: Any other content ends a tag block that was not consumed.
 			if !strings.HasPrefix(trimmed, "|") && !strings.HasPrefix(trimmed, "\"\"\"") {
 				pending = nil
 			}
@@ -210,11 +210,11 @@ func parseClaimsInFile(path string) ([]Claim, error) {
 		lineNo++
 		line := scanner.Text()
 
-		// Continuing a wrapped claim title.
+		// INFO: Continuing a wrapped claim title.
 		if openClaim != nil {
 			m := commentRe.FindStringSubmatch(line)
 			if m == nil {
-				openClaim, openTitle = nil, "" // an unterminated claim is not a claim
+				openClaim, openTitle = nil, "" // INFO: an unterminated claim is not a claim
 				continue
 			}
 			rest := m[1]
@@ -247,7 +247,7 @@ func parseClaimsInFile(path string) ([]Claim, error) {
 			continue
 		}
 		if strings.TrimSpace(line) == "" {
-			// A blank line separates a comment block from what follows, so a
+			// INFO: A blank line separates a comment block from what follows, so a
 			// claim must sit directly above its test.
 			pending = nil
 		}

@@ -25,14 +25,14 @@ func TestAProjectsOwnInstanceNeverTakesAPortAnotherProgramHolds(t *testing.T) {
 		return p.Port
 	}
 	recorded := port("legacy-app")
-	// And another program listens on the loopback port recorded for it
+	// INFO: And another program listens on the loopback port recorded for it
 	h.ports.Bind(recorded)
 
 	if err := h.d.StartProject(h.ctx(), "legacy-app"); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 
-	// Then its own instance listens on the next free port instead, and the
+	// INFO: Then its own instance listens on the next free port instead, and the
 	// config records it
 	moved := port("legacy-app")
 	if moved == 0 || moved == recorded {
@@ -42,13 +42,13 @@ func TestAProjectsOwnInstanceNeverTakesAPortAnotherProgramHolds(t *testing.T) {
 	if spec, _ := h.runner.LastSpec(own); spec.Port != moved || !h.sup.Running(own) {
 		t.Fatalf("own instance on port %d (running=%v), want %d", spec.Port, h.sup.Running(own), moved)
 	}
-	// And the global instance forwards "legacy-app.localhost" to that port
+	// INFO: And the global instance forwards "legacy-app.localhost" to that port
 	conf := h.readGenerated("nginx.conf")
 	if !strings.Contains(conf, "127.0.0.1:"+strconv.Itoa(moved)) || strings.Contains(conf, "127.0.0.1:"+strconv.Itoa(recorded)) {
 		t.Fatalf("the front door does not forward to port %d:\n%s", moved, conf)
 	}
 
-	// And a project added while a port is taken is not given that port
+	// INFO: And a project added while a port is taken is not given that port
 	h.mustAdd("new-site")
 	if got := port("new-site"); got == recorded || got == moved {
 		t.Fatalf("new-site was given port %d, which is already held", got)
@@ -71,7 +71,7 @@ func TestSwitchingTheActiveWebserver(t *testing.T) {
 		t.Fatalf("switch webserver: %v", err)
 	}
 
-	// Then the daemon stops the running "nginx" process
+	// INFO: Then the daemon stops the running "nginx" process
 	select {
 	case <-time.After(2 * time.Second):
 		t.Fatal("nginx was not stopped")
@@ -81,7 +81,7 @@ func TestSwitchingTheActiveWebserver(t *testing.T) {
 		t.Fatal("nginx did not receive a stop signal")
 	}
 
-	// And the daemon starts the "apache" process
+	// INFO: And the daemon starts the "apache" process
 	st := h.d.State()
 	if st.Services.Webserver.State != string(supervisor.StateRunning) {
 		t.Fatalf("webserver state = %q, want running", st.Services.Webserver.State)
@@ -95,7 +95,7 @@ func TestSwitchingTheActiveWebserver(t *testing.T) {
 		t.Fatalf("apache started on port %d, want %d", last.Port, runtime.HTTPPort)
 	}
 
-	// And the config file's "services.webserver.active" value is updated
+	// INFO: And the config file's "services.webserver.active" value is updated
 	if got := h.d.Config().Services.Webserver.Active; got != "apache" {
 		t.Fatalf("config active webserver = %q, want apache", got)
 	}
@@ -116,14 +116,14 @@ func TestPortConflictOnSwitchWaitsForRelease(t *testing.T) {
 		t.Fatalf("start project: %v", err)
 	}
 
-	// Given "nginx" is bound to port 80 and does not release it on exit.
+	// INFO: Given "nginx" is bound to port 80 and does not release it on exit.
 	nginx := h.runner.Handle(runtime.WebserverID)
 	nginx.HoldPort = true
 
 	done := make(chan error, 1)
 	go func() { done <- h.d.SetWebserver(h.ctx(), "apache") }()
 
-	// Then the GUI shows a "switching webserver" status until the new process
+	// INFO: Then the GUI shows a "switching webserver" status until the new process
 	// is confirmed running.
 	if err := waitFor(func() bool { return h.d.State().Services.Webserver.Switching }); err != nil {
 		t.Fatal("webserver never entered the switching state")
@@ -138,7 +138,7 @@ func TestPortConflictOnSwitchWaitsForRelease(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 	}
 
-	// And the daemon waits for the port to be released before starting apache.
+	// INFO: And the daemon waits for the port to be released before starting apache.
 	nginx.ReleasePort()
 
 	if err := <-done; err != nil {
@@ -171,7 +171,7 @@ func TestPerProjectOverrideTakesPrecedence(t *testing.T) {
 	}
 	port := strconv.Itoa(legacy.Port)
 
-	// Then "legacy-app" is served by its own "apache" instance, listening
+	// INFO: Then "legacy-app" is served by its own "apache" instance, listening
 	// only on loopback
 	spec := findSpec(h, runtime.ProjectServiceID("legacy-app"))
 	if spec == nil || !strings.Contains(spec.Path, "httpd") {
@@ -182,19 +182,19 @@ func TestPerProjectOverrideTakesPrecedence(t *testing.T) {
 		t.Fatalf("legacy-app's apache does not listen on loopback only:\n%s", own)
 	}
 
-	// And the global "nginx" instance forwards "legacy-app.localhost" to it
+	// INFO: And the global "nginx" instance forwards "legacy-app.localhost" to it
 	front := h.readGenerated("nginx.conf")
 	if !strings.Contains(vhostBlock(t, front, "legacy-app.localhost"), "proxy_pass http://127.0.0.1:"+port+";") {
 		t.Fatalf("nginx does not forward legacy-app to its instance:\n%s", front)
 	}
 
-	// And "legacy-app" is reachable at "http://legacy-app.localhost", without
+	// INFO: And "legacy-app" is reachable at "http://legacy-app.localhost", without
 	// a port
 	if got := h.project("legacy-app"); got.URL != "http://legacy-app.localhost" || got.State != string(supervisor.StateRunning) {
 		t.Fatalf("legacy-app = %q %q, want running at http://legacy-app.localhost", got.State, got.URL)
 	}
 
-	// And PHP in "legacy-app" sees port 80, so Kirby builds its links without
+	// INFO: And PHP in "legacy-app" sees port 80, so Kirby builds its links without
 	// a port: the front door sends the port the browser used, and the
 	// instance hands that to PHP.
 	if !strings.Contains(front, "proxy_set_header X-Forwarded-Port $server_port;") ||
@@ -202,7 +202,7 @@ func TestPerProjectOverrideTakesPrecedence(t *testing.T) {
 		t.Fatalf("the browser's port does not reach PHP:\n%s\n%s", front, own)
 	}
 
-	// The global instance still serves everybody else itself.
+	// INFO: The global instance still serves everybody else itself.
 	global := findSpec(h, runtime.WebserverID)
 	if global == nil || global.Label != "nginx" || !h.sup.Running(runtime.WebserverID) {
 		t.Fatalf("global webserver = %+v, want nginx running", global)
@@ -225,14 +225,14 @@ func TestChoosingTheActiveWebserverForAProjectStartsNoSecondInstance(t *testing.
 		t.Fatal(err)
 	}
 
-	// Then "my-kirby-site" is served by the global "nginx" instance
+	// INFO: Then "my-kirby-site" is served by the global "nginx" instance
 	if !h.sup.Running(runtime.WebserverID) {
 		t.Fatal("the global nginx is not running")
 	}
 	if !strings.Contains(vhostBlock(t, h.readGenerated("nginx.conf"), "my-kirby-site.localhost"), "fastcgi_pass") {
 		t.Fatal("the global nginx does not serve the project")
 	}
-	// And no second webserver process is started for it
+	// INFO: And no second webserver process is started for it
 	if spec := findSpec(h, runtime.ProjectServiceID("my-kirby-site")); spec != nil {
 		t.Fatalf("a second instance was started: %+v", spec)
 	}
@@ -255,7 +255,7 @@ func TestTheFrontDoorAnswersOnPort80WithoutProjectsOfItsOwn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Then the global webserver starts on port 80 and forwards to it
+	// INFO: Then the global webserver starts on port 80 and forwards to it
 	front := findSpec(h, runtime.WebserverID)
 	if front == nil || front.Port != runtime.HTTPPort || !h.sup.Running(runtime.WebserverID) {
 		t.Fatalf("front door = %+v, want running on port 80", front)
@@ -264,13 +264,13 @@ func TestTheFrontDoorAnswersOnPort80WithoutProjectsOfItsOwn(t *testing.T) {
 	if !strings.Contains(vhostBlock(t, conf, "legacy-app.localhost"), "proxy_pass") {
 		t.Fatalf("the front door does not forward legacy-app:\n%s", conf)
 	}
-	// And a request for a name no project has is refused, not answered by
+	// INFO: And a request for a name no project has is refused, not answered by
 	// another project
 	if !strings.Contains(conf, "listen 80 default_server;") || !strings.Contains(conf, "return 404;") {
 		t.Fatalf("no default server refuses unknown names:\n%s", conf)
 	}
 
-	// The project is only as reachable as its front door.
+	// INFO: The project is only as reachable as its front door.
 	if got := h.project("legacy-app").State; got != string(supervisor.StateRunning) {
 		t.Fatalf("legacy-app = %q, want running", got)
 	}
@@ -279,6 +279,47 @@ func TestTheFrontDoorAnswersOnPort80WithoutProjectsOfItsOwn(t *testing.T) {
 	}
 	if got := h.project("legacy-app").State; got == string(supervisor.StateRunning) {
 		t.Fatal("legacy-app is shown running while its front door is down")
+	}
+}
+
+// features/service-management.feature — "The front door answers this machine
+// only". That nginx and Apache then refuse another address was checked
+// against the real binaries; this pins the rule that makes them.
+func TestTheFrontDoorAnswersThisMachineOnly(t *testing.T) {
+	h := newHarness(t)
+	h.mustAdd("my-kirby-site")
+	h.mustAdd("legacy-app")
+	apache := "apache"
+	if _, err := h.d.UpdateSettings(h.ctx(), "legacy-app", Settings{Webserver: &apache}); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"my-kirby-site", "legacy-app"} {
+		if err := h.d.StartProject(h.ctx(), name); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// INFO: Then the front door refuses it — before any server block, so every
+	// project the front door serves or forwards inherits the rule. And a
+	// request from this machine is served as before.
+	front := h.readGenerated("nginx.conf")
+	rule := strings.Index(front, "allow 127.0.0.0/8;\n  allow ::1;\n  deny all;")
+	if rule < 0 || rule > strings.Index(front, "server {") {
+		t.Fatalf("the front door does not refuse other machines ahead of every server:\n%s", front)
+	}
+
+	// INFO: And a project behind the front door is reached through it alone
+	if own := h.readGenerated("project-legacy-app-apache.conf"); strings.Contains(own, "Listen 80") {
+		t.Fatalf("legacy-app's own instance listens beyond loopback:\n%s", own)
+	}
+
+	// INFO: The same holds with Apache at the front door.
+	if err := h.d.SetWebserver(h.ctx(), "apache"); err != nil {
+		t.Fatal(err)
+	}
+	if conf := h.readGenerated("apache.conf"); !strings.Contains(conf,
+		`<If "! -R '127.0.0.0/8' && ! -R '::1/128'">`+"\n  Require all denied\n</If>") {
+		t.Fatalf("Apache at the front door does not refuse other machines:\n%s", conf)
 	}
 }
 

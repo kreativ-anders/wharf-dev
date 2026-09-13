@@ -32,31 +32,31 @@ func TestStatusAtTracksTheSupportTimeline(t *testing.T) {
 }
 
 func TestRecommendedIsTheNewestActivelySupportedRelease(t *testing.T) {
-	// Between 8.4's release and 8.5's, 8.4 is the newest in active support.
+	// INFO: Between 8.4's release and 8.5's, 8.4 is the newest in active support.
 	if got := Recommended(at("2025-06-01")); got != "8.4" {
 		t.Errorf("Recommended(2025-06-01) = %s, want 8.4", got)
 	}
-	// Once 8.5 is out, it takes over.
+	// INFO: Once 8.5 is out, it takes over.
 	if got := Recommended(at("2026-03-01")); got != "8.5" {
 		t.Errorf("Recommended(2026-03-01) = %s, want 8.5", got)
 	}
-	// An unreleased version is never recommended, however new the table is.
+	// INFO: An unreleased version is never recommended, however new the table is.
 	if got := Recommended(at("2024-01-01")); got != "8.3" {
 		t.Errorf("Recommended(2024-01-01) = %s, want 8.3", got)
 	}
 }
 
 func TestPreferredChoosesFromWhatIsInstalled(t *testing.T) {
-	now := at("2026-03-01") // 8.4 and 8.5 active; 8.2 and 8.3 security; 8.1 EOL
+	now := at("2026-03-01") // INFO: 8.4 and 8.5 active; 8.2 and 8.3 security; 8.1 EOL
 
 	if got := Preferred([]string{"8.1", "8.3", "8.4"}, now); got != "8.4" {
 		t.Errorf("Preferred = %s, want the actively supported 8.4", got)
 	}
-	// With nothing active installed, the newest still getting security fixes.
+	// INFO: With nothing active installed, the newest still getting security fixes.
 	if got := Preferred([]string{"8.1", "8.2", "8.3"}, now); got != "8.3" {
 		t.Errorf("Preferred = %s, want 8.3", got)
 	}
-	// Only end-of-life builds: still better than nothing, and the GUI says so.
+	// INFO: Only end-of-life builds: still better than nothing, and the GUI says so.
 	if got := Preferred([]string{"8.1"}, now); got != "8.1" {
 		t.Errorf("Preferred = %s, want 8.1", got)
 	}
@@ -107,7 +107,7 @@ func TestDetectFindsVendoredBuilds(t *testing.T) {
 	stub(t, filepath.Join(vendor, "8.3", FastCGIName()))
 	stub(t, filepath.Join(vendor, "8.3", CLIName()))
 	stub(t, filepath.Join(vendor, "8.1", FastCGIName()))
-	// A folder with nothing usable in it is not an installation.
+	// INFO: A folder with nothing usable in it is not an installation.
 	if err := os.MkdirAll(filepath.Join(vendor, "8.0"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestDetectFindsVendoredBuilds(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("detected %+v, want 8.3 and 8.1", got)
 	}
-	// Newest first, so the picker's default sits at the top.
+	// INFO: Newest first, so the picker's default sits at the top.
 	if got[0].Version != "8.3" || got[1].Version != "8.1" {
 		t.Fatalf("order = %s, %s; want newest first", got[0].Version, got[1].Version)
 	}

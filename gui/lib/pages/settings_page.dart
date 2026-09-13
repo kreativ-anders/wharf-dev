@@ -74,7 +74,7 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 _Navigation(
                   selected: _section,
-                  // A narrow window keeps the room for the page's paths and
+                  // INFO: A narrow window keeps the room for the page's paths and
                   // buttons; the navigation shows its icons only.
                   compact: constraints.maxWidth < 560,
                   onSelect: _select,
@@ -317,7 +317,7 @@ class _ConfigSection extends StatelessWidget {
           child: Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
-              onPressed: config.isEmpty ? null : () => daemon.open(openFolder,config),
+              onPressed: config.isEmpty ? null : () => daemon.open(openFolder, config),
               icon: const Icon(Icons.folder_open, size: 16),
               label: const Text('Open config folder'),
             ),
@@ -404,7 +404,7 @@ class _WebserverSection extends StatelessWidget {
                       : 'Serves ${server.projects.join(', ')}',
                   child: RadioListTile<String>(
                     value: server.name,
-                    // Enabled even when missing: its explanation must stay
+                    // INFO: Enabled even when missing: its explanation must stay
                     // readable, and it may be chosen before it is installed.
                     enabled: !webserver.switching,
                     title: Text(_title(server)),
@@ -486,9 +486,9 @@ class _InstallAction extends StatelessWidget {
       );
     }
     return IconButton(
-      tooltip: 'Open the folder it belongs in',
+      tooltip: 'Open the folder ${server.name} belongs in',
       icon: const Icon(Icons.folder_open, size: 18),
-      onPressed: () => daemon.open(openFolder,_parent(server.binary)),
+      onPressed: () => daemon.open(openFolder, _parent(server.binary)),
     );
   }
 }
@@ -532,7 +532,7 @@ class _PhpSection extends StatelessWidget {
               ],
             ),
           )
-        // The selected version can be one that is not here: a first run with
+        // INFO: The selected version can be one that is not here: a first run with
         // nothing installed selects the newest supported release. Saying so
         // beats a list where no radio is filled in and nothing explains why.
         else if (!php.selectedIsInstalled)
@@ -556,7 +556,7 @@ class _PhpSection extends StatelessWidget {
                   RadioListTile<String>(
                     value: install.version,
                     enabled: install.servable,
-                    // A Wrap, so a narrow window moves the badge under the
+                    // INFO: A Wrap, so a narrow window moves the badge under the
                     // version instead of cutting it off.
                     title: Wrap(
                       spacing: 10,
@@ -581,9 +581,9 @@ class _PhpSection extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          tooltip: 'Open folder',
+                          tooltip: 'Open ${install.dir}',
                           icon: const Icon(Icons.folder_open, size: 18),
-                          onPressed: () => daemon.open(openFolder,install.dir),
+                          onPressed: () => daemon.open(openFolder, install.dir),
                         ),
                         _RemovePhpButton(daemon: daemon, install: install),
                       ],
@@ -641,9 +641,12 @@ class _PhpSection extends StatelessWidget {
                         Text('Downloading…'),
                       ],
                     )
-                  : TextButton(
-                      onPressed: () => daemon.installPhp(download.version),
-                      child: const Text('Download'),
+                  : Tooltip(
+                      message: 'Download PHP ${download.version}',
+                      child: TextButton(
+                        onPressed: () => daemon.installPhp(download.version),
+                        child: const Text('Download'),
+                      ),
                     ),
             ),
         ],
@@ -655,7 +658,7 @@ class _PhpSection extends StatelessWidget {
               IconButton(
                 tooltip: 'Open ${php.dir}',
                 icon: const Icon(Icons.folder_open, size: 18),
-                onPressed: php.dir.isEmpty ? null : () => daemon.open(openFolder,php.dir),
+                onPressed: php.dir.isEmpty ? null : () => daemon.open(openFolder, php.dir),
               ),
             ],
           ),
@@ -778,7 +781,7 @@ class _SslSection extends StatelessWidget {
           subtitle: ssl.trusted
               ? 'Trusted — browsers accept Wharf\'s certificates'
               : 'Not trusted — browsers warn until it is',
-          // Trusting installs mkcert first if it is missing, so this is the
+          // INFO: Trusting installs mkcert first if it is missing, so this is the
           // one action the page needs.
           action: ssl.trusted
               ? (ssl.caRoot.isEmpty
@@ -786,7 +789,7 @@ class _SslSection extends StatelessWidget {
                     : IconButton(
                         tooltip: 'Open certificate authority folder',
                         icon: const Icon(Icons.folder_open, size: 18),
-                        onPressed: () => daemon.open(openFolder,ssl.caRoot),
+                        onPressed: () => daemon.open(openFolder, ssl.caRoot),
                       ))
               : FilledButton(
                   onPressed: busy ? null : daemon.setupSsl,

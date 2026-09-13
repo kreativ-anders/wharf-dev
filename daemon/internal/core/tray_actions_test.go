@@ -30,7 +30,7 @@ func TestStartingAProjectFromTheTray(t *testing.T) {
 		t.Fatalf("start from tray: %v", err)
 	}
 
-	// Then the daemon starts that project's required services
+	// INFO: Then the daemon starts that project's required services
 	if !h.sup.Running(runtime.WebserverID) {
 		t.Fatal("the webserver was not started")
 	}
@@ -38,12 +38,12 @@ func TestStartingAProjectFromTheTray(t *testing.T) {
 		t.Fatal("the PHP backend was not started")
 	}
 
-	// And the tray menu updates the project's status to "running"
+	// INFO: And the tray menu updates the project's status to "running"
 	if got := h.project("my-kirby-site").State; got != string(supervisor.StateRunning) {
 		t.Fatalf("project status = %q, want running", got)
 	}
 
-	// And no other project is started
+	// INFO: And no other project is started
 	if got := h.project("other-site").State; got != string(supervisor.StateStopped) {
 		t.Fatalf("other-site = %q, want stopped", got)
 	}
@@ -68,14 +68,14 @@ func TestAFailedProjectIsNotStartedWithTheNextOne(t *testing.T) {
 		t.Fatalf("start other-site: %v", err)
 	}
 
-	// Then only that other project is started
+	// INFO: Then only that other project is started
 	if got := h.project("other-site").State; got != string(supervisor.StateRunning) {
 		t.Fatalf("other-site = %q, want running", got)
 	}
 	if strings.Contains(h.readGenerated("nginx.conf"), "broken-site.localhost") {
 		t.Fatal("the webserver serves the project that failed, which nobody started again")
 	}
-	// And the project that failed still shows its error
+	// INFO: And the project that failed still shows its error
 	p := h.project("broken-site")
 	if p.State != string(supervisor.StateFailed) || !strings.Contains(p.Error, "address already in use") {
 		t.Fatalf("broken-site = %q (%q), want failed with its error", p.State, p.Error)
@@ -96,20 +96,20 @@ func TestStoppingAProject(t *testing.T) {
 		t.Fatalf("stop: %v", err)
 	}
 
-	// Then the daemon stops serving that project
+	// INFO: Then the daemon stops serving that project
 	if strings.Contains(h.readGenerated("nginx.conf"), "my-kirby-site.localhost") {
 		t.Fatal("the webserver still serves the stopped project")
 	}
-	// And the project's status updates to "stopped"
+	// INFO: And the project's status updates to "stopped"
 	if got := h.project("my-kirby-site").State; got != string(supervisor.StateStopped) {
 		t.Fatalf("project status = %q, want stopped", got)
 	}
-	// And every other started project keeps running
+	// INFO: And every other started project keeps running
 	if got := h.project("other-site").State; got != string(supervisor.StateRunning) || !h.sup.Running(runtime.WebserverID) {
 		t.Fatalf("other-site = %q, want it still running", got)
 	}
 
-	// Stopping the last one stops the webserver itself.
+	// INFO: Stopping the last one stops the webserver itself.
 	if err := h.d.StopProject(h.ctx(), "other-site"); err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestRestartingAProject(t *testing.T) {
 			if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
 				t.Fatal(err)
 			}
-			// The PHP backend has died since, and the generated config is gone.
+			// INFO: The PHP backend has died since, and the generated config is gone.
 			php := runtime.PHPServiceID(h.d.Config().Services.PHP.Version)
 			if err := h.sup.Stop(h.ctx(), php); err != nil {
 				t.Fatal(err)
@@ -151,22 +151,22 @@ func TestRestartingAProject(t *testing.T) {
 				t.Fatalf("restart: %v", err)
 			}
 
-			// Then its webserver config is generated again
+			// INFO: Then its webserver config is generated again
 			if _, err := os.Stat(vhost); err != nil {
 				t.Fatalf("config not generated again: %v", err)
 			}
-			// And the process serving it is restarted with that config
+			// INFO: And the process serving it is restarted with that config
 			if got := h.countStarts(id); got != before+1 || !h.sup.Running(id) {
 				t.Fatalf("%s started %d times (want %d), running=%v", id, got, before+1, h.sup.Running(id))
 			}
-			// And its PHP backend is started if it is not running
+			// INFO: And its PHP backend is started if it is not running
 			if !h.sup.Running(php) {
 				t.Fatal("the PHP backend was not started")
 			}
 		})
 	}
 
-	// A project that failed to start is retried by the same action.
+	// INFO: A project that failed to start is retried by the same action.
 	h := newHarness(t)
 	h.mustAdd("my-kirby-site")
 	h.runner.Refuse[runtime.WebserverID] = "bad config\n"
@@ -206,7 +206,7 @@ func TestStoppingAllServicesFromTheTray(t *testing.T) {
 		t.Fatalf("stop all: %v", err)
 	}
 
-	// Then the daemon stops every running service and project
+	// INFO: Then the daemon stops every running service and project
 	for _, s := range h.sup.Statuses() {
 		if s.State != supervisor.StateStopped {
 			t.Fatalf("%s is %q after stop-all, want stopped", s.ID, s.State)
@@ -218,7 +218,7 @@ func TestStoppingAllServicesFromTheTray(t *testing.T) {
 		}
 	}
 
-	// And the tray icon reflects an idle state
+	// INFO: And the tray icon reflects an idle state
 	if h.sup.AnyRunning() {
 		t.Fatal("the tray would still show an active state")
 	}
@@ -229,7 +229,7 @@ func TestAddingAProjectViaTheTray(t *testing.T) {
 	h := newHarness(t)
 	h.mkProject("dropped-in-folder")
 
-	// The folder picker's result is a path; only folders under www/ qualify.
+	// INFO: The folder picker's result is a path; only folders under www/ qualify.
 	picked := filepath.Join(h.root.WWW(), "dropped-in-folder")
 	name := filepath.Base(picked)
 	if !contains(h.d.State().Unregistered, name) {
@@ -240,7 +240,7 @@ func TestAddingAProjectViaTheTray(t *testing.T) {
 		t.Fatalf("add from tray: %v", err)
 	}
 
-	// Then selecting a folder under "www/" adds it as a project — no window
+	// INFO: Then selecting a folder under "www/" adds it as a project — no window
 	// is involved, because the daemon holds the state, not the GUI.
 	if _, ok := h.d.Config().Project(name); !ok {
 		t.Fatal("project was not registered")
@@ -270,7 +270,7 @@ func TestMainWindowSeesTheSameStateAsTheTray(t *testing.T) {
 
 	socket := shortSocket(t)
 	srv := ipc.NewServer(socket, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	// The transport the daemon uses on this OS: loopback TCP on Windows.
+	// INFO: The transport the daemon uses on this OS: loopback TCP on Windows.
 	srv.SetTransport(ipc.DefaultTransport())
 	h.d.Register(srv)
 	if err := srv.Listen(); err != nil {
@@ -295,7 +295,7 @@ func TestMainWindowSeesTheSameStateAsTheTray(t *testing.T) {
 		t.Fatalf("the window's state differs from the daemon's:\n over ipc: %+v\n daemon:   %+v", overIPC, h.d.State())
 	}
 
-	// And a change made anywhere reaches the window without it asking.
+	// INFO: And a change made anywhere reaches the window without it asking.
 	go func() { _ = h.d.StopAll(context.Background()) }()
 
 	deadline := time.After(3 * time.Second)
@@ -325,7 +325,7 @@ func TestUnknownMethodIsReportedNotFatal(t *testing.T) {
 	h := newHarness(t)
 	socket := shortSocket(t)
 	srv := ipc.NewServer(socket, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	// The transport the daemon uses on this OS: loopback TCP on Windows.
+	// INFO: The transport the daemon uses on this OS: loopback TCP on Windows.
 	srv.SetTransport(ipc.DefaultTransport())
 	h.d.Register(srv)
 	if err := srv.Listen(); err != nil {
@@ -347,7 +347,7 @@ func TestUnknownMethodIsReportedNotFatal(t *testing.T) {
 	if err == nil || !asIPC(err, &ipcErr) || ipcErr.Code != ipc.CodeUnknownMethod {
 		t.Fatalf("error = %v, want an unknown_method code", err)
 	}
-	// The connection must survive it.
+	// INFO: The connection must survive it.
 	if err := c.Call(ctx, ipc.MethodPing, nil, nil); err != nil {
 		t.Fatalf("connection did not survive an unknown method: %v", err)
 	}

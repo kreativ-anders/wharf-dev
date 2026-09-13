@@ -50,25 +50,25 @@ class WharfColors extends ThemeExtension<WharfColors> {
   static const actionTint = 0.12;
 
   static const light = WharfColors(
-    dimmed: Color(0xFF666666), // 5.7:1 on white
+    dimmed: Color(0xFF666666), // INFO: 5.7:1 on white
     border: Color(0xFFE0E0E0),
-    running: Color(0xFF5C7A1F), // 4.9:1
-    busy: Color(0xFFB86114), // 4.4:1
-    failed: Color(0xFFDC1818), // 5.0:1
-    idle: Color(0xFF858585), // 3.7:1
-    focus: Color(0xFF266EB5), // 5.3:1
-    castOff: Color(0xFF0F7C80), // white on it 5.0:1
+    running: Color(0xFF5C7A1F), // INFO: 4.9:1
+    busy: Color(0xFFB86114), // INFO: 4.4:1
+    failed: Color(0xFFDC1818), // INFO: 5.0:1
+    idle: Color(0xFF858585), // INFO: 3.7:1
+    focus: Color(0xFF266EB5), // INFO: 5.3:1
+    castOff: Color(0xFF0F7C80), // INFO: white on it 5.0:1
   );
 
   static const dark = WharfColors(
-    dimmed: Color(0xFFB2B2B2), // 8.0:1 on #1C1C1C
+    dimmed: Color(0xFFB2B2B2), // INFO: 8.0:1 on #1C1C1C
     border: Color(0xFF4C4C4C),
     running: Color(0xFFA3D147),
     busy: Color(0xFFEC9951),
     failed: Color(0xFFEE6363),
     idle: Color(0xFF999999),
     focus: Color(0xFF8DBAE7),
-    castOff: Color(0xFF5FC4C8), // #1C1C1C on it 8.3:1
+    castOff: Color(0xFF5FC4C8), // INFO: #1C1C1C on it 8.3:1
   );
 
   static WharfColors of(BuildContext context) =>
@@ -125,14 +125,14 @@ ThemeData wharfTheme(Brightness brightness) {
     onSecondaryContainer: ink,
   );
 
-  // The platform's own system font, as getkirby.com uses: San Francisco on
+  // INFO: The platform's own system font, as getkirby.com uses: San Francisco on
   // macOS, Segoe UI on Windows, the desktop's default on Linux.
   final typography = Typography.material2021(platform: defaultTargetPlatform);
   final base = (dark ? typography.white : typography.black).apply(
     bodyColor: ink,
     displayColor: ink,
   );
-  // Every style derives from the platform's, so none loses its font family.
+  // INFO: Every style derives from the platform's, so none loses its font family.
   final text = base.copyWith(
     bodySmall: base.bodySmall!.copyWith(color: colors.dimmed, fontSize: 12.5, height: 1.4),
     titleMedium: base.titleMedium!.copyWith(fontSize: 15, fontWeight: FontWeight.w600),
@@ -201,7 +201,7 @@ ThemeData wharfTheme(Brightness brightness) {
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
     ),
-    // A control's outline needs 3:1 against the page (WCAG 1.4.11); the
+    // INFO: A control's outline needs 3:1 against the page (WCAG 1.4.11); the
     // hairline border grey would be 1.3:1.
     switchTheme: SwitchThemeData(
       trackOutlineColor: WidgetStatePropertyAll(colors.idle),

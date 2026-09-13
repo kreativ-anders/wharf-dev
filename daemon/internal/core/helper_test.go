@@ -126,7 +126,7 @@ func newHarness(t *testing.T, adjust ...func(*Options)) *harness {
 	if err := root.Ensure(); err != nil {
 		t.Fatal(err)
 	}
-	// The resolver refuses to build a spec for a binary that is not there, so
+	// INFO: The resolver refuses to build a spec for a binary that is not there, so
 	// the vendored layout is stubbed out.
 	stubWebservers(t, root)
 	for _, v := range []string{"8.1", "8.2", "8.3"} {
@@ -154,7 +154,7 @@ func newHarness(t *testing.T, adjust ...func(*Options)) *harness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The daemon's first-run setup detects the stubbed 8.1/8.2/8.3 builds and
+	// INFO: The daemon's first-run setup detects the stubbed 8.1/8.2/8.3 builds and
 	// selects the newest supported one, so the harness does not preset them.
 
 	installer := &fakeInstaller{}
@@ -162,7 +162,7 @@ func newHarness(t *testing.T, adjust ...func(*Options)) *harness {
 	opts := Options{
 		Root:  root,
 		Store: store,
-		// Detection must see only what the test staged: no probing of the
+		// WARNING: Detection must see only what the test staged: no probing of the
 		// machine the suite happens to run on.
 		Detector: &php.Detector{
 			VendorDir:  filepath.Join(root.Bin(), "php"),
@@ -289,7 +289,7 @@ func (h *harness) hostsContent() string {
 // Go's t.TempDir() paths on macOS are long enough to exceed it on their own.
 func shortSocket(t *testing.T) string {
 	t.Helper()
-	// Windows serves IPC over TCP, where the path's length does not matter.
+	// INFO: Windows serves IPC over TCP, where the path's length does not matter.
 	base := "/tmp"
 	if goruntime.GOOS == "windows" {
 		base = ""

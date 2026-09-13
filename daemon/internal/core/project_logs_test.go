@@ -13,14 +13,14 @@ func TestEachProjectWritesItsOwnLogs(t *testing.T) {
 	h.mustAdd("my-kirby-site")
 	h.mustAdd("other-site")
 
-	// When they are started, both on the global nginx
+	// INFO: When they are started, both on the global nginx
 	for _, name := range []string{"my-kirby-site", "other-site"} {
 		if err := h.d.StartProject(h.ctx(), name); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	// Then each logs requests and errors to data/log/projects/<name>/
+	// INFO: Then each logs requests and errors to data/log/projects/<name>/
 	conf := h.readGenerated("nginx.conf")
 	for _, name := range []string{"my-kirby-site", "other-site"} {
 		dir := h.root.ProjectLogDir(name)
@@ -36,7 +36,7 @@ func TestEachProjectWritesItsOwnLogs(t *testing.T) {
 				t.Fatalf("%s's server block lacks %s:\n%s", name, want, block)
 			}
 		}
-		// nginx does not create a log folder; one missing keeps it from starting.
+		// INFO: nginx does not create a log folder; one missing keeps it from starting.
 		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 			t.Fatalf("%s does not exist before nginx starts: %v", dir, err)
 		}
@@ -45,7 +45,7 @@ func TestEachProjectWritesItsOwnLogs(t *testing.T) {
 		}
 	}
 
-	// And "other-site" logs to its own folder, not to "my-kirby-site"'s
+	// INFO: And "other-site" logs to its own folder, not to "my-kirby-site"'s
 	mine := filepath.ToSlash(h.root.ProjectLogDir("my-kirby-site"))
 	if strings.Contains(vhostBlock(t, conf, "other-site.localhost"), mine) {
 		t.Fatal("other-site logs into my-kirby-site's folder")
@@ -67,7 +67,7 @@ func TestAProjectKeepsItsLogsOnEitherWebserver(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Then its apache writes to data/log/projects/my-kirby-site/ as well
+	// INFO: Then its apache writes to data/log/projects/my-kirby-site/ as well
 	dir := h.root.ProjectLogDir("my-kirby-site")
 	slashed := filepath.ToSlash(dir)
 	own := h.readGenerated("project-my-kirby-site-apache.conf")
@@ -79,12 +79,12 @@ func TestAProjectKeepsItsLogsOnEitherWebserver(t *testing.T) {
 			t.Fatalf("apache config lacks %s:\n%s", want, own)
 		}
 	}
-	// A request the front door cannot hand on is this project's error too.
+	// INFO: A request the front door cannot hand on is this project's error too.
 	front := vhostBlock(t, h.readGenerated("nginx.conf"), "my-kirby-site.localhost")
 	if !strings.Contains(front, `error_log "`+slashed+`/error.log";`) {
 		t.Fatalf("the front door does not log my-kirby-site's errors to its folder:\n%s", front)
 	}
-	// Its own instance's output — the startup error that names a broken
+	// INFO: Its own instance's output — the startup error that names a broken
 	// custom config — lands there too.
 	spec, ok := h.runner.LastSpec(projectServiceID("my-kirby-site"))
 	if !ok || filepath.Dir(spec.LogPath) != dir {

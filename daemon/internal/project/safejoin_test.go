@@ -14,7 +14,7 @@ func TestSafeJoinRejectsEscapes(t *testing.T) {
 	if _, err := safeJoin("/tmp/dest", "site/config.php"); err != nil {
 		t.Errorf("safeJoin rejected a legitimate path: %v", err)
 	}
-	// An absolute entry name is not an escape: joining roots it inside the
+	// INFO: An absolute entry name is not an escape: joining roots it inside the
 	// destination, which is where it belongs.
 	got, err := safeJoin("/tmp/dest", "/abs/path")
 	if want := filepath.Join("/tmp/dest", "abs", "path"); err != nil || got != want {

@@ -35,7 +35,7 @@ Future<void> _openInEditor(String path) async {
     await Process.start('notepad.exe', [path], mode: ProcessStartMode.detached);
     return;
   }
-  // macOS: the user's default text editor, else TextEdit, which every Mac
+  // INFO: macOS: the user's default text editor, else TextEdit, which every Mac
   // has. Linux: whatever the desktop opens the file with.
   final attempts = Platform.isMacOS
       ? [

@@ -53,7 +53,7 @@ func stage(content string) (string, func(), error) {
 		cleanup()
 		return "", func() {}, err
 	}
-	// The staged file becomes the destination's content, so it must be
+	// WARNING: The staged file becomes the destination's content, so it must be
 	// world-readable like the hosts file it replaces.
 	if err := os.Chmod(f.Name(), 0o644); err != nil {
 		cleanup()

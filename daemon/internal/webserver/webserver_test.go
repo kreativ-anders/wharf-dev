@@ -68,7 +68,7 @@ func TestApacheWithoutModulesIsNotUsable(t *testing.T) {
 	if _, ok := d.Detect(context.Background())[Apache]; ok && ModulesDir(httpd) == "" {
 		t.Fatal("an Apache without mod_proxy_fcgi was accepted")
 	}
-	// Debian and Homebrew layouts both resolve.
+	// INFO: Debian and Homebrew layouts both resolve.
 	stub(t, filepath.Join(dir, "lib", "httpd", "modules", "mod_proxy_fcgi.so"))
 	got := d.Detect(context.Background())[Apache]
 	if got.Modules != filepath.Join(dir, "lib", "httpd", "modules") {

@@ -22,7 +22,7 @@ void main() {
   });
 
   test('a repository checkout finds its own build folder', () async {
-    // gui/ sits beside daemon/ in the repo; running from gui/ must find
+    // INFO: gui/ sits beside daemon/ in the repo; running from gui/ must find
     // build/wharfd at the repo root.
     final sep = Platform.pathSeparator;
     await Directory('${tmp.path}${sep}daemon').create();

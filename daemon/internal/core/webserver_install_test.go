@@ -26,7 +26,7 @@ func withoutWebserver(names ...string) func(*Options) {
 // features/webserver-install.feature — "First start adopts a webserver
 // already on the machine"
 func TestFirstStartAdoptsAWebserverAlreadyOnTheMachine(t *testing.T) {
-	// Apache where macOS keeps it: the binary in sbin, its modules in
+	// INFO: Apache where macOS keeps it: the binary in sbin, its modules in
 	// libexec/apache2.
 	machine := t.TempDir()
 	httpd := exeName(filepath.Join(machine, "usr", "sbin", "httpd"))
@@ -37,7 +37,7 @@ func TestFirstStartAdoptsAWebserverAlreadyOnTheMachine(t *testing.T) {
 		o.WebDetector.Candidates = map[string][]string{webserver.Apache: {httpd}}
 	})
 
-	// Then Apache is used where it is, without being copied
+	// INFO: Then Apache is used where it is, without being copied
 	apache := h.server("apache")
 	if !apache.Installed || apache.Binary != httpd || apache.Source != "system" {
 		t.Fatalf("apache = %+v, want the system copy at %s", apache, httpd)
@@ -45,7 +45,7 @@ func TestFirstStartAdoptsAWebserverAlreadyOnTheMachine(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(h.root.Bin(), "apache")); !os.IsNotExist(err) {
 		t.Fatal("apache was copied into bin/")
 	}
-	// And Apache is selected as the default webserver
+	// INFO: And Apache is selected as the default webserver
 	if got := h.d.Config().Services.Webserver.Active; got != "apache" {
 		t.Fatalf("default webserver = %q, want apache", got)
 	}
@@ -76,7 +76,7 @@ func TestInstallingNginx(t *testing.T) {
 	done := make(chan error)
 	go func() { done <- h.d.InstallWebserver(h.ctx(), "nginx") }()
 
-	// And Settings shows it as installing until it is done
+	// INFO: And Settings shows it as installing until it is done
 	if !<-inside {
 		t.Fatal("nginx not shown as installing mid-way")
 	}
@@ -84,12 +84,12 @@ func TestInstallingNginx(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatalf("install: %v", err)
 	}
-	// Then the newest nginx for this OS and CPU is installed
+	// INFO: Then the newest nginx for this OS and CPU is installed
 	nginx := h.server("nginx")
 	if !nginx.Installed || nginx.Installing || nginx.Binary != exeName(filepath.Join(h.root.Bin(), "nginx", "nginx")) {
 		t.Fatalf("nginx = %+v, want installed into bin/nginx", nginx)
 	}
-	// And every project can be served by nginx without further setup
+	// INFO: And every project can be served by nginx without further setup
 	h.mustAdd("my-kirby-site")
 	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
 		t.Fatalf("start on the installed nginx: %v", err)
@@ -111,7 +111,7 @@ func TestAWebserverInstallFails(t *testing.T) {
 	if !errors.Is(err, webserver.ErrFetch) || !asIPC(asIPCError(err), &ipcErr) || ipcErr.Code != ipc.CodeOffline {
 		t.Fatalf("err = %v, want an offline error", err)
 	}
-	// And no partial "bin/nginx" folder is left behind
+	// INFO: And no partial "bin/nginx" folder is left behind
 	if _, err := os.Stat(filepath.Join(h.root.Bin(), "nginx")); !os.IsNotExist(err) {
 		t.Fatal("bin/nginx exists after a failed install")
 	}
@@ -131,11 +131,11 @@ func TestAWebserverWharfCannotInstallSaysHowToGetIt(t *testing.T) {
 	h.web.plan = map[string]webserver.Plan{webserver.Apache: {Hint: hint}}
 
 	apache := h.server("apache")
-	// Then Apache offers no "Install" action
+	// INFO: Then Apache offers no "Install" action
 	if apache.Install.Installable {
 		t.Fatal("apache offered as installable")
 	}
-	// And the GUI says how to install it instead
+	// INFO: And the GUI says how to install it instead
 	if apache.Install.Hint != hint {
 		t.Fatalf("hint = %q, want %q", apache.Install.Hint, hint)
 	}
@@ -159,7 +159,7 @@ func TestOneWebserverOneConfigFilePerProject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Then one nginx process serves both projects
+	// INFO: Then one nginx process serves both projects
 	running := 0
 	for _, st := range h.sup.Statuses() {
 		if st.State == "running" && !strings.HasPrefix(st.ID, "php:") {
@@ -169,7 +169,7 @@ func TestOneWebserverOneConfigFilePerProject(t *testing.T) {
 	if running != 1 {
 		t.Fatalf("%d webserver processes running, want 1", running)
 	}
-	// And each project's server block is generated into its own file under
+	// INFO: And each project's server block is generated into its own file under
 	// "data/gen/nginx/"
 	gen := filepath.Join(h.root.Data(), "gen")
 	for _, name := range []string{"my-kirby-site", "other-site"} {
@@ -181,7 +181,7 @@ func TestOneWebserverOneConfigFilePerProject(t *testing.T) {
 			t.Fatalf("%s's file is not exactly its own server block:\n%s", name, body)
 		}
 	}
-	// And the main nginx config includes exactly those files
+	// INFO: And the main nginx config includes exactly those files
 	main, _ := os.ReadFile(filepath.Join(gen, "nginx.conf"))
 	if strings.Contains(string(main), "server_name") {
 		t.Fatal("the main config holds a server block itself")
@@ -208,12 +208,12 @@ func TestAKirbyProjectNeedsNoWebserverConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// nginx has no .htaccess, so the generated block carries Kirby's rules.
+	// INFO: nginx has no .htaccess, so the generated block carries Kirby's rules.
 	block := vhostBlock(t, h.readGenerated("nginx.conf"), "my-kirby-site.localhost")
 	for _, rule := range []string{
-		// Then its pages, the Panel and its media are served
+		// INFO: Then its pages, the Panel and its media are served
 		`try_files $uri $uri/ /index.php$is_args$args;`,
-		// And "content/", "site/", "kirby/" and dot-files are never served
+		// INFO: And "content/", "site/", "kirby/" and dot-files are never served
 		// as files
 		`rewrite (^|/)\.(?!well-known/) /index.php last;`,
 		`rewrite ^/(content|site|kirby)/ /index.php last;`,
@@ -222,12 +222,12 @@ func TestAKirbyProjectNeedsNoWebserverConfiguration(t *testing.T) {
 			t.Fatalf("nginx block lacks %q:\n%s", rule, block)
 		}
 	}
-	// And no custom config is needed for any of it
+	// INFO: And no custom config is needed for any of it
 	if strings.Contains(block, filepath.ToSlash(h.root.VhostDir())) {
 		t.Fatal("the rules came from a custom config")
 	}
 
-	// Apache reads the Starterkit's own .htaccess, and denies the folders
+	// INFO: Apache reads the Starterkit's own .htaccess, and denies the folders
 	// even where mod_rewrite is missing. The .htaccess needs the modules its
 	// directives come from, where the install has them.
 	modules := filepath.Join(h.root.Bin(), "apache", "modules")
@@ -243,7 +243,7 @@ func TestAKirbyProjectNeedsNoWebserverConfiguration(t *testing.T) {
 			t.Fatalf("apache config lacks %q:\n%s", want, conf)
 		}
 	}
-	// And PHP is handed the script's path as the OS spells it, a Windows
+	// INFO: And PHP is handed the script's path as the OS spells it, a Windows
 	// drive letter included: Apache appends the path to the handler URL, and
 	// "C:/..." without the slash runs into the port ("DNS lookup failure for:
 	// 127.0.0.1:9003c:").

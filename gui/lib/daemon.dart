@@ -89,8 +89,9 @@ class Daemon extends ChangeNotifier {
   Future<void> _connect() async {
     _retry?.cancel();
     _set(() => connection = Connection.connecting);
+    IpcClient? client;
     try {
-      final client = await launcher.connect();
+      client = await launcher.connect();
       _client = client;
 
       client.events.listen((frame) {
@@ -110,8 +111,14 @@ class Daemon extends ChangeNotifier {
         notice = null;
       });
     } catch (e) {
+      // WARNING: A connection that failed half-way through setting up is
+      // closed here, or the retry would open a second one beside it.
+      if (client != null) {
+        _client = null;
+        unawaited(client.close());
+      }
       if (_shuttingDown) return;
-      // A missing binary explains itself; keep retrying so that building it
+      // INFO: A missing binary explains itself; keep retrying so that building it
       // is all it takes to recover.
       _set(() {
         connection = Connection.disconnected;
@@ -321,7 +328,7 @@ class Daemon extends ChangeNotifier {
     await _guard(() async {
       await _require().call(Method.projectSettings, {
         'name': name,
-        // A key that is absent leaves that setting alone; an empty string
+        // INFO: A key that is absent leaves that setting alone; an empty string
         // clears an override and reverts to the global default.
         'settings': {
           'webserver_override': ?webserverOverride,
@@ -358,7 +365,7 @@ class Daemon extends ChangeNotifier {
     try {
       await action();
     } on DaemonError catch (e) {
-      // An older daemon still running after an update — or, in development,
+      // INFO: An older daemon still running after an update — or, in development,
       // after a hot reload, which rebuilds the app but not wharfd — cannot
       // do what this window asks. Say what fixes it, not "unknown method".
       _set(

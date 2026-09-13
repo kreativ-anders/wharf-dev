@@ -90,7 +90,7 @@ func (d *Detector) Detect(ctx context.Context) map[string]Install {
 func (d *Detector) candidates(name string) []string {
 	list := []string{d.Vendored(name)}
 	if name == Apache {
-		// The layout used before Wharf installed Apache itself.
+		// INFO: The layout used before Wharf installed Apache itself.
 		list = append(list, filepath.Join(d.BinDir, "apache", d.exe("httpd")))
 	}
 	if d.Candidates != nil {
@@ -112,7 +112,7 @@ func systemCandidates(goos, name string) []string {
 	case "darwin/nginx":
 		return []string{"/opt/homebrew/bin/nginx", "/usr/local/bin/nginx", "/opt/local/sbin/nginx"}
 	case "darwin/apache":
-		// macOS ships Apache; a Homebrew one is newer and preferred.
+		// INFO: macOS ships Apache; a Homebrew one is newer and preferred.
 		return []string{"/opt/homebrew/opt/httpd/bin/httpd", "/usr/local/opt/httpd/bin/httpd", "/usr/sbin/httpd"}
 	case "linux/nginx":
 		return []string{"/usr/sbin/nginx", "/usr/local/sbin/nginx", "/usr/local/nginx/sbin/nginx",
@@ -133,7 +133,7 @@ func (d *Detector) inspect(ctx context.Context, name, bin string) (Install, bool
 	}
 	in := Install{Name: name, Binary: bin, Source: d.source(bin)}
 	if name == Apache {
-		// An Apache without mod_proxy_fcgi cannot reach PHP; it is not an
+		// INFO: An Apache without mod_proxy_fcgi cannot reach PHP; it is not an
 		// install Wharf can use.
 		in.Modules = ModulesDir(bin)
 		if in.Modules == "" {
@@ -153,7 +153,7 @@ func (d *Detector) source(bin string) string {
 			return "homebrew"
 		}
 	}
-	// /usr/local/bin/nginx on an Intel Mac is Homebrew's too.
+	// INFO: /usr/local/bin/nginx on an Intel Mac is Homebrew's too.
 	if resolved, err := filepath.EvalSymlinks(bin); err == nil && strings.Contains(resolved, "/Cellar/") {
 		return "homebrew"
 	}
@@ -192,7 +192,7 @@ func (d *Detector) probe(ctx context.Context, bin string) (string, error) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	// nginx prints its version on stderr, Apache on stdout.
+	// INFO: nginx prints its version on stderr, Apache on stdout.
 	out, err := exec.CommandContext(ctx, bin, "-v").CombinedOutput()
 	if m := versionRe.FindStringSubmatch(string(out)); m != nil {
 		return m[1], nil

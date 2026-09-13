@@ -179,12 +179,12 @@ func TestEveryDaemonBuildIsStamped(t *testing.T) {
 // time; a rename would otherwise surface on the day of a release.
 func TestReleaseWorkflowPathsExist(t *testing.T) {
 	workflow := read(t, ".github/workflows/release.yml")
-	// Not preceded by a slash or a word character: /dev/null is not dev/.
+	// INFO: Not preceded by a slash or a word character: /dev/null is not dev/.
 	pathRe := regexp.MustCompile(`(?:^|[^/\w.$])((?:tool|daemon|gui|packaging|dev)/[A-Za-z0-9_./-]*[A-Za-z0-9_-])`)
 	seen := map[string]bool{}
 	for _, m := range pathRe.FindAllStringSubmatch(workflow, -1) {
 		p := m[1]
-		// Build output, not repository content.
+		// INFO: Build output, not repository content.
 		if seen[p] || strings.HasPrefix(p, "gui/build/") {
 			continue
 		}

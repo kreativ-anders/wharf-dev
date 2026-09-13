@@ -1,10 +1,13 @@
 package ipc
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -107,7 +110,7 @@ func TestTCPRejectsAConnectionWithoutTheToken(t *testing.T) {
 		t.Fatalf("endpoint = %+v, want an address and a token", ep)
 	}
 
-	// A client that skips the handshake gets nowhere.
+	// INFO: A client that skips the handshake gets nowhere.
 	bare, err := DialEndpoint(Endpoint{Transport: TransportTCP, Address: ep.Address})
 	if err != nil {
 		t.Fatal(err)
@@ -119,7 +122,7 @@ func TestTCPRejectsAConnectionWithoutTheToken(t *testing.T) {
 		t.Fatalf("error = %v, want unauthorized", err)
 	}
 
-	// So does one with the wrong token.
+	// INFO: So does one with the wrong token.
 	wrong, err := DialEndpoint(Endpoint{Transport: TransportTCP, Address: ep.Address, Token: "nope"})
 	if err == nil {
 		wrong.Close()
@@ -139,7 +142,7 @@ func TestEndpointFileRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The file carries the token, so no other user may read it. Windows has
+	// INFO: The file carries the token, so no other user may read it. Windows has
 	// no mode bits to check: there the file inherits the ACL of the root
 	// folder, which under the user's profile admits only that user.
 	if perm := info.Mode().Perm(); runtime.GOOS != "windows" && perm != 0o600 {
@@ -267,4 +270,79 @@ func TestBroadcastSurvivesClientsDisconnecting(t *testing.T) {
 	}
 	close(stop)
 	<-done
+}
+
+// isTimeout tells a read that gave up on this side from a connection the
+// daemon closed.
+func isTimeout(err error) bool {
+	var ne net.Error
+	return errors.As(err, &ne) && ne.Timeout()
+}
+
+// Loopback admits every local process, so a TCP client that never presents
+// the token must not hold one of the daemon's connections for good.
+func TestTCPDropsAClientThatNeverAuthenticates(t *testing.T) {
+	srv := NewServer(filepath.Join(t.TempDir(), "w.sock"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	srv.SetTransport(TransportTCP)
+	srv.authTimeout = 50 * time.Millisecond
+	if err := srv.Listen(); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() { cancel(); srv.Close() })
+	go srv.Serve(ctx)
+
+	conn, err := net.Dial("tcp", srv.Endpoint().Address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if _, err := conn.Read(make([]byte, 1)); err == nil || isTimeout(err) {
+		t.Fatalf("read = %v, want the daemon to have closed the connection", err)
+	}
+}
+
+// A wrong token is answered, and then the connection ends, so no process can
+// try one token after another on it.
+func TestTCPDropsAClientWithAWrongToken(t *testing.T) {
+	_, ep := newServer(t, TransportTCP)
+	conn, err := net.Dial("tcp", ep.Address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if _, err := conn.Write([]byte(`{"id":"1","method":"auth","params":{"token":"nope"}}` + "\n")); err != nil {
+		t.Fatal(err)
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	r := bufio.NewReader(conn)
+	if line, err := r.ReadString('\n'); err != nil || !strings.Contains(line, CodeUnauthorized) {
+		t.Fatalf("answer = %q (%v), want %s", line, err, CodeUnauthorized)
+	}
+	if _, err := r.ReadByte(); err == nil || isTimeout(err) {
+		t.Fatalf("read after a wrong token = %v, want the connection closed", err)
+	}
+}
+
+// The endpoint file carries the token. One left behind with a wider mode — a
+// restored backup — must not keep that mode once the token is in it.
+func TestEndpointFileStaysPrivateOverAStaleOne(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no mode bits: the file inherits the root folder's ACL")
+	}
+	path := filepath.Join(t.TempDir(), EndpointFileName)
+	if err := os.WriteFile(path, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteEndpoint(path, Endpoint{Transport: TransportTCP, Address: "127.0.0.1:1", Token: "secret"}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Fatalf("endpoint file mode = %v, want 0600", perm)
+	}
 }

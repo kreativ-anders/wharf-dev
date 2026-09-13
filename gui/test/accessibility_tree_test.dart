@@ -1,4 +1,4 @@
-// Replays every semantics update the framework sends through the commit the
+// INFO: Replays every semantics update the framework sends through the commit the
 // Windows engine performs (shell/platform/common/accessibility_bridge.cc
 // feeding ui::AXTree), so a sequence that makes Windows log "Failed to
 // update ui::AXTree" fails here instead of scrolling past in a run's log.
@@ -29,7 +29,7 @@ void main() {
     _engine.commit({0: n([1]), 1: n([2]), 2: n([3]), 3: n([])});
     expect(_engine.errors, isEmpty);
 
-    // 1 moves under a new node 4. 2 is unchanged and not resent, but 3 is:
+    // INFO: 1 moves under a new node 4. 2 is unchanged and not resent, but 3 is:
     // taking 1 off its old parent took 2 and 3 with it, and 3 has no parent.
     _engine.commit({0: n([4]), 4: n([1]), 1: n([2]), 3: n([])});
     expect(_engine.errors.single, startsWith('3 will not be in the tree and is not the new root'));
@@ -68,7 +68,7 @@ void main() {
     semantics.dispose();
   }, variant: _windows);
 
-  // Opening the tray menu, closing to the tray or switching to another
+  // INFO: Opening the tray menu, closing to the tray or switching to another
   // window each leave the window inactive, and focus is put away until it
   // comes back.
   for (final (name, open) in <(String, Future<void> Function(WidgetTester))>[
@@ -108,7 +108,7 @@ void main() {
     }, variant: _windows);
   }
 
-  // A minimised window can hand the view no room at all, which culls every
+  // INFO: A minimised window can hand the view no room at all, which culls every
   // node, and restoring it brings them back.
   for (final (name, open) in <(String, Future<void> Function(WidgetTester))>[
     ('the main window', (_) async {}),
@@ -121,7 +121,7 @@ void main() {
       await open(tester);
       await _wait(tester);
 
-      // Content that does not fit a tiny window says so; that is not what
+      // INFO: Content that does not fit a tiny window says so; that is not what
       // this is about.
       final report = FlutterError.onError;
       FlutterError.onError = (details) {
@@ -349,7 +349,7 @@ void main() {
     semantics.dispose();
   }, variant: _windows);
 
-  // Hovering long enough to read a tooltip, then clicking: the click opens a
+  // INFO: Hovering long enough to read a tooltip, then clicking: the click opens a
   // dialog or a page while the tooltip is still fading out.
   for (final (name, tip) in [
     ('a row\'s settings', 'Settings for my-kirby-site'),
@@ -508,12 +508,12 @@ Future<void> _app(
   _FakeDaemon daemon, {
   Future<void> Function()? onCastOff,
 }) async {
-  // The focus manager was made before the platform was overridden.
+  // WARNING: The focus manager was made before the platform was overridden.
   FocusManager.instance.listenToApplicationLifecycleChangesIfSupported();
   tester.view.physicalSize = const Size(560, 720);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  // As main.dart builds it: the whole app follows the daemon.
+  // INFO: As main.dart builds it: the whole app follows the daemon.
   await tester.pumpWidget(
     ListenableBuilder(
       listenable: daemon,
@@ -691,7 +691,7 @@ class _Recorder implements ui.SemanticsUpdateBuilder {
     return _real.build();
   }
 
-  // updateNode has some forty named parameters; only two matter here.
+  // INFO: updateNode has some forty named parameters; only two matter here.
   @override
   dynamic noSuchMethod(Invocation invocation) {
     if (invocation.memberName != #updateNode) return super.noSuchMethod(invocation);
@@ -747,7 +747,7 @@ class _Engine {
     _pending = pending;
     pending.forEach((id, node) => _labels[id] = node.label);
 
-    // Update 1: every node listed under a new parent leaves its old one.
+    // INFO: Update 1: every node listed under a new parent leaves its old one.
     final parents = {
       for (final entry in _tree.entries)
         for (final child in entry.value) child: entry.key,
@@ -769,7 +769,7 @@ class _Engine {
       return;
     }
 
-    // Update 2: each pending subtree parent first, the subtrees in reverse
+    // INFO: Update 2: each pending subtree parent first, the subtrees in reverse
     // order of discovery.
     final remaining = Map.of(pending);
     final lists = <List<int>>[];

@@ -64,7 +64,7 @@ class _ProjectSheet extends StatelessWidget {
                 IconButton(
                   tooltip: 'Close',
                   icon: const Icon(Icons.close, size: 18),
-                  // Drop focus before the dialog's subtree is torn down, or
+                  // WARNING: Drop focus before the dialog's subtree is torn down, or
                   // Windows logs an AXTree error trying to reconcile a
                   // focused node that vanished mid-frame.
                   onPressed: () => _closeDialog(context),
@@ -72,15 +72,19 @@ class _ProjectSheet extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 6),
-            InkWell(
-              onTap: () => launchUrlString(project.url),
-              child: Text(
-                project.url,
-                style: muted?.copyWith(decoration: TextDecoration.underline),
+            // INFO: Announced as a link, which is what the underline shows.
+            Semantics(
+              link: true,
+              child: InkWell(
+                onTap: () => launchUrlString(project.url),
+                child: Text(
+                  project.url,
+                  style: muted?.copyWith(decoration: TextDecoration.underline),
+                ),
               ),
             ),
             const SizedBox(height: 8),
-            // Where the files are, one tap from the file manager
+            // INFO: Where the files are, one tap from the file manager
             // (features/project-folders.feature).
             Row(
               children: [
@@ -93,7 +97,7 @@ class _ProjectSheet extends StatelessWidget {
                   ),
                 ),
                 TextButton.icon(
-                  onPressed: () => daemon.open(openFolder,project.dir),
+                  onPressed: () => daemon.open(openFolder, project.dir),
                   icon: const Icon(Icons.folder_open, size: 16),
                   label: const Text('Open folder'),
                 ),
@@ -109,7 +113,7 @@ class _ProjectSheet extends StatelessWidget {
                 items: [
                   for (final v in php.available) DropdownMenuItem(value: v, child: Text('PHP $v')),
                 ],
-                // The global version is no override: picking it clears one,
+                // INFO: The global version is no override: picking it clears one,
                 // and the project follows the global setting again
                 // (features/app-configuration.feature).
                 onChanged: (v) => daemon.updateSettings(
@@ -126,7 +130,7 @@ class _ProjectSheet extends StatelessWidget {
                 items: [
                   for (final w in webserver.available) DropdownMenuItem(value: w, child: Text(w)),
                 ],
-                // Picking the active webserver clears the override: the
+                // INFO: Picking the active webserver clears the override: the
                 // project is served by the front door itself and follows the
                 // global setting (features/app-configuration.feature).
                 onChanged: (v) => daemon.updateSettings(
@@ -144,7 +148,7 @@ class _ProjectSheet extends StatelessWidget {
                     : (v) => daemon.updateSettings(project.name, ssl: v),
               ),
             ),
-            // Nothing to install by hand: the switch sets up what is missing
+            // INFO: Nothing to install by hand: the switch sets up what is missing
             // (features/local-ssl.feature).
             if (!project.ssl && !ssl.installed)
               Text(
@@ -173,7 +177,7 @@ class _ProjectSheet extends StatelessWidget {
               'Each webserver has its own file; saving it applies the change.',
               style: muted,
             ),
-            // The file in use comes first: a project just created on a chosen
+            // INFO: The file in use comes first: a project just created on a chosen
             // webserver opens here, one click from that webserver's config
             // (features/quick-app-php.feature).
             for (final custom in [
@@ -192,7 +196,7 @@ class _ProjectSheet extends StatelessWidget {
             const SizedBox(height: 20),
             Text('Logs', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 4),
-            // This project's requests and errors alone, PHP's warnings
+            // INFO: This project's requests and errors alone, PHP's warnings
             // included (features/project-logs.feature).
             Text('Requests and errors of this project, PHP\'s included.', style: muted),
             Row(
@@ -206,7 +210,7 @@ class _ProjectSheet extends StatelessWidget {
                   ),
                 ),
                 TextButton.icon(
-                  onPressed: project.logDir.isEmpty ? null : () => daemon.open(openFolder,project.logDir),
+                  onPressed: project.logDir.isEmpty ? null : () => daemon.open(openFolder, project.logDir),
                   icon: const Icon(Icons.article_outlined, size: 16),
                   label: const Text('Open logs'),
                 ),
@@ -266,7 +270,7 @@ class _ProjectSheet extends StatelessWidget {
   }
 }
 
-// Drop focus before popping: a control still focused when its dialog's
+// WARNING: Drop focus before popping: a control still focused when its dialog's
 // subtree is torn out in the same frame makes Windows log an AXTree error
 // while it reconciles the accessibility tree against the vanished node.
 void _closeDialog<T extends Object?>(BuildContext context, [T? result]) {
@@ -280,7 +284,7 @@ class _Row extends StatelessWidget {
   final Widget child;
 
   @override
-  // Merged, so a screen reader says "PHP version, PHP 8.4, pop-up
+  // INFO: Merged, so a screen reader says "PHP version, PHP 8.4, pop-up
   // button" instead of announcing a control with no name.
   Widget build(BuildContext context) => MergeSemantics(
     child: Padding(

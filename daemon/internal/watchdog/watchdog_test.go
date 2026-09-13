@@ -11,14 +11,14 @@ import (
 // features/single-application.feature — "The application exits without
 // shutting its daemon down"
 func TestTheDaemonNoticesWhenItsParentIsGone(t *testing.T) {
-	// A short-lived process stands in for the GUI: it starts, then dies
+	// INFO: A short-lived process stands in for the GUI: it starts, then dies
 	// without saying anything, as a crashed application would.
 	parent := exec.Command("sleep", "0.2")
 	if err := parent.Start(); err != nil {
 		t.Skipf("cannot start a stand-in parent: %v", err)
 	}
 	pid := parent.Process.Pid
-	go parent.Wait() // reap it, so the pid really disappears
+	go parent.Wait() // INFO: reap it, so the pid really disappears
 
 	gone := make(chan struct{})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -37,7 +37,7 @@ func TestALiveParentIsLeftAlone(t *testing.T) {
 	defer cancel()
 
 	called := false
-	// The test process's own parent is alive for the duration of the test.
+	// INFO: The test process's own parent is alive for the duration of the test.
 	WatchParent(ctx, os.Getppid(), 10*time.Millisecond, func() { called = true })
 	if called {
 		t.Fatal("onGone fired for a parent that is still running")

@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -124,6 +126,9 @@ func Load(path string) (*Store, error) {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	cfg.normalise()
+	if err := cfg.validate(); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
 	s.cfg = cfg
 	return s, nil
 }
@@ -150,6 +155,9 @@ func (s *Store) Update(fn func(*Config) error) (*Config, error) {
 		return nil, err
 	}
 	next.normalise()
+	if err := next.validate(); err != nil {
+		return nil, err
+	}
 	if err := s.write(next); err != nil {
 		return nil, err
 	}
@@ -169,6 +177,9 @@ func (s *Store) Reload() (*Config, error) {
 		return nil, fmt.Errorf("parse %s: %w", s.path, err)
 	}
 	cfg.normalise()
+	if err := cfg.validate(); err != nil {
+		return nil, fmt.Errorf("%s: %w", s.path, err)
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -291,19 +302,19 @@ func (c *Config) normalise() {
 	if len(c.Services.PHP.Available) == 0 {
 		c.Services.PHP.Available = []string{c.Services.PHP.Version}
 	}
-	if !contains(c.Services.Webserver.Available, c.Services.Webserver.Active) {
+	if !slices.Contains(c.Services.Webserver.Available, c.Services.Webserver.Active) {
 		c.Services.Webserver.Available = append(c.Services.Webserver.Available, c.Services.Webserver.Active)
 	}
-	if !contains(c.Services.PHP.Available, c.Services.PHP.Version) {
+	if !slices.Contains(c.Services.PHP.Available, c.Services.PHP.Version) {
 		c.Services.PHP.Available = append(c.Services.PHP.Available, c.Services.PHP.Version)
 	}
 	sort.Strings(c.Services.Webserver.Available)
-	// Versions sort numerically, so that 8.10 lands after 8.9 rather than
+	// INFO: Versions sort numerically, so that 8.10 lands after 8.9 rather than
 	// before it.
 	php.Sort(c.Services.PHP.Available)
 
 	for v := range c.Services.PHP.Paths {
-		if !contains(c.Services.PHP.Available, v) {
+		if !slices.Contains(c.Services.PHP.Available, v) {
 			delete(c.Services.PHP.Paths, v)
 		}
 	}
@@ -316,7 +327,7 @@ func (c *Config) normalise() {
 		if dir == "" {
 			continue
 		}
-		if dir = filepath.Clean(dir); !contains(hidden, dir) {
+		if dir = filepath.Clean(dir); !slices.Contains(hidden, dir) {
 			hidden = append(hidden, dir)
 		}
 	}
@@ -387,11 +398,33 @@ func clonePaths(in map[string]string) map[string]string {
 
 func strptr(s string) *string { return &s }
 
-func contains(hay []string, needle string) bool {
-	for _, s := range hay {
-		if s == needle {
-			return true
+// projectNameRe is what a name must look like before it is joined into a path
+// or written into a webserver config: no separator, no quote, no space, and
+// nothing that ends a directive.
+var projectNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+// CheckProject reports why an entry cannot be served, or nil. The GUI and
+// wharfctl only add names project.ValidateName accepts, so this guards a
+// hand-edit: a name becomes a folder in www/, files in config/vhosts/ and
+// data/certs/ — the ones Reset deletes — and a server_name line.
+func CheckProject(p Project) error {
+	if !projectNameRe.MatchString(p.Name) {
+		return fmt.Errorf("project name %q cannot be used: it becomes a folder and a host name — "+
+			"use letters, digits, dots, hyphens and underscores, starting with a letter or digit", p.Name)
+	}
+	if strings.ContainsAny(p.Path, "\"\r\n\x00") {
+		return fmt.Errorf("the folder of %q, %q, holds a quote or a line break, which no webserver config "+
+			"can name — rename the folder", p.Name, p.Path)
+	}
+	return nil
+}
+
+// validate refuses a config the daemon could not serve safely.
+func (c *Config) validate() error {
+	for _, p := range c.Projects {
+		if err := CheckProject(p); err != nil {
+			return err
 		}
 	}
-	return false
+	return nil
 }

@@ -57,7 +57,7 @@ func TestStartIsIdempotent(t *testing.T) {
 func TestStartFailsWhenTheProcessNeverBinds(t *testing.T) {
 	ports := NewFakePorts()
 	runner := NewFakeRunner(ports)
-	runner.Ports = nil // started processes never bind their port
+	runner.Ports = nil // INFO: started processes never bind their port
 	s := New(runner, ports)
 	s.StartTimeout = 100 * time.Millisecond
 	s.Poll = time.Millisecond
@@ -153,7 +153,7 @@ func TestRestartWaitsForTheOldProcessToReleaseThePort(t *testing.T) {
 		t.Fatalf("restart completed while port 80 was held (err=%v)", err)
 	case <-time.After(100 * time.Millisecond):
 	}
-	// The swap is in flight: whether it is still stopping the old process or
+	// INFO: The swap is in flight: whether it is still stopping the old process or
 	// already waiting to start the new one, the GUI shows "switching".
 	if st, _ := s.Status("webserver"); st.State != StateStopping && st.State != StateStarting {
 		t.Fatalf("state while waiting = %q, want stopping or starting", st.State)
@@ -251,7 +251,7 @@ func TestAProcessThatExitsDuringStartupFailsAtOnceWithItsOwnError(t *testing.T) 
 	s, runner, _ := newTestSupervisor()
 	s.StartTimeout = time.Minute
 	log := filepath.Join(t.TempDir(), "nginx.log")
-	// An earlier run's complaint must not be blamed for this one.
+	// INFO: An earlier run's complaint must not be blamed for this one.
 	os.WriteFile(log, []byte("2026/09/11 10:00:00 [emerg] 1#0: an old problem\n"), 0o644)
 	runner.Refuse["webserver"] = "2026/09/11 10:13:20 [emerg] 71176#0: \"server\" directive is not allowed here in /w/test.nginx.conf:17\n"
 

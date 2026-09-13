@@ -221,7 +221,7 @@ func systemCandidates() []string {
 			}
 		}
 	}
-	// Whatever `php` resolves to on PATH, which may be none of the above.
+	// INFO: Whatever `php` resolves to on PATH, which may be none of the above.
 	if p, err := exec.LookPath(CLIName()); err == nil {
 		out = append(out, p)
 	}

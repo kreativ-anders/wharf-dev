@@ -47,7 +47,7 @@ func TestDaemonShutsDownCleanlyWhenTheAppDies(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Stand-in for the app: alive while the daemon starts, then gone.
+	// INFO: Stand-in for the app: alive while the daemon starts, then gone.
 	app := exec.Command("sleep", "1")
 	if err := app.Start(); err != nil {
 		t.Fatal(err)
@@ -82,7 +82,7 @@ func TestDaemonShutsDownCleanlyWhenTheAppDies(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	// The app held these; when it dies they close with it.
+	// INFO: The app held these; when it dies they close with it.
 	stdout.Close()
 	stderr.Close()
 
@@ -136,7 +136,7 @@ func TestDaemonShutsDownCleanlyWhenAsked(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	// The reply can be lost as the daemon drops its connections; exiting is
+	// INFO: The reply can be lost as the daemon drops its connections; exiting is
 	// the answer that counts.
 	_ = c.Call(ctx, ipc.MethodShutdown, nil, nil)
 

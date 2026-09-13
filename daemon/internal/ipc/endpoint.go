@@ -91,7 +91,15 @@ func WriteEndpoint(path string, ep Endpoint) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(body, '\n'), 0o600)
+	// WARNING: os.WriteFile applies the mode only to a file it creates. A
+	// stale endpoint file with a wider mode — restored from a backup, copied
+	// by hand — would keep it and show the token to every local user, so the
+	// old file goes first and the chmod covers a removal Windows refused.
+	_ = os.Remove(path)
+	if err := os.WriteFile(path, append(body, '\n'), 0o600); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o600)
 }
 
 // ReadEndpoint loads an endpoint description written by the daemon.

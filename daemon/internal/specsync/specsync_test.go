@@ -27,7 +27,7 @@ func TestSpecCoverage(t *testing.T) {
 	var claims []Claim
 	for _, dir := range sourceDirs {
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			continue // the GUI may not be checked out
+			continue // INFO: the GUI may not be checked out
 		}
 		found, err := ParseClaims(dir)
 		if err != nil {
@@ -108,7 +108,7 @@ Feature: Everything here is later
 		t.Fatalf("feature-level tags should still apply: %v", later.Tags)
 	}
 
-	// A feature-level @roadmap covers every scenario in the file.
+	// INFO: A feature-level @roadmap covers every scenario in the file.
 	inherited := find(t, got, "Not in v1")
 	if !inherited.Has(TagRoadmap) {
 		t.Fatalf("feature-level @roadmap was not inherited: %v", inherited.Tags)
@@ -135,7 +135,7 @@ func TestParseClaimsReadsDartTestsToo(t *testing.T) {
 
 func TestParseClaimsRequiresTheCommentDirectlyAboveTheTest(t *testing.T) {
 	dir := t.TempDir()
-	// The claim lines are assembled rather than written literally: this file
+	// WARNING: The claim lines are assembled rather than written literally: this file
 	// is itself scanned by TestSpecCoverage, and a literal claim here would
 	// be read as a real one.
 	write(t, filepath.Join(dir, "x_test.go"), "package x\n\n"+

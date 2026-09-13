@@ -136,7 +136,13 @@ wharf/
 │       ├── certs/             mkcert: pinned download, local CA trust, per-project certs
 │       ├── config/            wharf.json: load, atomic write, hand-edit repair
 │       ├── core/              THE BEHAVIOUR — one method per user action
-│       │   ├── core.go        projects, services, settings, scaffolding
+│       │   ├── core.go        the daemon: construction, first run, settings, reset, shutdown
+│       │   ├── projects.go    add, remove, start, stop, restart, overrides, scaffolding
+│       │   ├── php.go         PHP versions: detect, adopt, download, remove or hide, backends
+│       │   ├── webserver.go   webservers: detect, install, switch the active one
+│       │   ├── frontdoor.go   what the front door serves; own instances' ports
+│       │   ├── userfiles.go   custom webserver configs and php.ini: created, applied on save
+│       │   ├── errors.go      what the user got wrong, told apart from what the daemon did
 │       │   ├── state.go       the snapshot the GUI renders
 │       │   ├── api.go         IPC method wiring
 │       │   ├── watch.go       reloads wharf.json and custom configs when hand-edited
@@ -265,6 +271,12 @@ change. That does not prove the code is right.
   that explains *how Wharf works* belongs in `dev/` and shrinks to a pointer
   (`see dev/architecture.md §4c`). Keep the comments that name a concrete
   failure or say why something is deliberately *not* done.
+- **Every explanatory comment carries a tag.** `INFO:` says why a line is
+  the way it is; `WARNING:` names what breaks if it is changed — a concrete
+  failure, a hazard, something deliberately not done; `TODO(topic):` is work
+  still due. Doc comments on declarations — Go's above a package, type, func
+  or field, Dart's `///` — stay untagged, and so do spec claims (§1) and tool
+  directives (`//go:build`, `// ignore:`).
 - **A `TODO` names the condition that makes it due** ("once packaging exists").
   One without a condition is a wish; delete it.
 - **Errors name the fix.** "PHP 8.2 is not installed (expected …/bin/php/8.2)",

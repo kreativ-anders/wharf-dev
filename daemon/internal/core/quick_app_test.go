@@ -65,13 +65,13 @@ func TestScaffoldingANewKirbyProject(t *testing.T) {
 		t.Fatalf("scaffold: %v", err)
 	}
 
-	// Then a folder "www/my-kirby-site" is created
+	// INFO: Then a folder "www/my-kirby-site" is created
 	dir := h.root.ProjectDir("my-kirby-site")
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 		t.Fatalf("www/my-kirby-site was not created: %v", err)
 	}
 
-	// And the Kirby starter kit is fetched into that folder
+	// INFO: And the Kirby starter kit is fetched into that folder
 	// (the archive's top-level folder is stripped, so index.php sits at the root)
 	for _, want := range []string{"index.php", "site/config/config.php", "content/home/home.txt"} {
 		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(want))); err != nil {
@@ -79,16 +79,16 @@ func TestScaffoldingANewKirbyProject(t *testing.T) {
 		}
 	}
 
-	// And the project appears in the GUI's project list
+	// INFO: And the project appears in the GUI's project list
 	found := h.project("my-kirby-site")
 	if found.Name != "my-kirby-site" {
 		t.Fatalf("project list does not contain the new project: %+v", h.d.State().Projects)
 	}
-	// And it is reachable at "http://my-kirby-site.localhost"
+	// INFO: And it is reachable at "http://my-kirby-site.localhost"
 	if p.URL != "http://my-kirby-site.localhost" {
 		t.Fatalf("URL = %q, want http://my-kirby-site.localhost", p.URL)
 	}
-	// Scaffolding starts the project, so it is at least on its way up.
+	// INFO: Scaffolding starts the project, so it is at least on its way up.
 	if err := waitFor(func() bool {
 		switch h.project("my-kirby-site").State {
 		case "starting", "running":
@@ -105,7 +105,7 @@ func TestATypedNameBecomesAProjectName(t *testing.T) {
 	h := newHarness(t)
 	h.d.scaf.Fetcher = offlineFetcher{}
 
-	// And a name sent to the daemon without the GUI gets the same rewrite
+	// INFO: And a name sent to the daemon without the GUI gets the same rewrite
 	p, err := h.d.Scaffold(h.ctx(), "empty", "Müller & Söhne", "")
 	if err != nil {
 		t.Fatalf("scaffold: %v", err)
@@ -120,7 +120,7 @@ func TestATypedNameBecomesAProjectName(t *testing.T) {
 		t.Fatalf("URL = %q, want http://mueller-soehne.localhost", p.URL)
 	}
 
-	// And a name with no letter or digit in it is refused, asking for at least one
+	// INFO: And a name with no letter or digit in it is refused, asking for at least one
 	_, err = h.d.Scaffold(h.ctx(), "empty", "!!!", "")
 	if err == nil || !strings.Contains(err.Error(), "letter or digit") {
 		t.Fatalf("error = %v, want it to ask for a letter or digit", err)
@@ -141,7 +141,7 @@ func TestScaffoldingFailsWithoutNetworkAccess(t *testing.T) {
 
 	_, err := h.d.Scaffold(h.ctx(), "kirby", "my-kirby-site", "")
 
-	// Then the GUI reports that the template could not be fetched
+	// INFO: Then the GUI reports that the template could not be fetched
 	if err == nil {
 		t.Fatal("scaffolding offline should fail")
 	}
@@ -149,7 +149,7 @@ func TestScaffoldingFailsWithoutNetworkAccess(t *testing.T) {
 		t.Fatalf("error = %v, want it to report a fetch failure", err)
 	}
 
-	// And no partial project folder is left behind
+	// INFO: And no partial project folder is left behind
 	if _, statErr := os.Stat(h.root.ProjectDir("my-kirby-site")); !os.IsNotExist(statErr) {
 		t.Fatalf("a partial project folder was left behind: %v", statErr)
 	}
@@ -193,12 +193,12 @@ func TestChoosingTheWebserverWhileCreatingAProject(t *testing.T) {
 		t.Fatalf("scaffold: %v", err)
 	}
 
-	// Then "legacy-app" is created with "webserver_override: apache"
+	// INFO: Then "legacy-app" is created with "webserver_override: apache"
 	entry, _ := h.d.Config().Project("legacy-app")
 	if entry.WebserverOverride == nil || *entry.WebserverOverride != "apache" {
 		t.Fatalf("override = %v, want apache", entry.WebserverOverride)
 	}
-	// And its settings open, with its apache config one click away: the
+	// INFO: And its settings open, with its apache config one click away: the
 	// snapshot marks apache's file as the one in use, which is the entry the
 	// GUI puts first.
 	if p.Webserver != "apache" {
@@ -214,7 +214,7 @@ func TestChoosingTheWebserverWhileCreatingAProject(t *testing.T) {
 		t.Fatalf("custom config in use = %q, want apache", inUse)
 	}
 
-	// And a project created with the webserver left at "Default" has no override
+	// INFO: And a project created with the webserver left at "Default" has no override
 	if _, err := h.d.Scaffold(h.ctx(), "empty", "plain", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestChoosingTheWebserverWhileCreatingAProject(t *testing.T) {
 		t.Fatalf("a default project was pinned to %q", *plain.WebserverOverride)
 	}
 
-	// A webserver Wharf does not know is refused before anything is created.
+	// INFO: A webserver Wharf does not know is refused before anything is created.
 	if _, err := h.d.Scaffold(h.ctx(), "empty", "odd", "lighttpd"); err == nil {
 		t.Fatal("an unknown webserver was accepted")
 	}
@@ -234,14 +234,14 @@ func TestChoosingTheWebserverWhileCreatingAProject(t *testing.T) {
 // features/quick-app-php.feature — "Creating an empty project"
 func TestCreatingAnEmptyProject(t *testing.T) {
 	h := newHarness(t)
-	// And nothing is downloaded: any fetch would fail here.
+	// INFO: And nothing is downloaded: any fetch would fail here.
 	h.d.scaf.Fetcher = offlineFetcher{}
 
 	if _, err := h.d.Scaffold(h.ctx(), "empty", "blank", ""); err != nil {
 		t.Fatalf("scaffold: %v", err)
 	}
 
-	// Then a folder "www/blank" is created with an "index.php" in it
+	// INFO: Then a folder "www/blank" is created with an "index.php" in it
 	entries, err := os.ReadDir(h.root.ProjectDir("blank"))
 	if err != nil {
 		t.Fatal(err)

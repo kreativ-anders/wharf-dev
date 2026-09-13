@@ -22,7 +22,7 @@ void main() {
   setUp(() async {
     root = await Directory.systemTemp.createTemp('wharf-launch');
     final hosts = File('${root.path}/hosts')..writeAsStringSync('127.0.0.1\tlocalhost\n');
-    // Never the real hosts file, never a password prompt.
+    // WARNING: Never the real hosts file, never a password prompt.
     safeArgs = ['--hosts', hosts.path, '--elevator', 'direct'];
   });
 
@@ -77,7 +77,7 @@ void main() {
 
     expect(launcher.ownsDaemon, isFalse);
     expect(_alive(pid), isFalse, reason: 'the daemon must not outlive the app');
-    // A clean shutdown removes the endpoint, so the next launch starts fresh.
+    // INFO: A clean shutdown removes the endpoint, so the next launch starts fresh.
     expect(File(endpointPathFor(root.path)).existsSync(), isFalse);
   });
 

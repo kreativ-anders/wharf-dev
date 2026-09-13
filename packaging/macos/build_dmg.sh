@@ -52,7 +52,7 @@ fail() {
   exit 1
 }
 
-# A missing credential is a warning for a test build and an error for a
+# INFO: A missing credential is a warning for a test build and an error for a
 # release; one function so the two cannot drift apart.
 missing() {
   if [ "$REQUIRE_NOTARIZED" = 1 ]; then
@@ -71,7 +71,7 @@ fi
 
 # ------------------------------------------------------ Work on a copy --
 #
-# Do not optimise away: signing the bundle in gui/build/ in place breaks the
+# WARNING: Do not optimise away: signing the bundle in gui/build/ in place breaks the
 # NEXT `flutter build macos`. Since Sonoma, macOS's app-management protection
 # forbids other processes from modifying a *signed* bundle, so Flutter can no
 # longer copy its plugins in — a wall of "You don't have permission to save the
@@ -89,7 +89,7 @@ MAIN_EXE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Content
 
 # ------------------------------------------- One architecture set --
 #
-# `flutter build macos --release` builds a universal app; the "Embed wharfd"
+# WARNING: `flutter build macos --release` builds a universal app; the "Embed wharfd"
 # build phase builds the daemon for the build machine only unless told
 # otherwise. An arm64-only wharfd inside a universal app launches on an Intel
 # Mac and then fails to start its daemon — an app that looks broken for a reason
@@ -111,7 +111,7 @@ else
   missing "no identity '$SIGN_IDENTITY' in the keychain — the image stays UNSIGNED."
 fi
 
-# Retries with a growing pause. Not decoration: --timestamp is one network call
+# WARNING: Retries with a growing pause. Not decoration: --timestamp is one network call
 # per signature to Apple's timestamp service, which now and then does not
 # answer. codesign reports that as a meaningless "errSecInternalComponent" and
 # gives up; the identical call succeeds seconds later.
@@ -129,18 +129,18 @@ retry() {
 }
 
 sign_one() {
-  # --options runtime: the Hardened Runtime, required for notarization.
+  # INFO: --options runtime: the Hardened Runtime, required for notarization.
   # --timestamp: Apple's signed timestamp, so the signature outlives the
   # certificate's expiry.
   retry codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$@"
 }
 
 if [ "$CAN_SIGN" = 1 ]; then
-  # Extended attributes (com.apple.quarantine, Finder metadata) make codesign
+  # WARNING: Extended attributes (com.apple.quarantine, Finder metadata) make codesign
   # fail with "resource fork, Finder information, or similar detritus".
   xattr -cr "$APP"
 
-  # Inside out: every embedded library, then every framework as a whole, then
+  # WARNING: Inside out: every embedded library, then every framework as a whole, then
   # every helper executable, the bundle last. Deliberately not --deep — Apple
   # does not intend it for distribution, and it would hand the app's
   # entitlements to everything inside.
@@ -154,7 +154,7 @@ if [ "$CAN_SIGN" = 1 ]; then
     done < <(find "$APP/Contents/Frameworks" -mindepth 1 -maxdepth 1 -print0)
   fi
 
-  # wharfd, and anything else beside the main executable. Notarization rejects
+  # WARNING: wharfd, and anything else beside the main executable. Notarization rejects
   # the whole app if one Mach-O inside is signed only ad hoc — which is what the
   # Go linker gives wharfd. No entitlements: the daemon needs none, and it
   # starts PHP and the webservers as processes of their own, which the Hardened
@@ -164,7 +164,7 @@ if [ "$CAN_SIGN" = 1 ]; then
     sign_one "$exe"
   done < <(find "$APP/Contents/MacOS" -type f -perm -u+x -print0)
 
-  # Only the outer bundle gets the entitlements (the sandbox stays off).
+  # INFO: Only the outer bundle gets the entitlements (the sandbox stays off).
   sign_one --entitlements "$ENTITLEMENTS" "$APP"
 
   codesign --verify --strict --deep --verbose=2 "$APP"
@@ -190,7 +190,7 @@ if [ "$CAN_SIGN" = 1 ] && [ "${SKIP_NOTARIZE:-0}" != 1 ]; then
 fi
 
 notarize() {
-  # --wait blocks until Apple is done (usually 1–5 minutes). Without it the
+  # INFO: --wait blocks until Apple is done (usually 1–5 minutes). Without it the
   # submission ID would have to be polled, and a rejection would no longer sit
   # next to the build that caused it.
   if ! xcrun notarytool submit "$1" "${NOTARY_ARGS[@]}" --wait --output-format json >"$WORK/notary.json"; then
@@ -199,20 +199,20 @@ notarize() {
   fi
   cat "$WORK/notary.json"
   if ! grep -q '"status" *: *"Accepted"' "$WORK/notary.json"; then
-    # The log names the exact file and reason Apple rejected.
+    # INFO: The log names the exact file and reason Apple rejected.
     id="$(sed -n 's/.*"id" *: *"\([^"]*\)".*/\1/p' "$WORK/notary.json" | head -n 1)"
     [ -n "$id" ] && xcrun notarytool log "$id" "${NOTARY_ARGS[@]}" >&2 || true
     fail "Apple did not accept $1 (log above)."
   fi
 }
 
-# Notarized twice on purpose: the ticket is stapled into the app AND into the
+# WARNING: Notarized twice on purpose: the ticket is stapled into the app AND into the
 # image. Stapling only the image is not enough — once the app is dragged out,
 # it carries no ticket of its own and Gatekeeper has to ask Apple online on
 # first launch, exactly what the image is meant to spare.
 if [ "$CAN_NOTARIZE" = 1 ]; then
   ZIP="$WORK/Wharf.zip"
-  # ditto, not zip: keeps resource forks and extended attributes.
+  # WARNING: ditto, not zip: keeps resource forks and extended attributes.
   ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
   notarize "$ZIP"
   xcrun stapler staple "$APP"
@@ -233,7 +233,7 @@ rm -f "$OUT_FILE"
 hdiutil create -volname Wharf -srcfolder "$STAGING" -ov -format UDZO "$OUT_FILE"
 
 if [ "$CAN_SIGN" = 1 ]; then
-  # No --options runtime: the Hardened Runtime belongs to a running program,
+  # INFO: No --options runtime: the Hardened Runtime belongs to a running program,
   # and the image is only its container.
   retry codesign --force --timestamp --sign "$SIGN_IDENTITY" "$OUT_FILE"
 fi
@@ -242,7 +242,7 @@ if [ "$CAN_NOTARIZE" = 1 ]; then
   notarize "$OUT_FILE"
   xcrun stapler staple "$OUT_FILE"
 
-  # The check that counts: "source=Notarized Developer ID" means Gatekeeper
+  # INFO: The check that counts: "source=Notarized Developer ID" means Gatekeeper
   # opens the image on any Mac without asking.
   spctl -a -t open --context context:primary-signature -vv "$OUT_FILE"
 fi

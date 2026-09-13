@@ -51,7 +51,7 @@ func run() error {
 		return nil
 	}
 
-	// Started by the app, stdout and stderr are pipes the app holds. If the
+	// WARNING: Started by the app, stdout and stderr are pipes the app holds. If the
 	// app dies, the next log line hits a closed pipe — and Go's default is to
 	// kill a process with SIGPIPE on a broken write to fd 1 or 2. That struck
 	// mid-shutdown, before the daemon could stop its webservers. Ignored, a
@@ -102,7 +102,7 @@ func run() error {
 		return err
 	}
 
-	// Clients find the daemon through this file rather than by guessing a
+	// INFO: Clients find the daemon through this file rather than by guessing a
 	// socket path or a port.
 	endpointPath := filepath.Join(root.Data(), ipc.EndpointFileName)
 	if err := ipc.WriteEndpoint(endpointPath, srv.Endpoint()); err != nil {
@@ -113,7 +113,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// The app quits a daemon it started through this rather than a signal, so
+	// INFO: The app quits a daemon it started through this rather than a signal, so
 	// the shutdown below runs on Windows too (single-application.feature,
 	// "Quitting an application that started its own daemon").
 	srv.Handle(ipc.MethodShutdown, func(context.Context, json.RawMessage) (any, error) {
@@ -124,7 +124,7 @@ func run() error {
 
 	go d.WatchConfig(ctx)
 
-	// Started by the GUI: if the GUI disappears without stopping us — a
+	// INFO: Started by the GUI: if the GUI disappears without stopping us — a
 	// crash, a force quit — shut down rather than keep services running with
 	// nobody left to see them.
 	go watchdog.WatchParent(ctx, *parentFlag, watchdog.DefaultPoll, func() {
@@ -148,7 +148,7 @@ func run() error {
 		}
 	}
 
-	// Managed processes must not outlive the daemon: an orphaned webserver
+	// WARNING: Managed processes must not outlive the daemon: an orphaned webserver
 	// still holding port 80 is the worst thing this tool could leave behind.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

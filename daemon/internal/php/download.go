@@ -238,7 +238,7 @@ func (d *Downloader) installWindows(ctx context.Context, version, destDir, tmp s
 	if _, err := os.Stat(filepath.Join(destDir, "php-cgi.exe")); err != nil {
 		return "", fmt.Errorf("%s did not contain php-cgi.exe", filepath.Base(zipPath))
 	}
-	// The Windows build loads its extensions from DLLs, and without a
+	// WARNING: The Windows build loads its extensions from DLLs, and without a
 	// php.ini it loads none — Kirby would not boot. PHP looks for php.ini
 	// beside the binary, so one is written there. extension_dir is not in
 	// it: the folder is renamed after this returns, so the daemon passes the
