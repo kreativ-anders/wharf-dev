@@ -39,7 +39,7 @@ Single tray-resident application; one-click service and project control.
 | Core daemon | Process orchestration, config state, hosts/elevation adapter | Go, single cross-compiled binary |
 | IPC | GUI ↔ daemon transport | Unix domain socket on macOS/Linux; loopback TCP + token on Windows (see §4a) |
 | Service registry | Which services exist, which is active, per-project overrides | Single config file (JSON/TOML) read by daemon, watched for changes |
-| Elevation adapter | One of the two platform-branching code paths; process trees are the other (§4) | 3 thin implementations behind one interface (see §4) |
+| Elevation adapter | One of the three platform-branching code paths; process trees and the terminal PATH are the others (§4) | 3 thin implementations behind one interface (see §4) |
 | Runtime binaries | PHP (v1); Nginx/Apache; mkcert; roadmap: Node, Go, Python, MySQL, PostgreSQL, Mailpit | Per-OS portable builds under `bin/` — see §4b |
 
 ## 4. Cross-OS strategy: one code path, minimal branching
@@ -77,6 +77,30 @@ Every design decision favours identical behaviour across OS over the most
   openable while anything holds a handle to it — the flutter tool, a
   debugger — so "can it be opened" kept the daemon waiting for an app that
   was gone; it must be asked whether the process has exited.
+- **PHP in the terminal** — `bin/path` holds a `php` that runs the global
+  default version, and "Use in terminal" puts that folder first on PATH
+  (`features/php-terminal.feature`). `internal/shellpath` is the third
+  platform-specific surface: a symbolic link and a marked block in the shell
+  startup files (`.zshrc`, bash's, `.profile`, fish's `conf.d`) on macOS and
+  Linux; a `php.cmd` and the `Path` of the user environment on Windows, where
+  a symbolic link needs Developer Mode and no shell reads a startup file every
+  editor also reads. *Added later*: before it, a terminal or an editor could
+  not find the PHP Wharf serves with, because nothing Wharf installs is on
+  PATH. It is off until the user turns it on, since it writes outside the
+  Wharf folder; it needs no password, because those files and the user
+  environment are the user's. Wharf changes them only when the switch changes
+  or is on at start. PATH runs the first `php` it finds, so only one Wharf
+  folder can be the terminal's: the one switched on (or started with it on)
+  last. Turning it on replaces another folder's block; turning it off removes
+  only the folder's own, so a second Wharf folder cannot take away the first
+  one's. A start line without its end line is refused with the file named,
+  never removed up to the end of the file — that deleted the user's own lines.
+  Quitting leaves it in place; Reset takes it away. `bin/path` itself is never
+  adopted as a PHP install. On Windows `php.cmd` passes its arguments through
+  cmd, which re-reads `&` and `|` in an argument a program did not quote for
+  it, and Ctrl+C asks "Terminate batch job"; a `php.exe` shim of Wharf's own
+  would remove both, once packaging can ship one. Editors started from the Dock on macOS see it only if they ask
+  a login shell for PATH, as VS Code does.
 - **SSL** — `mkcert`, already cross-platform, used unmodified.
 - **Distribution shell** — a portable root folder (`bin/`, `www/`, `config/`)
   is the shared internal model; only the outer package format differs
@@ -209,6 +233,8 @@ install keeps them, so the generated config works with any install.
 wharf/
 ├── bin/
 │   ├── php/            # versioned, one folder per version (downloaded or vendored)
+│   ├── path/           # php → the global default's php (php.cmd on Windows);
+│   │                   #   on PATH when "Use in terminal" is on
 │   ├── nginx/          # nginx, when Wharf installed it
 │   ├── apache/         # bin/httpd + modules/, when Wharf installed it
 │   └── mkcert/         # downloaded when SSL is first turned on
@@ -277,6 +303,8 @@ them surviving a restart:
   a PHP it did not download; removing one it did deletes `bin/php/<version>`
   instead, so neither needs elevation on any OS
   (`features/php-runtime.feature`).
+- `services.php.terminal` — `true` only while "Use in terminal" puts
+  `bin/path` on the user's PATH (`features/php-terminal.feature`).
 
 A project's `name` becomes a folder in `www/`, files in `config/vhosts/` and
 `data/certs/`, and a `server_name` line, so a hand-edited one must be usable

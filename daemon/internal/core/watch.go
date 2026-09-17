@@ -53,6 +53,12 @@ func (d *Daemon) WatchConfig(ctx context.Context) {
 			if !slices.Equal(prev.Services.PHP.Hidden, cfg.Services.PHP.Hidden) {
 				d.RefreshPHP(ctx)
 			}
+			// INFO: Turning "terminal" on or off by hand does what the switch does.
+			if prev.Services.PHP.Terminal != cfg.Services.PHP.Terminal {
+				d.mu.Lock()
+				d.applyTerminal(cfg.Services.PHP.Terminal, true)
+				d.mu.Unlock()
+			}
 			d.log.Info("config reloaded from disk", "projects", len(cfg.Projects))
 			d.publish()
 		}

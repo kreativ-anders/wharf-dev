@@ -20,6 +20,7 @@ import (
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/php"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/project"
 	wruntime "github.com/kreativ-anders/wharf-dev/daemon/internal/runtime"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/shellpath"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/supervisor"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/webserver"
 )
@@ -92,6 +93,16 @@ type Daemon struct {
 	// but its row still shows the reason.
 	failed map[string]string
 
+	// shell puts bin/path on the user's PATH (php-terminal.feature), and
+	// terminalPlaces is where it last did.
+	shell          shellpath.Registrar
+	terminalPlaces atomic.Pointer[[]string]
+	// linkTarget is the binary bin/path's php runs, as last linked; linkSynced
+	// is false until the link was first brought in line. Both guarded by linkMu.
+	linkMu     sync.Mutex
+	linkTarget string
+	linkSynced bool
+
 	onState atomic.Pointer[func(State)]
 }
 
@@ -115,7 +126,11 @@ type Options struct {
 	// supply ones that see only what they staged.
 	WebDetector  *webserver.Detector
 	WebInstaller webserver.Installer
-	Log          *slog.Logger
+	// ShellPath puts bin/path on the user's PATH. The default one writes the
+	// user's shell startup files, or the user environment on Windows; tests
+	// supply one that remembers instead.
+	ShellPath shellpath.Registrar
+	Log       *slog.Logger
 	// Now fixes the clock used to judge PHP support status.
 	Now func() time.Time
 	// Version is what wharfd was built as, published in the snapshot so the
@@ -167,6 +182,13 @@ func New(opts Options) (*Daemon, error) {
 	if detector.VendorDir == "" {
 		detector.VendorDir = filepath.Join(opts.Root.Bin(), "php")
 	}
+	if detector.PathDir == "" {
+		detector.PathDir = opts.Root.PathBin()
+	}
+	shell := opts.ShellPath
+	if shell == nil {
+		shell = shellpath.System()
+	}
 
 	installer := opts.PHPInstaller
 	if installer == nil {
@@ -213,7 +235,9 @@ func New(opts Options) (*Daemon, error) {
 		now:          now,
 		log:          opts.Log,
 		version:      opts.Version,
+		shell:        shell,
 	}
+	d.setTerminalPlaces(nil)
 	d.res.Installs = d.WebInstalls
 	detector.Hidden = d.phpHidden
 	d.RefreshWebservers(context.Background())
@@ -237,6 +261,8 @@ func New(opts Options) (*Daemon, error) {
 	} else {
 		d.RefreshPHP(context.Background())
 	}
+	d.applyTerminal(store.Get().Services.PHP.Terminal, false)
+	d.publish()
 	return d, nil
 }
 
@@ -325,6 +351,7 @@ func (d *Daemon) Config() *config.Config { return d.store.Get() }
 func (d *Daemon) Root() layout.Root { return d.root }
 
 func (d *Daemon) publish() {
+	d.syncPathLink(d.store.Get())
 	if fn := d.onState.Load(); fn != nil {
 		(*fn)(d.State())
 	}
@@ -401,6 +428,13 @@ func (d *Daemon) Reset(ctx context.Context) error {
 	}
 	d.clearStarted()
 	cfg := d.store.Get()
+
+	// INFO: wharf.json goes back to a first start, where "Use in terminal" is
+	// off, so the PATH goes back too (php-terminal.feature, "Resetting Wharf
+	// takes PHP off the terminal PATH"). bin/path stays, like bin/php.
+	if cfg.Services.PHP.Terminal {
+		d.applyTerminal(false, true)
+	}
 
 	// INFO: Lines left from the <name>.wharf days go too: one prompt, and a
 	// declined one leaves lines that no longer do anything.

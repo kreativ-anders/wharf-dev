@@ -163,6 +163,39 @@ func TestDetectAdoptsSystemInstalls(t *testing.T) {
 	}
 }
 
+// features/php-terminal.feature — "Wharf's own folder is not adopted as another PHP"
+func TestDetectPassesOverWharfsPathFolder(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bin/path holds php.cmd on Windows, which is never a php.exe candidate")
+	}
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "machine", "bin")
+	cli := filepath.Join(bin, CLIName())
+	stub(t, cli)
+	stub(t, filepath.Join(bin, FastCGIName()))
+	pathDir := filepath.Join(dir, "Wharf", "bin", "path")
+	if err := os.MkdirAll(pathDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(pathDir, CLIName())
+	if err := os.Symlink(cli, link); err != nil {
+		t.Fatal(err)
+	}
+
+	d := &Detector{
+		VendorDir: filepath.Join(dir, "none"),
+		// INFO: The link first, as PATH would name it before the real folder.
+		Candidates: []string{link, cli},
+		PathDir:    pathDir,
+		Probe:      func(context.Context, string) (string, error) { return "8.4.3", nil },
+		Now:        func() time.Time { return at("2026-03-01") },
+	}
+	got := d.Detect(context.Background())
+	if len(got) != 1 || got[0].Dir != bin {
+		t.Fatalf("detected %+v, want only the install in %s", got, bin)
+	}
+}
+
 // A vendored build and a system build of the same version are one entry, and
 // the tool's own copy wins.
 func TestVendoredBuildsBeatSystemOnes(t *testing.T) {

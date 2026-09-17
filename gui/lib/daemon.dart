@@ -19,6 +19,7 @@ class Method {
   static const installPhp = 'services.installPHP';
   static const removePhp = 'services.removePHP';
   static const unhidePhp = 'services.unhidePHP';
+  static const setPhpTerminal = 'services.setPHPTerminal';
   static const setupSsl = 'services.setupSSL';
   static const phpSettings = 'services.phpSettings';
   static const phpReleases = 'services.phpReleases';
@@ -179,6 +180,10 @@ class Daemon extends ChangeNotifier {
 
   /// Shows a hidden PHP folder in the picker again.
   Future<void> unhidePhp(String dir) => _act(Method.unhidePhp, {'dir': dir});
+
+  /// Puts bin/path on the user's PATH, or takes it off
+  /// (features/php-terminal.feature).
+  Future<void> setPhpTerminal(bool on) => _act(Method.setPhpTerminal, {'on': on});
 
   /// Installs nginx or Apache; Settings shows it as installing meanwhile
   /// (features/webserver-install.feature).

@@ -23,7 +23,7 @@ one is renamed, deleted or left unimplemented. See [CLAUDE.md](CLAUDE.md) §1.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — getting set up, commits
 - `dev/releasing.md` — versions and how a release is cut;
   [`CHANGELOG.md`](CHANGELOG.md) is written by each release
-- `daemon/` — the Go core daemon (`wharfd`) and its CLI (`wharfctl`) — see
+- `daemon/` — the Go core daemon (`wharfd`) and a developer CLI (`wharfctl`) — see
   [`daemon/README.md`](daemon/README.md)
 - `gui/` — the Flutter desktop app — see [`gui/README.md`](gui/README.md)
 
@@ -33,7 +33,7 @@ one is renamed, deleted or left unimplemented. See [CLAUDE.md](CLAUDE.md) §1.
 |---|---|
 | Core daemon | Implemented. Every `@v1` scenario has a test claiming it. |
 | Flutter GUI | Implemented: project list, tray menu, settings, PHP version picker. Runs on macOS today; Linux and Windows shells are generated but unbuilt here. |
-| `wharfctl` CLI | Implemented — a complete way to use Wharf without the GUI. |
+| `wharfctl` CLI | Developer tool: drives a running daemon from the terminal. Not shipped in releases. |
 | PHP runtime | Detected on the machine and adopted where it is, or downloaded from Settings with one click. |
 | SSL | mkcert is downloaded (pinned, checksum-verified) and its authority trusted when a project first turns SSL on. |
 | Webservers | Adopted where installed (a Mac's own Apache is used out of the box), or installed from Settings: nginx on Linux/Windows by download, on macOS via Homebrew; Apache on Windows by download. |
@@ -79,9 +79,10 @@ started. If the app is force-quit
 or crashes, the daemon notices within a couple of seconds and stops itself.
 If something looks wrong, the log is at `~/Wharf/data/log/wharfd.log`.
 
-### Without the GUI
+### From the terminal
 
-`wharfctl` is a complete front end on its own:
+`wharfctl` talks to a running daemon — the app's, or one from `make run` — and
+never starts one. It is for development and debugging, not part of a release:
 
 ```sh
 ./build/wharfctl status

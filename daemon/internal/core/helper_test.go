@@ -17,6 +17,7 @@ import (
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/elevate"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/layout"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/php"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/shellpath"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/supervisor"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/webserver"
 )
@@ -40,6 +41,8 @@ type harness struct {
 	sup    *supervisor.Supervisor
 	php    *fakeInstaller
 	web    *fakeWebInstaller
+	shell  *shellpath.Fake
+	opts   Options
 }
 
 // stubWebservers stages nginx and Apache as Wharf's own copies. Apache is
@@ -159,6 +162,9 @@ func newHarness(t *testing.T, adjust ...func(*Options)) *harness {
 
 	installer := &fakeInstaller{}
 	webFake := &fakeWebInstaller{}
+	// WARNING: Never the real one: it would write the shell startup files of
+	// whoever runs the suite.
+	shell := shellpath.NewFake()
 	opts := Options{
 		Root:  root,
 		Store: store,
@@ -178,6 +184,7 @@ func newHarness(t *testing.T, adjust ...func(*Options)) *harness {
 		PHPInstaller: installer,
 		WebDetector:  testWebDetector(),
 		WebInstaller: webFake,
+		ShellPath:    shell,
 		Log:          slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 	for _, fn := range adjust {
@@ -193,7 +200,7 @@ func newHarness(t *testing.T, adjust ...func(*Options)) *harness {
 		_ = d.Shutdown(ctx)
 	})
 
-	return &harness{t: t, d: d, root: root, runner: runner, ports: ports, el: el, certs: ca, hosts: hostsPath, sup: sup, php: installer, web: webFake}
+	return &harness{t: t, d: d, root: root, runner: runner, ports: ports, el: el, certs: ca, hosts: hostsPath, sup: sup, php: installer, web: webFake, shell: shell, opts: opts}
 }
 
 func stubBinary(t *testing.T, path string) {

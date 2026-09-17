@@ -11,7 +11,7 @@ import (
 // Root is a resolved wharf root folder.
 //
 //	wharf/
-//	├── bin/     php/<version>, nginx/, apache/, mkcert/
+//	├── bin/     php/<version>, path/, nginx/, apache/, mkcert/
 //	├── www/     one folder per project
 //	├── config/  wharf.json, php.ini, vhosts/ (custom webserver directives)
 //	└── data/    runtime state, sockets, logs
@@ -85,6 +85,10 @@ func (r Root) MkcertBin() string { return filepath.Join(r.Bin(), "mkcert") }
 
 // PHPBin is the directory holding one PHP version's binaries.
 func (r Root) PHPBin(version string) string { return filepath.Join(r.Bin(), "php", version) }
+
+// PathBin holds the php of the global default version, the folder "Use in
+// terminal" puts on PATH (php-terminal.feature).
+func (r Root) PathBin() string { return filepath.Join(r.Bin(), "path") }
 
 // Ensure creates the directories the daemon expects to exist.
 func (r Root) Ensure() error {

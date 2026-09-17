@@ -20,6 +20,7 @@ import (
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/layout"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/php"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/runtime"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/shellpath"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/supervisor"
 )
 
@@ -94,7 +95,8 @@ func newFirstRun(t *testing.T, now time.Time, systemVersions ...string) *firstRu
 			},
 			Now: func() time.Time { return now },
 		},
-		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		ShellPath: shellpath.NewFake(),
+		Log:       slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	if err != nil {
 		t.Fatal(err)

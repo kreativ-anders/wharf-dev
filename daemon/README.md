@@ -40,6 +40,7 @@ so it raises no password prompt and never touches the real `/etc/hosts`.
 | `internal/config` | `wharf.json`: load, atomic write, hand-edit repair |
 | `internal/elevate` | **Platform-specific**: UAC / osascript / pkexec |
 | `internal/proctree` | **Platform-specific**: a service and its workers, stopped as one (process group / job object) |
+| `internal/shellpath` | **Platform-specific**: `bin/path`'s php, and `bin/path` on the user's PATH (shell startup files / user environment) |
 | `internal/hostsfile` | Removes hosts lines left from the old `<name>.wharf` scheme |
 | `internal/supervisor` | Process lifecycle, port waiting, state transitions |
 | `internal/runtime` | Config → process specs; generates nginx/apache/php-fpm config |
@@ -54,7 +55,9 @@ so it raises no password prompt and never touches the real `/etc/hosts`.
 
 The platform-specific surface is three files in `internal/elevate`
 (~50 lines each, two functions), two in `internal/proctree` (a process group
-on macOS/Linux, a job object on Windows), plus two constants: the hosts-file path and the Windows `.exe`
+on macOS/Linux, a job object on Windows), two in `internal/shellpath` (shell
+startup files and a link on macOS/Linux, the user environment and a `php.cmd`
+on Windows), plus two constants: the hosts-file path and the Windows `.exe`
 suffix. Everything else compiles unmodified for all six targets.
 
 ## Talking to the daemon
@@ -86,14 +89,17 @@ Error codes the GUI branches on: `elevation_denied`, `missing_binary`,
 
 ## `wharfctl`
 
-The same API from a terminal — useful for development, and a complete way to
-use Wharf without the GUI:
+The same API from a terminal, for development and debugging. It connects to a
+daemon that is already running — found through `data/wharf.endpoint` in the
+root — and never starts one, so the app (or `make run`) has to be up. It is not
+shipped in releases, and goes once Wharf has a stable one:
 
 ```sh
 wharfctl status
 wharfctl add my-kirby-site        # register a folder already in www/
 wharfctl add ~/Code/client-site   # or any folder, left where it is
 wharfctl php install 8.4          # download a PHP build into bin/php/8.4
+wharfctl php terminal on          # put the default PHP (bin/path) on the terminal PATH
 wharfctl ssl                      # install mkcert, trust its authority
 wharfctl config my-kirby-site nginx   # path of the custom nginx directives
 wharfctl webserver install nginx  # install a webserver
@@ -116,6 +122,7 @@ Each `@v1` scenario in `features/` has a test named after it:
 | `app-configuration.feature` | `internal/core/app_configuration_test.go` |
 | `local-ssl.feature` | `internal/core/local_ssl_test.go` |
 | `php-runtime.feature` | `internal/core/php_runtime_test.go` |
+| `php-terminal.feature` | `internal/core/php_terminal_test.go`, `internal/shellpath/shellpath_unix_test.go` |
 | `project-folders.feature` | `internal/core/project_folders_test.go` |
 | `webserver-install.feature` | `internal/core/webserver_install_test.go` |
 | `pretty-urls.feature` | `internal/core/pretty_urls_test.go` |

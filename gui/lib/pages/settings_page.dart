@@ -125,6 +125,9 @@ class _SettingsPageState extends State<SettingsPage> {
         const SizedBox(height: 28),
         _SectionHeader('PHP settings'),
         _PhpSettingsSection(daemon: daemon, php: services.php),
+        const SizedBox(height: 28),
+        _SectionHeader('Terminal'),
+        _PhpTerminalSection(daemon: daemon, php: services.php),
       ],
       SettingsSection.ssl => [
         _SectionHeader('SSL'),
@@ -749,6 +752,55 @@ class _PhpSettingsSection extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The global default PHP for terminals and editors: one switch, and what it
+/// changed outside the Wharf folder named where it can be undone by hand
+/// (features/php-terminal.feature).
+class _PhpTerminalSection extends StatelessWidget {
+  const _PhpTerminalSection({required this.daemon, required this.php});
+
+  final Daemon daemon;
+  final Php php;
+
+  @override
+  Widget build(BuildContext context) {
+    final terminal = php.terminal;
+    final muted = Theme.of(context).textTheme.bodySmall;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SwitchListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+          title: const Text('Use in terminal'),
+          subtitle: Text('Terminals and editors run PHP ${php.version} as php, from ${terminal.dir}.'),
+          value: terminal.on,
+          onChanged: daemon.state.busy ? null : daemon.setPhpTerminal,
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (terminal.php.isEmpty)
+                Text(
+                  'PHP ${php.version} is not installed, so the terminal finds no PHP from Wharf '
+                  'until it is.',
+                  style: muted,
+                ),
+              if (terminal.on && terminal.places.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text('Added to:', style: muted),
+                for (final place in terminal.places) SelectableText(place, style: muted),
+                const SizedBox(height: 8),
+                Text('A new terminal picks it up.', style: muted),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

@@ -66,6 +66,10 @@ type Detector struct {
 	// the same version can take its place. Builds under VendorDir are never
 	// hidden: they are Wharf's own, and removed instead.
 	Hidden func(dir string) bool
+	// PathDir is Wharf's bin/path. Its php only runs another install, so it
+	// is never adopted as one of its own, however PATH finds it
+	// (php-terminal.feature, "Wharf's own folder is not adopted as another PHP").
+	PathDir string
 }
 
 // NewDetector returns a Detector for the given bin/php directory.
@@ -155,6 +159,12 @@ func (d *Detector) system(ctx context.Context) []Install {
 	seen := map[string]bool{}
 	var out []Install
 	for _, cli := range candidates {
+		dir := filepath.Dir(cli)
+		// WARNING: Before the seen check: the link resolves to the install it
+		// runs, which must still be found under its own folder.
+		if d.PathDir != "" && filepath.Clean(dir) == filepath.Clean(d.PathDir) {
+			continue
+		}
 		resolved, err := filepath.EvalSymlinks(cli)
 		if err != nil {
 			resolved = cli
@@ -164,7 +174,6 @@ func (d *Detector) system(ctx context.Context) []Install {
 		}
 		seen[resolved] = true
 
-		dir := filepath.Dir(cli)
 		if d.Hidden != nil && d.Hidden(dir) {
 			continue
 		}

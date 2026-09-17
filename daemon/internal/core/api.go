@@ -11,6 +11,7 @@ import (
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/php"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/project"
 	wruntime "github.com/kreativ-anders/wharf-dev/daemon/internal/runtime"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/shellpath"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/webserver"
 )
 
@@ -27,6 +28,9 @@ type (
 	}
 	modeParams struct {
 		Mode string `json:"mode"`
+	}
+	onParams struct {
+		On bool `json:"on"`
 	}
 	addParams struct {
 		Name string `json:"name"`
@@ -87,6 +91,7 @@ func (d *Daemon) Register(srv *ipc.Server) {
 		srv.Handle(method, action(d, func(ctx context.Context, p versionParams) error { return act(ctx, p.Version) }))
 	}
 	srv.Handle(ipc.MethodUnhidePHP, action(d, func(ctx context.Context, p dirParams) error { return d.UnhidePHP(ctx, p.Dir) }))
+	srv.Handle(ipc.MethodSetPHPTerminal, action(d, func(ctx context.Context, p onParams) error { return d.SetPHPTerminal(ctx, p.On) }))
 	srv.Handle(ipc.MethodSetAppearance, action(d, func(_ context.Context, p modeParams) error { return d.SetAppearance(p.Mode) }))
 
 	// INFO: These answer with what they made or changed, not the snapshot.
@@ -179,6 +184,7 @@ func asIPCError(err error) error {
 		notFound *NotFoundError
 		invalid  *InvalidError
 		conflict *ConflictError
+		broken   *shellpath.BrokenBlockError
 	)
 	switch {
 	case err == nil:
@@ -196,7 +202,7 @@ func asIPCError(err error) error {
 		return ipc.Errorf(ipc.CodeNotFound, "%s", err.Error())
 	case errors.As(err, &invalid):
 		return ipc.Errorf(ipc.CodeBadRequest, "%s", err.Error())
-	case errors.As(err, &conflict):
+	case errors.As(err, &conflict), errors.As(err, &broken):
 		return ipc.Errorf(ipc.CodeConflict, "%s", err.Error())
 	}
 	return err

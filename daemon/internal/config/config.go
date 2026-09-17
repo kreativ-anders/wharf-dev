@@ -61,6 +61,9 @@ type PHP struct {
 	// passes over them rather than deleting them (php-runtime.feature,
 	// "Hiding a PHP version found on the machine").
 	Hidden []string `json:"hidden,omitempty"`
+	// Terminal puts bin/path, whose php runs the global default version, on
+	// the user's PATH (php-terminal.feature). Absent means off.
+	Terminal bool `json:"terminal,omitempty"`
 }
 
 // Project is one folder under www/. Override fields are pointers so that
@@ -362,6 +365,7 @@ func (c *Config) clone() *Config {
 				Available: append([]string(nil), c.Services.PHP.Available...),
 				Paths:     clonePaths(c.Services.PHP.Paths),
 				Hidden:    append([]string(nil), c.Services.PHP.Hidden...),
+				Terminal:  c.Services.PHP.Terminal,
 			},
 		},
 		Projects: make([]Project, len(c.Projects)),

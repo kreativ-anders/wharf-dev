@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -114,6 +115,37 @@ func TestGetReturnsACopy(t *testing.T) {
 	}
 	if s.Get().Services.Webserver.Available[0] == "mutated" {
 		t.Fatal("Get shared the available-services slice")
+	}
+}
+
+// clone copies field by field, so a new key it does not know is silently
+// lost on every update. Every field below is set; one clone forgot is caught.
+func TestCloneKeepsEveryField(t *testing.T) {
+	override := "apache"
+	version := "8.2"
+	full := &Config{
+		Appearance: "dark",
+		Services: Services{
+			Webserver: Webserver{Active: "apache", Available: []string{"apache", "nginx"}},
+			PHP: PHP{
+				Version:   "8.3",
+				Available: []string{"8.2", "8.3"},
+				Paths:     map[string]string{"8.2": "/opt/php82/bin"},
+				Hidden:    []string{"/opt/php81/bin"},
+				Terminal:  true,
+			},
+		},
+		Projects: []Project{{Name: "site", WebserverOverride: &override, PHPVersion: &version, SSL: true, Port: 8081, Path: "/src/site"}},
+	}
+	for _, v := range []reflect.Value{reflect.ValueOf(full.Services.PHP), reflect.ValueOf(full.Services.Webserver), reflect.ValueOf(full.Projects[0])} {
+		for i := range v.NumField() {
+			if v.Field(i).IsZero() {
+				t.Fatalf("the fixture leaves %s.%s unset; set it so clone is checked for it", v.Type().Name(), v.Type().Field(i).Name)
+			}
+		}
+	}
+	if got := full.clone(); !reflect.DeepEqual(got, full) {
+		t.Fatalf("clone = %+v\nwant %+v", got, full)
 	}
 }
 

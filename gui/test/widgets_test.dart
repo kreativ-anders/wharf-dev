@@ -65,6 +65,26 @@ class _PhpDaemon extends Daemon {
   Future<void> unhidePhp(String dir) async => calls.add('show $dir');
 }
 
+/// A fixture daemon that records how "Use in terminal" is switched.
+class _TerminalDaemon extends Daemon {
+  _TerminalDaemon(String json) : super(root: '/tmp/wharf-test') {
+    state = WharfState.fromJson(jsonDecode(json) as Map<String, dynamic>);
+  }
+
+  final calls = <bool>[];
+
+  @override
+  Future<void> setPhpTerminal(bool on) async => calls.add(on);
+}
+
+/// "Use in terminal" on, with two startup files changed.
+final _terminalOn = _twoProjects.replaceFirst(
+  '"settings": "/Users/x/Wharf/config/php.ini",',
+  '"settings": "/Users/x/Wharf/config/php.ini",'
+      '"terminal": {"on": true, "dir": "/Users/x/Wharf/bin/path", "php": "/opt/php84/php",'
+      ' "places": ["/Users/x/.zshrc", "/Users/x/.profile"]},',
+);
+
 /// One PHP Wharf downloaded, one found on the machine, one folder hidden.
 const _phpRemovable = '''
 {
@@ -679,6 +699,45 @@ void main() {
       find.widgetWithText(TextButton, 'Download'),
       findsOneWidget,
       reason: 'only 8.5 offers it',
+    );
+  });
+
+  // features/php-terminal.feature — "Putting Wharf's PHP on the terminal PATH"
+  testWidgets('Use in terminal is a switch that names every place it changed', (tester) async {
+    final off = _TerminalDaemon(
+      _twoProjects.replaceFirst(
+        '"settings": "/Users/x/Wharf/config/php.ini",',
+        '"settings": "/Users/x/Wharf/config/php.ini",'
+            '"terminal": {"on": false, "dir": "/Users/x/Wharf/bin/path", "php": "/opt/php84/php", "places": []},',
+      ),
+    );
+    await showSettings(tester, off, SettingsSection.php);
+
+    await tester.ensureVisible(find.text('Use in terminal'));
+    expect(find.text('Terminals and editors run PHP 8.4 as php, from /Users/x/Wharf/bin/path.'), findsOneWidget);
+    expect(find.text('A new terminal picks it up.'), findsNothing);
+    await tester.tap(find.text('Use in terminal'));
+    await tester.pump();
+    expect(off.calls, [true]);
+
+    final on = _TerminalDaemon(_terminalOn);
+    await showSettings(tester, on, SettingsSection.php);
+    await tester.ensureVisible(find.text('Use in terminal'));
+    expect(find.text('/Users/x/.zshrc'), findsOneWidget);
+    expect(find.text('/Users/x/.profile'), findsOneWidget);
+    expect(find.text('A new terminal picks it up.'), findsOneWidget);
+    expect(find.textContaining('not installed, so the terminal'), findsNothing);
+  });
+
+  // features/php-terminal.feature — "The global default PHP is not installed"
+  testWidgets('the terminal switch says when the default PHP is not there to run', (tester) async {
+    final daemon = fixture(_terminalOn.replaceFirst('"php": "/opt/php84/php",', '"php": "",'));
+    await showSettings(tester, daemon, SettingsSection.php);
+
+    await tester.ensureVisible(find.text('Use in terminal'));
+    expect(
+      find.text('PHP 8.4 is not installed, so the terminal finds no PHP from Wharf until it is.'),
+      findsOneWidget,
     );
   });
 

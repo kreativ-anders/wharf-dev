@@ -16,6 +16,7 @@ A new concept gets a row here in the same commit that introduces it.
 | **Adopt** | Use a PHP or webserver already on the machine, where it is, instead of installing one — recorded in `services.php.paths` | `features/php-runtime.feature`, `features/webserver-install.feature` |
 | **Install** | Download or fetch a binary into `bin/`, only when the user asks | `dev/architecture.md` §4b |
 | **Hide** / **Remove** (a PHP) | *Hide*: detection passes over a PHP found on the machine (`services.php.hidden`). *Remove*: delete a PHP Wharf downloaded. Wharf never deletes what it did not install | `features/php-runtime.feature` |
+| **Use in terminal** | Put `bin/path`, whose `php` runs the global default version, first on the user's PATH — `services.php.terminal` | `features/php-terminal.feature` |
 | **Recommended** (PHP) | The newest version in active support — what a first run selects | `gui/lib/models/state.dart` |
 | **Stop all** | Stop every running project; Wharf stays open | `features/tray-actions.feature` |
 | **Cast off** / **Quit** | Stop everything and quit — *Cast off* in the window, *Quit* in the tray. The only action about Wharf itself rather than a project | `features/single-application.feature` |

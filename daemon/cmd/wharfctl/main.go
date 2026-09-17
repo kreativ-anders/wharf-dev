@@ -1,7 +1,12 @@
-// Command wharfctl drives the daemon from the terminal. It exists so the
-// daemon's behaviour can be exercised and scripted without the GUI — the
-// config file and this tool together are a complete way to use Wharf.
+// Command wharfctl drives a running daemon from the terminal. It is a
+// developer tool: it exercises and debugs the daemon without the GUI, and it
+// never starts one — it connects through data/wharf.endpoint in the root, so
+// the app has to be running (or `make run`). It is not part of a release.
 package main
+
+// TODO(wharfctl): remove this command once Wharf has a stable release — the
+// GUI and the e2e tests cover what it was for. Remove it from the Makefile,
+// both READMEs and the CLAUDE.md map with it.
 
 import (
 	"context"
@@ -47,6 +52,7 @@ const usage = `usage: wharfctl [--root DIR] <command> [args]
   php remove <version>       delete a downloaded version, or hide one found on the machine
   php unhide <folder>        show a hidden PHP folder again
   php scan                   re-scan the machine for PHP installations
+  php terminal <on|off>      put the default PHP (bin/path) on the terminal PATH, or take it off
   ssl                        install mkcert and trust its certificate authority
   config <name> <webserver>  print (creating if needed) a project's custom config path
   set <name> [flags]         per-project overrides
@@ -271,6 +277,16 @@ func runPHP(ctx context.Context, c *ipc.Client, args []string) error {
 		}
 		printPHP(st.Services.PHP)
 		return nil
+	case "terminal":
+		if len(args) < 2 || (args[1] != "on" && args[1] != "off") {
+			return fmt.Errorf("usage: wharfctl php terminal <on|off>")
+		}
+		var st core.State
+		if err := c.Call(ctx, ipc.MethodSetPHPTerminal, map[string]bool{"on": args[1] == "on"}, &st); err != nil {
+			return err
+		}
+		printPHP(st.Services.PHP)
+		return nil
 	case "unhide":
 		if len(args) < 2 {
 			return fmt.Errorf("usage: wharfctl php unhide <folder>")
@@ -317,6 +333,22 @@ func printPHP(p core.PHP) {
 	}
 	w.Flush()
 	printHiddenPHP(p.Hidden)
+	printTerminal(p.Terminal)
+}
+
+// printTerminal says whether the default PHP is on the terminal PATH, and where.
+func printTerminal(t core.Terminal) {
+	if !t.On {
+		fmt.Printf("\nterminal   off  (wharfctl php terminal on)\n")
+		return
+	}
+	fmt.Printf("\nterminal   on — %s is on PATH in new terminals\n", t.Dir)
+	if t.PHP == "" {
+		fmt.Printf("           the default version is not installed, so it holds no php\n")
+	}
+	for _, place := range t.Places {
+		fmt.Printf("           %s\n", place)
+	}
 }
 
 func printHiddenPHP(hidden []string) {

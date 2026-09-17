@@ -82,7 +82,7 @@
           {
             "@type": "Question",
             "name": "Can I use Wharf without the app?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Yes. The wharfctl command line does everything the app does, and the whole setup is one JSON file that Wharf picks up again when you edit it by hand." }
+            "acceptedAnswer": { "@type": "Answer", "text": "The app is what runs Wharf, but you never have to click through it: the whole setup is one JSON file that Wharf picks up again when you edit it by hand." }
           },
           {
             "@type": "Question",
@@ -432,7 +432,6 @@ nginx  :80  :443      <span class="dim">the front door</span>
       </p>
       <dl class="state">
         <div><dt><span class="status is-running" aria-hidden="true"></span>Core service</dt><dd><span class="sr-only">Done. </span>Every scenario has a test</dd></div>
-        <div><dt><span class="status is-running" aria-hidden="true"></span>Command line (<code>wharfctl</code>)</dt><dd><span class="sr-only">Done. </span>Everything, without the app</dd></div>
         <div><dt><span class="status is-running" aria-hidden="true"></span>PHP, nginx, Apache, HTTPS</dt><dd><span class="sr-only">Done. </span>Used if present, installed on request</dd></div>
         <div><dt><span class="status is-busy" aria-hidden="true"></span>Desktop app</dt><dd><span class="sr-only">Partly. </span>Runs on macOS; Windows and Linux builds next</dd></div>
         <div><dt><span class="status is-idle" aria-hidden="true"></span>Installers</dt><dd><span class="sr-only">Not yet. </span>DMG, MSI and AppImage not started</dd></div>
@@ -495,9 +494,9 @@ nginx  :80  :443      <span class="dim">the front door</span>
           </details>
           <details>
             <summary>Can I use Wharf without the app?</summary>
-            <p>Yes. The <code>wharfctl</code> command line does everything the
-            app does, and the whole setup is one JSON file that Wharf picks up
-            again when you edit it by hand.</p>
+            <p>The app is what runs Wharf, but you never have to click through
+            it: the whole setup is one JSON file that Wharf picks up again when
+            you edit it by hand.</p>
           </details>
           <details>
             <summary>Is Wharf only for Kirby?</summary>

@@ -116,6 +116,7 @@ wharf/
 │   ├── local-ssl.feature            mkcert installed and trusted by the SSL switch
 │   ├── php-runtime.feature          PHP detection, first-run default, picker, download, remove/hide
 │   ├── php-settings.feature         config/php.ini, read by every PHP version after its own
+│   ├── php-terminal.feature         bin/path runs the default PHP; "Use in terminal" puts it on PATH
 │   ├── pretty-urls.feature          <name>.localhost; old .wharf hosts lines removed
 │   ├── project-logs.feature         one log folder per project, opened from its settings
 │   ├── project-folders.feature      folders from anywhere, opening them
@@ -131,7 +132,7 @@ wharf/
 │   ├── go.mod                 module github.com/kreativ-anders/wharf-dev/daemon
 │   ├── cmd/
 │   │   ├── wharfd/            the daemon binary
-│   │   └── wharfctl/          CLI client; the front end until the GUI exists
+│   │   └── wharfctl/          dev-only CLI client of a running daemon; not shipped
 │   └── internal/
 │       ├── certs/             mkcert: pinned download, local CA trust, per-project certs
 │       ├── config/            wharf.json: load, atomic write, hand-edit repair
@@ -142,6 +143,7 @@ wharf/
 │       │   ├── webserver.go   webservers: detect, install, switch the active one
 │       │   ├── frontdoor.go   what the front door serves; own instances' ports
 │       │   ├── userfiles.go   custom webserver configs and php.ini: created, applied on save
+│       │   ├── terminal.go    bin/path follows the default PHP; "Use in terminal" on and off
 │       │   ├── errors.go      what the user got wrong, told apart from what the daemon did
 │       │   ├── state.go       the snapshot the GUI renders
 │       │   ├── api.go         IPC method wiring
@@ -157,6 +159,7 @@ wharf/
 │       ├── proctree/          PLATFORM-SPECIFIC: a service and its workers, stopped as one; is a process alive
 │       ├── project/           folder-as-project discovery, name rewriting, template scaffolding
 │       ├── runtime/           config → process specs; the front door, one generated file per project
+│       ├── shellpath/         PLATFORM-SPECIFIC: bin/path's php, and bin/path on the user's PATH (startup files / user environment)
 │       ├── specsync/          THE SYNC GUARD (§1)
 │       ├── supervisor/        process lifecycle, port waiting, state machine
 │       ├── watchdog/          daemon exits when the app that started it is gone
@@ -208,8 +211,9 @@ means changing the document that records it.
 - **No Docker, no VM.** Native host processes only.
 - **One behaviour across Windows, macOS and Linux.** Prefer identical behaviour
   over the best per-platform solution. All platform branching lives in
-  [`internal/elevate`](daemon/internal/elevate/) (elevation prompts) and
-  [`internal/proctree`](daemon/internal/proctree/) (process group / job object),
+  [`internal/elevate`](daemon/internal/elevate/) (elevation prompts),
+  [`internal/proctree`](daemon/internal/proctree/) (process group / job object) and
+  [`internal/shellpath`](daemon/internal/shellpath/) (shell startup files / user environment, link / `php.cmd`),
   plus two constants: the hosts file path and the Windows `.exe` suffix. `make cross` proves it still builds
   everywhere.
 - **PHP only in v1.** Node, Go, Python, MySQL, PostgreSQL and Mailpit are

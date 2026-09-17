@@ -116,6 +116,8 @@ type PHP struct {
 	// SettingsExist whether it has been created yet (php-settings.feature).
 	Settings      string `json:"settings"`
 	SettingsExist bool   `json:"settings_exist"`
+	// Terminal is "Use in terminal" (php-terminal.feature).
+	Terminal Terminal `json:"terminal"`
 }
 
 // Download is a version the picker offers to download, with its support
@@ -222,6 +224,7 @@ func (d *Daemon) snapshot(cfg *config.Config) State {
 		Downloading:  d.downloadingVersions(),
 		Hidden:       hidden,
 		Settings:     d.root.PHPIni(),
+		Terminal:     d.terminalState(cfg),
 	}
 	if _, err := os.Stat(d.root.PHPIni()); err == nil {
 		st.Services.PHP.SettingsExist = true

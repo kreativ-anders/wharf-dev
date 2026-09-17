@@ -216,6 +216,7 @@ class Php {
     this.hidden = const [],
     this.settings = '',
     this.settingsExist = false,
+    this.terminal = PhpTerminal.off,
   });
 
   final String version;
@@ -249,6 +250,9 @@ class Php {
   final String settings;
   final bool settingsExist;
 
+  /// "Use in terminal" (features/php-terminal.feature).
+  final PhpTerminal terminal;
+
   static const empty = Php(
     version: '',
     available: [],
@@ -275,10 +279,38 @@ class Php {
     hidden: (json['hidden'] as List<dynamic>? ?? const []).map((e) => e as String).toList(),
     settings: json['settings'] as String? ?? '',
     settingsExist: json['settings_exist'] as bool? ?? false,
+    terminal: json['terminal'] is Map<String, dynamic>
+        ? PhpTerminal.fromJson(json['terminal'] as Map<String, dynamic>)
+        : PhpTerminal.off,
   );
 
   /// Whether the selected version is actually present on the machine.
   bool get selectedIsInstalled => installs.any((i) => i.version == version && i.servable);
+}
+
+/// Whether bin/path — whose php runs the global default version — is on the
+/// user's PATH, and where that was written (features/php-terminal.feature).
+class PhpTerminal {
+  const PhpTerminal({required this.on, this.dir = '', this.php = '', this.places = const []});
+
+  final bool on;
+
+  /// bin/path, and the binary its php runs; empty while the global default
+  /// version is not installed.
+  final String dir;
+  final String php;
+
+  /// Shell startup files, or the user environment on Windows.
+  final List<String> places;
+
+  static const off = PhpTerminal(on: false);
+
+  factory PhpTerminal.fromJson(Map<String, dynamic> json) => PhpTerminal(
+    on: json['on'] as bool? ?? false,
+    dir: json['dir'] as String? ?? '',
+    php: json['php'] as String? ?? '',
+    places: (json['places'] as List<dynamic>? ?? const []).map((e) => e as String).toList(),
+  );
 }
 
 /// A version the picker offers to download.

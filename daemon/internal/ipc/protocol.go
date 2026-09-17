@@ -33,7 +33,10 @@ const (
 	// found on the machine; MethodUnhidePHP shows a hidden folder again.
 	MethodRemovePHP = "services.removePHP"
 	MethodUnhidePHP = "services.unhidePHP"
-	MethodSetupSSL  = "services.setupSSL"
+	// MethodSetPHPTerminal puts Wharf's PHP on the terminal PATH, or takes it
+	// off ({"on": bool}).
+	MethodSetPHPTerminal = "services.setPHPTerminal"
+	MethodSetupSSL       = "services.setupSSL"
 	// MethodPHPSettings creates config/php.ini if needed and returns its
 	// path, for the GUI to open.
 	MethodPHPSettings = "services.phpSettings"
