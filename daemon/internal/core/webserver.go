@@ -2,12 +2,14 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/config"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/elevate"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/webserver"
 )
 
@@ -59,7 +61,12 @@ func (d *Daemon) InstallWebserver(ctx context.Context, name string) error {
 	}
 	defer os.RemoveAll(staging)
 
-	if err := d.webInstaller.Install(ctx, name, staging); err != nil {
+	if err := d.webInstaller.Install(ctx, name, staging); errors.Is(err, elevate.ErrDeclined) {
+		// INFO: A dismissed password prompt is the user's answer, not a failure:
+		// the webserver stays missing and Settings still offers to install it.
+		d.log.Info("webserver install declined", "name", name)
+		return nil
+	} else if err != nil {
 		return err
 	}
 	// INFO: A package manager installs elsewhere and leaves staging empty.

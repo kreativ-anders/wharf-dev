@@ -15,3 +15,13 @@ func (Direct) RequestElevatedRun(program string, _ []string, _ []string) error {
 	slog.Warn("elevation disabled: not running privileged program", "program", program)
 	return ErrDeclined
 }
+
+// AllowLowPorts behaves as if the prompt were declined, where there is one to
+// decline.
+func (Direct) AllowLowPorts() error {
+	if lowPortsAllowed() {
+		return nil
+	}
+	slog.Warn("elevation disabled: ports below 1024 stay reserved for administrators")
+	return ErrDeclined
+}

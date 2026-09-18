@@ -13,6 +13,11 @@ type Fake struct {
 	// OnRun is called for an approved run, so a test can play the part of
 	// the program.
 	OnRun func(program string, args, env []string) error
+	// LowPortsBlocked plays a Linux that keeps ports below 1024 for
+	// administrators; an approved AllowLowPorts clears it, as the setting it
+	// writes would. LowPortsAsked counts the prompts that raised.
+	LowPortsBlocked bool
+	LowPortsAsked   int
 }
 
 // NewFake returns a Fake that approves every request.
@@ -42,4 +47,29 @@ func (f *Fake) RunCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return len(f.Runs)
+}
+
+// AllowLowPorts prompts only while LowPortsBlocked is set.
+func (f *Fake) AllowLowPorts() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !f.LowPortsBlocked {
+		return nil
+	}
+	f.LowPortsAsked++
+	if f.Decline {
+		return ErrDeclined
+	}
+	if f.Err != nil {
+		return f.Err
+	}
+	f.LowPortsBlocked = false
+	return nil
+}
+
+// LowPortsPrompts reports how often AllowLowPorts prompted.
+func (f *Fake) LowPortsPrompts() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.LowPortsAsked
 }

@@ -18,11 +18,14 @@ import 'e2e_daemon.dart';
 void main() {
   late Directory root;
   late Process daemon;
+  var createdRoot = false;
+  var startedDaemon = false;
 
   setUpAll(() async {
     final binary = e2eDaemonBinary();
 
     root = await Directory.systemTemp.createTemp('wharf-e2e');
+    createdRoot = true;
     await Directory('${root.path}/www/my-kirby-site').create(recursive: true);
 
     daemon = await Process.start(binary, [
@@ -32,14 +35,21 @@ void main() {
       // WARNING: The user's shell startup files are never changed either.
       '--terminal=false',
     ]);
+    startedDaemon = true;
     // WARNING: Keep the daemon's stderr drained; a full pipe would block it.
     daemon.stderr.drain<void>();
   });
 
   tearDownAll(() async {
-    daemon.kill();
-    await daemon.exitCode;
-    await root.delete(recursive: true);
+    // WARNING: setUpAll fails before either of these exists whenever
+    // build/wharfd is missing. Reading a `late` local that was never assigned
+    // raises a LateInitializationError that buries the one message naming the
+    // fix, so clean up only what setUpAll got as far as making.
+    if (startedDaemon) {
+      daemon.kill();
+      await daemon.exitCode;
+    }
+    if (createdRoot) await root.delete(recursive: true);
   });
 
   test('the GUI connects through the endpoint file the daemon publishes', () async {

@@ -10,8 +10,12 @@ Copy them into place as follows:
     tray_tile_N.png     -> assets/tray/icon_N.png, and assets/tray/icon.ico
                            (Windows and Linux, whose bars may be light or dark,
                            so the mark sits on its own dark tile)
+    tray_*_running_N.png, tray_running.ico -> the same names with _running:
+                           the icon while anything runs, the mark plus a dot
+                           (features/tray-actions.feature)
     app_N.png           -> macos/Runner/Assets.xcassets/AppIcon.appiconset/
                            app_icon_N.png, and windows/runner/resources/app_icon.ico
+                           (Linux reads the same PNGs: make gui-desktop)
 
 Needs Pillow.
 """
@@ -37,7 +41,19 @@ def pier(draw, box, fill):
     bottom = [u(fx, wave(fx) + t / 2) for fx in reversed(xs)]
     draw.polygon(top + bottom, fill=fill)
 
-def render(size, tile):
+def badge(draw, centre, background, fill):
+    """The running dot, top right, cut free of the mark by a ring of background.
+
+    INFO: Its shape is the signal, not its colour: a macOS template image is
+    tinted to one colour, and status is never told by colour alone
+    (dev/design-principles.md §4).
+    """
+    cx, cy = S * centre[0], S * centre[1]
+    r, gap = S * 0.12, S * 0.05
+    draw.ellipse([cx - r - gap, cy - r - gap, cx + r + gap, cy + r + gap], fill=background)
+    draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=fill)
+
+def render(size, tile, running=False):
     img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     if tile:
@@ -45,9 +61,14 @@ def render(size, tile):
         d.rounded_rectangle([m, m, S - m, S - m], radius=(S - 2 * m) * 0.225, fill=(28, 28, 28, 255))
         pad = S * (0.28 if tile == "app" else 0.20)
         pier(d, (pad, pad, S - pad, S - pad), (255, 255, 255, 255))
+        # INFO: The dark theme's running green (lib/theme.dart), 8.7:1 on the tile.
+        if running:
+            badge(d, (0.78, 0.22), (28, 28, 28, 255), (163, 209, 71, 255))
     else:
         pad = S * 0.06
         pier(d, (pad, pad, S - pad, S - pad), (0, 0, 0, 255))
+        if running:
+            badge(d, (0.86, 0.14), (0, 0, 0, 0), (0, 0, 0, 255))
     return img.resize((size, size), Image.LANCZOS)
 
 if __name__ == "__main__":
@@ -58,21 +79,26 @@ if __name__ == "__main__":
     for n in (16, 32, 64):
         render(n, None).save(f"{out}/tray_template_{n}.png")
         render(n, "tray").save(f"{out}/tray_tile_{n}.png")
+        render(n, None, True).save(f"{out}/tray_template_running_{n}.png")
+        render(n, "tray", True).save(f"{out}/tray_tile_running_{n}.png")
     for n in (16, 32, 64, 128, 256, 512, 1024):
         render(n, "app").save(f"{out}/app_{n}.png")
     render(256, "tray").save(f"{out}/tray.ico", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64)])
+    render(256, "tray", True).save(f"{out}/tray_running.ico", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64)])
     render(256, "app").save(f"{out}/app.ico", sizes=[(n, n) for n in (16, 24, 32, 48, 64, 128, 256)])
     # INFO: A contact sheet to look at: template on light and dark bars, tile, app.
-    sheet = Image.new("RGBA", (900, 300), (255, 255, 255, 255))
+    # INFO: Idle above, running below.
+    sheet = Image.new("RGBA", (900, 600), (255, 255, 255, 255))
     dark = Image.new("RGBA", (300, 150), (40, 40, 40, 255))
-    sheet.paste(dark, (0, 150))
-    for i, n in enumerate((16, 32, 64)):
-        t = render(n, None)
-        big = t.resize((n * 2, n * 2), Image.NEAREST)
-        sheet.alpha_composite(big, (20 + i * 90, 20))
-        white = Image.new("RGBA", t.size, (255, 255, 255, 255)); white.putalpha(t.getchannel("A"))
-        sheet.alpha_composite(white.resize((n * 2, n * 2), Image.NEAREST), (20 + i * 90, 170))
-        tile = render(n, "tray").resize((n * 2, n * 2), Image.NEAREST)
-        sheet.alpha_composite(tile, (320 + i * 90, 170))
+    for row, running in ((0, False), (300, True)):
+        sheet.paste(dark, (0, row + 150))
+        for i, n in enumerate((16, 32, 64)):
+            t = render(n, None, running)
+            big = t.resize((n * 2, n * 2), Image.NEAREST)
+            sheet.alpha_composite(big, (20 + i * 90, row + 20))
+            white = Image.new("RGBA", t.size, (255, 255, 255, 255)); white.putalpha(t.getchannel("A"))
+            sheet.alpha_composite(white.resize((n * 2, n * 2), Image.NEAREST), (20 + i * 90, row + 170))
+            tile = render(n, "tray", running).resize((n * 2, n * 2), Image.NEAREST)
+            sheet.alpha_composite(tile, (320 + i * 90, row + 170))
     sheet.alpha_composite(render(256, "app"), (620, 20))
     sheet.save(f"{out}/sheet.png")

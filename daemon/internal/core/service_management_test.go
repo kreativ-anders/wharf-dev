@@ -362,3 +362,50 @@ var errTimeout = timeoutError{}
 type timeoutError struct{}
 
 func (timeoutError) Error() string { return "timed out waiting for condition" }
+
+// features/service-management.feature — "Linux asks once before the front
+// door first takes port 80". That the setting survives a reboot is the file
+// in /etc/sysctl.d/ the real prompt writes; the fake stands in for both.
+func TestLinuxAsksOnceBeforeTheFrontDoorFirstTakesPort80(t *testing.T) {
+	h := newHarness(t)
+	h.el.LowPortsBlocked = true
+	h.mustAdd("my-kirby-site")
+	h.mustAdd("other-site")
+
+	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.el.LowPortsPrompts(); got != 1 {
+		t.Fatalf("prompts = %d, want 1", got)
+	}
+	if front := findSpec(h, runtime.WebserverID); front == nil || front.Port != runtime.HTTPPort {
+		t.Fatalf("front door = %+v, want started on port 80", front)
+	}
+
+	if err := h.d.StartProject(h.ctx(), "other-site"); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.el.LowPortsPrompts(); got != 1 {
+		t.Fatalf("prompts = %d after a second start, want still 1", got)
+	}
+}
+
+// features/service-management.feature — "Declining the port prompt"
+func TestDecliningThePortPrompt(t *testing.T) {
+	h := newHarness(t)
+	h.el.LowPortsBlocked = true
+	h.el.Decline = true
+	h.mustAdd("my-kirby-site")
+
+	err := h.d.StartProject(h.ctx(), "my-kirby-site")
+	if err == nil || !strings.Contains(err.Error(), "ports 80 and 443") {
+		t.Fatalf("err = %v, want one naming the ports", err)
+	}
+	if h.sup.Running(runtime.WebserverID) {
+		t.Fatal("the front door started without permission for port 80")
+	}
+	got := h.project("my-kirby-site")
+	if got.State == string(supervisor.StateRunning) || !strings.Contains(got.Error, "ip_unprivileged_port_start") {
+		t.Fatalf("project = %+v, want not running and saying how to allow the ports", got)
+	}
+}

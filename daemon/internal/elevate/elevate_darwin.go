@@ -47,3 +47,10 @@ func runScriptAsAdmin(shell string) error {
 	}
 	return nil
 }
+
+// lowPortsAllowed is always true here: this OS lets any process listen on the
+// front door's ports (dev/architecture.md §4c).
+func lowPortsAllowed() bool { return true }
+
+// AllowLowPorts has nothing to ask for.
+func (systemElevator) AllowLowPorts() error { return nil }

@@ -104,6 +104,33 @@
                 <li>
                   <span class="mark is-writes" aria-hidden="true"></span>
                   <div>
+                    <h3>Ports 80 and 443, on Linux <span class="when">When the first project starts</span></h3>
+                    <p>Linux lets only administrators use ports below 1024, and
+                    projects answer on 80 and 443. Wharf asks for your password
+                    once, then lowers that limit to 80 — now, and in
+                    <code>/etc/sysctl.d/60-wharf.conf</code> for every start after.
+                    Any program on this computer may then use ports from 80 up.
+                    Say no, and the project stays stopped.</p>
+                    <p class="undo">To undo: delete that file and run
+                    <code>sudo sysctl -w net.ipv4.ip_unprivileged_port_start=1024</code>.</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="mark is-writes" aria-hidden="true"></span>
+                  <div>
+                    <h3>Your distribution's Apache, on Linux <span class="when">When you install Apache</span></h3>
+                    <p>Wharf installs your distribution's Apache package with its
+                    package manager — apt, dnf, zypper or pacman — after asking
+                    for your password. Where the package starts an Apache
+                    service of its own, Wharf switches that service off, so it
+                    does not hold port 80.</p>
+                    <p class="undo">To undo: remove the package, e.g.
+                    <code>sudo apt remove apache2</code>.</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="mark is-writes" aria-hidden="true"></span>
+                  <div>
                     <h3>Homebrew, on a Mac <span class="when">When you install nginx</span></h3>
                     <p>On macOS, nginx comes from Homebrew: Wharf runs
                     <code>brew install nginx</code> for you.</p>
@@ -168,7 +195,7 @@
                     <tr><th scope="row">nginx · Linux, Windows</th><td><a href="https://jirutka.github.io/nginx-binaries/">nginx-binaries</a> on GitHub</td><td>SHA-1</td></tr>
                     <tr><th scope="row">nginx · macOS</th><td><a href="https://brew.sh">Homebrew</a></td><td>Homebrew</td></tr>
                     <tr><th scope="row">Apache · Windows</th><td><a href="https://www.apachelounge.com">Apache Lounge</a></td><td>SHA-256</td></tr>
-                    <tr><th scope="row">Apache · macOS, Linux</th><td>nothing to download: macOS has it, Linux uses your system's package</td><td>—</td></tr>
+                    <tr><th scope="row">Apache · macOS, Linux</th><td>nothing to download: macOS has it, Linux installs your distribution's package</td><td>—</td></tr>
                     <tr><th scope="row">mkcert</th><td><a href="https://github.com/FiloSottile/mkcert">mkcert</a>, one fixed release on GitHub</td><td>SHA-256</td></tr>
                   </tbody>
                 </table>

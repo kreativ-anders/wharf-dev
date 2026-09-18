@@ -64,7 +64,7 @@
           {
             "@type": "Question",
             "name": "Will Wharf ask for my password?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Adding a project never does. The one prompt comes the first time you turn on HTTPS: your computer has to be told once to trust Wharf's certificates. Saying no is fine — HTTPS stays on, browsers show a warning until you trust it, and Settings offers to ask again." }
+            "acceptedAnswer": { "@type": "Answer", "text": "Adding a project never does. On every system, the first time you turn on HTTPS, your computer has to be told once to trust Wharf's certificates. Saying no is fine — HTTPS stays on, browsers show a warning until you trust it, and Settings offers to ask again. On Linux, Wharf also asks once before the first project starts, to use ports 80 and 443, and when it installs Apache." }
           },
           {
             "@type": "Question",
@@ -361,11 +361,12 @@
           </details>
           <details>
             <summary>Will Wharf ask for my password?</summary>
-            <p>Adding a project never does. The one prompt comes the
-            first time you turn on HTTPS: your computer has to be told once to
-            trust Wharf's certificates. Saying no is fine — HTTPS stays on,
-            browsers show a warning until you trust it, and Settings offers to
-            ask again.</p>
+            <p>Adding a project never does. On every system, the first time you
+            turn on HTTPS, your computer has to be told once to trust Wharf's
+            certificates. Saying no is fine — HTTPS stays on, browsers show a
+            warning until you trust it, and Settings offers to ask again. On
+            Linux, Wharf also asks once before the first project starts, to use
+            ports 80 and 443, and when it installs Apache.</p>
           </details>
           <details>
             <summary>Why <code>.localhost</code> and not <code>.test</code>?</summary>

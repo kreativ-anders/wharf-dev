@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Wharf
+Comment=Local development environment for PHP projects
+Exec=wharf_gui
+Icon=dev.wharf.wharf_gui
+StartupWMClass=dev.wharf.wharf_gui
+Categories=Development;
+Terminal=false

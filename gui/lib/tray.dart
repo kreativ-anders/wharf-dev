@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
@@ -35,7 +35,6 @@ class TrayController with TrayListener {
 
   Future<void> start() async {
     trayManager.addListener(this);
-    await trayManager.setIcon(_iconPath(), isTemplate: Platform.isMacOS);
     daemon.addListener(rebuildMenu);
     await rebuildMenu();
   }
@@ -51,15 +50,23 @@ class TrayController with TrayListener {
   /// and Linux bars may be light or dark and tint nothing, so there the mark
   /// sits on its own dark tile; Windows wants that as an .ico.
   /// (gui/tool/draw_icons.py draws them all.)
-  String _iconPath() {
-    if (Platform.isMacOS) return 'assets/tray/template_64.png';
-    if (Platform.isWindows) return 'assets/tray/icon.ico';
-    return 'assets/tray/icon_32.png';
+  ///
+  /// While anything runs the mark carries a dot — the icon is the one signal
+  /// every platform's tray can show (tray-actions.feature, "The tray icon
+  /// shows whether anything is running").
+  static String iconPath({required bool running}) {
+    final r = running ? '_running' : '';
+    if (Platform.isMacOS) return 'assets/tray/template${r}_64.png';
+    if (Platform.isWindows) return 'assets/tray/icon$r.ico';
+    return 'assets/tray/icon${r}_32.png';
   }
 
   /// What the menu showed when it was last built. The daemon notifies on
   /// every snapshot and every pending click, and most change nothing here.
   String? _shown;
+
+  /// Whether the icon last set was the running one; null before the first.
+  bool? _iconRunning;
 
   Future<void> rebuildMenu() async {
     final state = daemon.state;
@@ -98,9 +105,16 @@ class TrayController with TrayListener {
       MenuItem(key: _quit, label: 'Quit'),
     ]);
 
+    if (_iconRunning != state.anyRunning) {
+      _iconRunning = state.anyRunning;
+      await trayManager.setIcon(iconPath(running: state.anyRunning), isTemplate: Platform.isMacOS);
+    }
     await trayManager.setContextMenu(Menu(items: items));
-    // INFO: The icon's tooltip is the whole of the idle-versus-active signal.
-    await trayManager.setToolTip(state.anyRunning ? 'Wharf — running' : 'Wharf — idle');
+    try {
+      await trayManager.setToolTip(state.anyRunning ? 'Wharf — running' : 'Wharf — idle');
+    } on MissingPluginException {
+      // INFO: Linux's AppIndicator tray has no tooltip; the icon already says it.
+    }
   }
 
   String _marker(Project p) {

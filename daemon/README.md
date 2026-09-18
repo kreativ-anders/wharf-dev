@@ -28,8 +28,9 @@ The daemon logs to `<root>/data/log/wharfd.log` as well as stderr — when the
 app runs it, the file is the only place the log survives.
 
 Projects are `<name>.localhost`, so the hosts file is never read or written.
-The one password prompt left is trusting mkcert's certificate authority;
-`make run` uses `--elevator direct`, which treats that prompt as declined.
+The password prompts left are trusting mkcert's certificate authority, and on
+Linux letting the front door use ports 80 and 443 and installing Apache;
+`make run` uses `--elevator direct`, which treats each prompt as declined.
 
 ## Layout
 
@@ -52,7 +53,7 @@ The one password prompt left is trusting mkcert's certificate authority;
 | `internal/core` | The behaviour itself; the IPC layer is a thin shell over it |
 
 The platform-specific surface is three files in `internal/elevate`
-(~50 lines each, two functions), two in `internal/proctree` (a process group
+(~50–100 lines each, three functions), two in `internal/proctree` (a process group
 on macOS/Linux, a job object on Windows), two in `internal/shellpath` (shell
 startup files and a link on macOS/Linux, the user environment and a `php.cmd`
 on Windows), plus two constants: the hosts-file path and the Windows `.exe`

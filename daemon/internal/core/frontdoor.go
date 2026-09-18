@@ -2,10 +2,15 @@ package core
 
 import (
 	"context"
+	"errors"
 
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/config"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/elevate"
 	wruntime "github.com/kreativ-anders/wharf-dev/daemon/internal/runtime"
 )
+
+const lowPortsDeclined = "Wharf needs permission to use ports 80 and 443 — start the project again and allow it, " +
+	"or run: sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80"
 
 const noProjectPort = "every project port from 8080 up is taken — quit a program listening there, or remove a project"
 
@@ -45,6 +50,14 @@ func (d *Daemon) ownPort(cfg *config.Config, p config.Project) (*config.Config, 
 func (d *Daemon) applyFrontDoor(ctx context.Context, cfg *config.Config) error {
 	if !d.anyStarted() {
 		return d.sup.Stop(ctx, runtimeWebserverID)
+	}
+	// INFO: Asked before every start, not once: the answer is the machine's, and
+	// it costs nothing once given (service-management.feature, "Linux asks
+	// once before the front door first takes port 80").
+	if err := d.elev.AllowLowPorts(); errors.Is(err, elevate.ErrDeclined) {
+		return conflict("%s", lowPortsDeclined)
+	} else if err != nil {
+		return err
 	}
 	spec, err := d.res.WebserverSpec(d.served(cfg))
 	if err != nil {

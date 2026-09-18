@@ -25,7 +25,9 @@ const _snapshot = '''
         {"name": "nginx", "installed": true, "binary": "/opt/nginx", "projects": [],
          "version": "1.27.3"}
       ]},
-    "php": {"version": "8.4", "available": ["8.4"], "recommended": "8.4", "status": "active"}
+    "php": {"version": "8.4", "available": ["8.4"], "recommended": "8.4", "status": "active",
+            "installs": [{"version": "8.4", "full_version": "8.4.3", "dir": "/opt/php84",
+                          "fastcgi": "/opt/php84/sbin/php-fpm", "source": "system", "status": "active"}]}
   },
   "projects": [
     {"name": "my-kirby-site", "state": "stopped", "url": "http://my-kirby-site.localhost",
@@ -54,7 +56,7 @@ const _bare = '''
         {"name": "nginx", "installed": false, "binary": "/Users/x/Wharf/bin/nginx/nginx",
          "projects": [], "install": {"installable": true, "hint": "Downloads nginx."}}
       ]},
-    "php": {"version": "8.5", "available": [], "recommended": "8.5", "status": "active",
+    "php": {"version": "8.5", "available": ["8.5"], "installs": [], "recommended": "8.5", "status": "active",
             "downloadable": [{"version": "8.5", "status": "active"}]}
   },
   "projects": [], "unregistered": []
@@ -365,8 +367,9 @@ void main() {
     // INFO: And a webserver Wharf cannot install says how to get it instead
     expect(find.widgetWithText(FilledButton, 'Install apache'), findsNothing);
     expect(find.textContaining('Install Apache with your package manager.'), findsOneWidget);
-    // INFO: And "Add project…" is offered below them
-    expect(find.widgetWithText(FilledButton, 'Add project…'), findsOneWidget);
+    // INFO: And "Add project…" is offered once, by the window's own button
+    expect(find.text('Add project…'), findsOneWidget);
+    expect(find.widgetWithText(FloatingActionButton, 'Add project…'), findsOneWidget);
 
     // INFO: A download under way shows as one, named for a screen reader — as
     // part of its row, which reads as one item.
@@ -393,8 +396,9 @@ void main() {
     expect(find.text('No projects yet'), findsOneWidget);
     expect(find.text('PHP 8.4 — ready'), findsOneWidget);
     expect(find.text('Webserver: nginx 1.27.3 — ready'), findsOneWidget);
-    expect(find.byType(FilledButton), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Add project…'), findsOneWidget);
+    // INFO: And "Add project…" is the one thing left to do
+    expect(find.byType(FilledButton), findsNothing);
+    expect(find.text('Add project…'), findsOneWidget);
   });
 
   // features/project-folders.feature — "Before the first project, Wharf says what

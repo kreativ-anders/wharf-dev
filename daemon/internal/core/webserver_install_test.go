@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/elevate"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/ipc"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/webserver"
 )
@@ -257,5 +258,21 @@ func TestAKirbyProjectNeedsNoWebserverConfiguration(t *testing.T) {
 	if !regexp.MustCompile(`SetHandler "proxy:fcgi://127\.0\.0\.1:\d+/"`).MatchString(conf) ||
 		!strings.Contains(conf, `ProxyFCGISetEnvIf "reqenv('SCRIPT_FILENAME') =~ m|^proxy:fcgi://[^/]+/([A-Za-z]:)?(/.*)|" SCRIPT_FILENAME "$1$2"`) {
 		t.Fatalf("apache does not hand PHP the script's own path:\n%s", conf)
+	}
+}
+
+// features/webserver-install.feature — "Declining the password prompt for a
+// webserver install"
+func TestDecliningThePasswordPromptForAWebserverInstall(t *testing.T) {
+	h := newHarness(t, withoutWebserver("apache"))
+	h.web.plan = map[string]webserver.Plan{webserver.Apache: {Installable: true, Via: "package"}}
+	h.web.fn = func(context.Context, string, string) error { return elevate.ErrDeclined }
+
+	if err := h.d.InstallWebserver(h.ctx(), "apache"); err != nil {
+		t.Fatalf("err = %v, want a declined prompt to be no error", err)
+	}
+	apache := h.server("apache")
+	if apache.Installed || !apache.Install.Installable {
+		t.Fatalf("apache = %+v, want not installed and still installable", apache)
 	}
 }

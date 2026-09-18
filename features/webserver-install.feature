@@ -33,6 +33,19 @@ Feature: Webserver installation
     Then the GUI reports that it could not be fetched
     And no partial "bin/nginx" folder is left behind
 
+  Scenario: Installing Apache on Linux
+    Given Apache is not installed on Linux, and the distribution's package manager is apt, dnf, zypper or pacman
+    When the user chooses "Install" next to Apache in Settings
+    Then Wharf asks for the password once and installs the distribution's Apache package
+    And the system's own Apache service is switched off, so it never holds port 80
+    And Apache is used where the package put it
+
+  Scenario: Declining the password prompt for a webserver install
+    Given installing Apache needs the password
+    When the user dismisses the password prompt
+    Then Apache stays not installed, with no error shown
+    And "Install" is still offered next to it
+
   Scenario: A webserver Wharf cannot install says how to get it
     Given there is no build of Apache that Wharf can install on this platform
     When the user opens Settings

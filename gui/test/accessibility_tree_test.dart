@@ -21,11 +21,6 @@ void main() {
   setUp(_engine.reset);
   // INFO: "Add project…" asks the system for a folder; the tests answer for it.
   setUp(() => pickFolder = (_) async => '/Users/x/Code/My Site');
-  tearDown(() {
-    for (final move in _engine.moves) {
-      debugPrint('MOVE $move');
-    }
-  });
 
   test('the engine model rejects what Windows rejects', () {
     _Node n(List<int> children) => _Node(children, '');
@@ -35,7 +30,7 @@ void main() {
       2: n([3]),
       3: n([]),
     });
-    expect(_engine.errors, isEmpty);
+    _expectNoAxErrors();
 
     // INFO: 1 moves under a new node 4. 2 is unchanged and not resent, but 3 is:
     // taking 1 off its old parent took 2 and 3 with it, and 3 has no parent.
@@ -75,7 +70,7 @@ void main() {
     await _wait(tester);
     expect(find.text('Settings'), findsOneWidget, reason: 'the tooltip is showing');
 
-    expect(_engine.errors, isEmpty);
+    _expectNoAxErrors();
     semantics.dispose();
   }, variant: _windows);
 
@@ -117,7 +112,7 @@ void main() {
         await _wait(tester);
       }
 
-      expect(_engine.errors, isEmpty);
+      _expectNoAxErrors();
       semantics.dispose();
     }, variant: _windows);
   }
@@ -153,7 +148,7 @@ void main() {
       }
       FlutterError.onError = report;
 
-      expect(_engine.errors, isEmpty);
+      _expectNoAxErrors();
       semantics.dispose();
     }, variant: _windows);
   }
@@ -174,7 +169,7 @@ void main() {
     }
     await tester.sendEventToBinding(wheel.removePointer());
 
-    expect(_engine.errors, isEmpty);
+    _expectNoAxErrors();
     semantics.dispose();
   }, variant: _windows);
 
@@ -238,7 +233,7 @@ void main() {
     daemon.change((json) => json['ssl'] = {'installed': true, 'trusted': true, 'ca_root': '/ca'});
     await _wait(tester);
 
-    expect(_engine.errors, isEmpty);
+    _expectNoAxErrors();
     semantics.dispose();
   }, variant: _windows);
 
@@ -256,7 +251,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Cast off'));
     await _wait(tester);
 
-    expect(_engine.errors, isEmpty);
+    _expectNoAxErrors();
     semantics.dispose();
   }, variant: _windows);
 
@@ -267,7 +262,7 @@ void main() {
     await tester.tap(find.text('Stop all'));
     await _wait(tester);
 
-    expect(_engine.errors, isEmpty);
+    _expectNoAxErrors();
     semantics.dispose();
   }, variant: _windows);
 
@@ -287,7 +282,7 @@ void main() {
     await _wait(tester);
 
     expect(find.text('legacy-app'), findsNothing);
-    expect(_engine.errors, isEmpty);
+    _expectNoAxErrors();
     semantics.dispose();
   }, variant: _windows);
 
@@ -309,7 +304,7 @@ void main() {
       ..change((_) {});
     await _wait(tester);
 
-    expect(_engine.errors, isEmpty);
+    _expectNoAxErrors();
     semantics.dispose();
   }, variant: _windows);
 
@@ -328,7 +323,7 @@ void main() {
       await _wait(tester);
     }
 
-    expect(_engine.errors, isEmpty);
+    _expectNoAxErrors();
     semantics.dispose();
   }, variant: _windows);
 
@@ -351,7 +346,7 @@ void main() {
     await mouse.moveTo(tester.getCenter(find.byKey(const ValueKey('nav:php'))));
     await _wait(tester);
 
-    expect(_engine.errors, isEmpty);
+    _expectNoAxErrors();
     semantics.dispose();
   }, variant: _windows);
 
@@ -366,7 +361,7 @@ void main() {
     await mouse.moveTo(_nowhere);
     await _wait(tester);
 
-    expect(_engine.errors, isEmpty);
+    _expectNoAxErrors();
     semantics.dispose();
   }, variant: _windows);
 
@@ -384,7 +379,7 @@ void main() {
 
       await _click(tester, mouse, find.byTooltip(tip).first);
 
-      expect(_engine.errors, isEmpty);
+      _expectNoAxErrors();
       semantics.dispose();
     }, variant: _windows);
   }
@@ -398,7 +393,7 @@ void main() {
     await _click(tester, mouse, find.byTooltip('Close'));
     expect(find.byTooltip('Close'), findsNothing, reason: 'the sheet is closed');
 
-    expect(_engine.errors, isEmpty);
+    _expectNoAxErrors();
     semantics.dispose();
   }, variant: _windows);
 
@@ -417,7 +412,7 @@ void main() {
     daemon.change((json) => _project(json, 'legacy-app')['state'] = 'running');
     await _wait(tester);
 
-    expect(_engine.errors, isEmpty);
+    _expectNoAxErrors();
     semantics.dispose();
   }, variant: _windows);
 
@@ -445,7 +440,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await _wait(tester);
 
-    expect(_engine.errors, isEmpty);
+    _expectNoAxErrors();
     semantics.dispose();
   }, variant: _windows);
 
@@ -467,7 +462,7 @@ void main() {
     await tester.pageBack();
     await _wait(tester);
 
-    expect(_engine.errors, isEmpty);
+    _expectNoAxErrors();
     semantics.dispose();
   }, variant: _windows);
 
@@ -486,7 +481,7 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await _wait(tester);
 
-    expect(_engine.errors, isEmpty);
+    _expectNoAxErrors();
     semantics.dispose();
   }, variant: _windows);
 
@@ -511,7 +506,7 @@ void main() {
     await tester.tap(find.byTooltip('Dismiss'));
     await _wait(tester);
 
-    expect(_engine.errors, isEmpty);
+    _expectNoAxErrors();
     semantics.dispose();
   }, variant: _windows);
 }
@@ -695,6 +690,14 @@ const _snapshot = '''
 // --------------------------------------------------------------- the engine
 
 final _engine = _Engine();
+
+/// No AXTree error, reporting the moves that led to one when there is.
+///
+/// The moves are the diagnostic an error needs; printing them after every test
+/// instead put them in every green run, where they were only noise.
+void _expectNoAxErrors() {
+  expect(_engine.errors, isEmpty, reason: _engine.moves.map((move) => 'MOVE $move').join('\n'));
+}
 
 class _AxBinding extends AutomatedTestWidgetsFlutterBinding {
   @override

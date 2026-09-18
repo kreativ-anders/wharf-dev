@@ -52,14 +52,16 @@ Every design decision favours identical behaviour across OS over the most
 - **Pretty URLs** — `<name>.localhost` everywhere, resolved to loopback by
   the OS or the browser itself; nothing is written anywhere, and the hosts
   file is never read or written.
-- **Elevation** — one interface with one function:
-  `RequestElevatedRun(program, args, env)` for trusting mkcert's local
-  certificate authority, which writes to the system trust store. All call
-  sites use only this; it is the only password prompt Wharf has. Three small adapters behind them (UAC / `osascript
-  with administrator privileges` / `pkexec`) are one of the two
-  platform-specific surfaces of the codebase; process trees are the other
-  (below). It came with `features/local-ssl.feature`: without it the
-  authority is never trusted and every browser warns.
+- **Elevation** — one interface with two functions, and the only password
+  prompts Wharf has. `RequestElevatedRun(program, args, env)` trusts
+  mkcert's local certificate authority, which writes to the system trust
+  store (`features/local-ssl.feature`: without it every browser warns), and
+  installs Apache with a Linux package manager (§4b). `AllowLowPorts()` lets
+  the front door take ports 80 and 443 (§4c); it prompts on Linux only, and
+  only while the limit is still 1024. Three small adapters behind them (UAC /
+  `osascript with administrator privileges` / `pkexec`) are one of the
+  platform-specific surfaces of the codebase; process trees and the
+  terminal PATH are the others (below).
 - **IPC** — see §4a. One protocol and one client API across all three OS; the
   socket type differs on Windows only because the GUI's language cannot open a
   unix socket there.
@@ -144,6 +146,15 @@ browser ──► nginx :80/:443 (active) ──► my-kirby-site   served direc
   which is what Kirby checks before it lets the Panel be installed
   (`features/service-management.feature`, "The front door answers this
   machine only").
+- On Linux, only administrators may listen below port 1024 until
+  `net.ipv4.ip_unprivileged_port_start` is lowered. Before the front door
+  starts, Wharf lowers it to 80 behind one password prompt — now, and in
+  `/etc/sysctl.d/60-wharf.conf` for every boot after — so the question comes
+  once per machine. A sysctl rather than `setcap` on the binary: it holds
+  for nginx and Apache alike, a distribution's Apache included, and
+  survives every update of either. Declining leaves the project stopped,
+  saying how to allow the ports (`features/service-management.feature`).
+  macOS and Windows let any process listen there, so they never ask.
 - It serves the *started* projects only. Starting one project adds it and
   restarts the front door; stopping one removes it and leaves every other
   started project running; the front door stops once none is left. Which
@@ -193,7 +204,7 @@ user asks — "Download" in the PHP picker, or turning SSL on without mkcert:
 | nginx, macOS | Homebrew (`brew install nginx`) | Homebrew's own |
 | Apache, Windows | Apache Lounge, newest 2.4 Win64 build | SHA-256 published beside each zip |
 | Apache, macOS | nothing to install — macOS ships `/usr/sbin/httpd` | — |
-| Apache, Linux | not installable by Wharf; Settings names the package command | — |
+| Apache, Linux | the distribution's package (apt, dnf, zypper or pacman), behind one password prompt | the distribution's own |
 
 Each download is staged beside its destination and renamed into place only
 when complete, so a failure leaves no half-installed folder. The newest patch
@@ -217,8 +228,12 @@ starts with no install at all (`features/webserver-install.feature`). The
 exceptions are honest, not hidden: every macOS nginx build in the index
 links Homebrew's libpcre2 and cannot start without Homebrew, so macOS nginx
 *is* Homebrew's; and a Linux distribution's Apache package is the only sane
-Apache on Linux. Settings says so instead of offering an install that would
-fail.
+Apache on Linux, so "Install" runs the package manager behind a password
+prompt. Debian's package starts and enables the system's own Apache on port
+80, so the same prompt switches that service off again
+(`systemctl disable --now`); Wharf runs the binary with its own config, as
+it does every other install. A distribution with none of the four package
+managers gets the command to run instead of an install that would fail.
 
 One copy of each webserver serves every project. Each project's server
 block is generated into its own file (`data/gen/<webserver>/<project>.conf`)

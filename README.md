@@ -36,7 +36,7 @@ one is renamed, deleted or left unimplemented. See [CLAUDE.md](CLAUDE.md) §1.
 | `wharfctl` CLI | Developer tool: drives a running daemon from the terminal. Not shipped in releases. |
 | PHP runtime | Detected on the machine and adopted where it is, or downloaded from Settings with one click. |
 | SSL | mkcert is downloaded (pinned, checksum-verified) and its authority trusted when a project first turns SSL on. |
-| Webservers | Adopted where installed (a Mac's own Apache is used out of the box), or installed from Settings: nginx on Linux/Windows by download, on macOS via Homebrew; Apache on Windows by download. |
+| Webservers | Adopted where installed (a Mac's own Apache is used out of the box), or installed from Settings: nginx on Linux/Windows by download, on macOS via Homebrew; Apache on Windows by download, on Linux with the distribution's package manager. |
 | Config templates | nginx and Apache rules for Kirby, Laravel, WordPress, Statamic, Symfony, Craft CMS and Drupal built in; each project picks one, and Settings → Webserver edits them or adds your own. |
 | Appearance | Kirby-plain light and dark themes, or follow the system. |
 | Updates | Settings → General shows the running version. "Check for updates" is there but disabled until releases exist; its behaviour is specified as `@roadmap`. |
@@ -103,8 +103,9 @@ make spec    # the spec-to-test coverage matrix
 make run     # the daemon alone, against a throwaway root
 ```
 
-**Note:** on Linux, Apache comes from your distribution's package — Settings
-names the command. Everything else installs itself on request.
+**Note:** on Linux, Wharf asks for your password once before the first
+project starts, to use ports 80 and 443, and again when it installs Apache
+from your distribution's package.
 
 ## Scope statement (v1)
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -304,6 +305,47 @@ void main() {
         .replaceFirst('"state": "running"', '"state": "stopped"');
     await tester.pumpWidget(wrap(ProjectsPage(daemon: fixture(idle))));
     expect(find.text('Stop all'), findsNothing);
+  });
+
+  // features/tray-actions.feature — "The tray icon shows whether anything is
+  // running"
+  test('the tray icon carries a dot while anything runs, even without a tooltip', () async {
+    // INFO: Fakes the plugin the way Linux's AppIndicator answers it: no tooltip.
+    final calls = <MethodCall>[];
+    const channel = MethodChannel('tray_manager');
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      if (call.method == 'setToolTip') throw MissingPluginException();
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    List<String> icons() => [
+      for (final c in calls)
+        if (c.method == 'setIcon') (c.arguments as Map)['iconPath'] as String,
+    ];
+
+    final idle = _twoProjects
+        .replaceFirst('"state": "running"', '"state": "stopped"')
+        .replaceFirst('"state": "running"', '"state": "stopped"');
+    final daemon = fixture(idle);
+    final tray = TrayController(daemon, onOpenWindow: () {}, onAddProject: () async {}, onQuit: () async {});
+    await tray.start();
+    expect(icons(), [endsWith(TrayController.iconPath(running: false))]);
+
+    daemon.state = fixture(_twoProjects).state;
+    await tray.rebuildMenu();
+    expect(icons().last, endsWith(TrayController.iconPath(running: true)));
+    // INFO: The menu is still built after the tooltip is refused.
+    expect(calls.where((c) => c.method == 'setContextMenu'), hasLength(2));
+
+    // INFO: Every variant the tray can ask for is a bundled asset.
+    for (final r in ['', '_running']) {
+      for (final name in ['template${r}_64.png', 'icon$r.ico', 'icon${r}_32.png']) {
+        expect(File('assets/tray/$name').existsSync(), isTrue, reason: name);
+      }
+    }
+    await tray.dispose();
   });
 
   // features/single-application.feature — "Casting off from the main window"

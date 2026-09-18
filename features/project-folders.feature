@@ -19,7 +19,7 @@ Feature: Project folders
     And it says no webserver is installed and offers to install each one Wharf can install
     And a webserver Wharf cannot install says how to get it instead
     And each line says in words whether it is ready, not by colour alone
-    And "Add project…" is offered below them
+    And "Add project…" is offered once, by the window's own button below them
 
   Scenario: Once PHP and a webserver are there, the window says so
     Given no project has been added yet

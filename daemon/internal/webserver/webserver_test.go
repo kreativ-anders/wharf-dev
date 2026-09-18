@@ -14,8 +14,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/elevate"
 )
 
 // hostExe names a stub the way this OS names executables: Windows knows one
@@ -78,19 +81,20 @@ func TestApacheWithoutModulesIsNotUsable(t *testing.T) {
 
 func TestPlansDifferByPlatformButAlwaysSaySomething(t *testing.T) {
 	cases := []struct {
-		goos, goarch, name, brew string
-		installable              bool
-		via                      string
+		goos, goarch, name, brew, manager string
+		installable                       bool
+		via                               string
 	}{
-		{"linux", "amd64", Nginx, "", true, "download"},
-		{"linux", "arm64", Nginx, "", true, "download"},
-		{"windows", "arm64", Nginx, "", true, "download"},
-		{"windows", "amd64", Apache, "", true, "download"},
-		{"linux", "amd64", Apache, "", false, ""},
-		{"darwin", "arm64", Nginx, "/opt/homebrew/bin/brew", true, "homebrew"},
+		{"linux", "amd64", Nginx, "", "", true, "download"},
+		{"linux", "arm64", Nginx, "", "", true, "download"},
+		{"windows", "arm64", Nginx, "", "", true, "download"},
+		{"windows", "amd64", Apache, "", "", true, "download"},
+		{"linux", "amd64", Apache, "", "dnf", true, "package"},
+		{"linux", "amd64", Apache, "", "", false, ""},
+		{"darwin", "arm64", Nginx, "/opt/homebrew/bin/brew", "", true, "homebrew"},
 	}
 	for _, c := range cases {
-		d := &Downloader{GOOS: c.goos, GOARCH: c.goarch, Brew: c.brew}
+		d := &Downloader{GOOS: c.goos, GOARCH: c.goarch, Brew: c.brew, LookPath: onlyManager(c.manager)}
 		p := d.Plan(c.name)
 		if p.Installable != c.installable || p.Via != c.via || p.Hint == "" {
 			t.Errorf("%s/%s %s: plan = %+v", c.goos, c.goarch, c.name, p)
@@ -192,5 +196,46 @@ func TestNginxOnAMacComesFromHomebrew(t *testing.T) {
 	}
 	if strings.Join(ran, " ") != "/opt/homebrew/bin/brew install nginx" {
 		t.Fatalf("ran %v", ran)
+	}
+}
+
+// onlyManager plays a machine whose one package manager is name.
+func onlyManager(name string) func(string) (string, error) {
+	return func(file string) (string, error) {
+		if name != "" && file == name {
+			return "/usr/bin/" + file, nil
+		}
+		return "", errors.New("not found")
+	}
+}
+
+// features/webserver-install.feature — "Installing Apache on Linux". That the
+// package's Apache is then found where it put it is detection's part:
+// /usr/sbin/apache2 and /usr/sbin/httpd are its Linux candidates.
+func TestInstallingApacheOnLinux(t *testing.T) {
+	for manager, want := range map[string]string{
+		"apt-get": "apt-get install -y apache2 && { systemctl disable --now apache2",
+		"dnf":     "dnf install -y httpd && { systemctl disable --now httpd",
+		"zypper":  "zypper --non-interactive install apache2 && { systemctl disable --now apache2",
+		"pacman":  "pacman -S --noconfirm --needed apache && { systemctl disable --now httpd",
+	} {
+		el := elevate.NewFake()
+		d := &Downloader{GOOS: "linux", GOARCH: "amd64", Elevator: el, LookPath: onlyManager(manager)}
+		dest := t.TempDir()
+		if err := d.Install(context.Background(), Apache, dest); err != nil {
+			t.Fatalf("%s: %v", manager, err)
+		}
+		// INFO: Then Wharf asks for the password once and installs the package,
+		// and switches the system's own Apache service off.
+		if len(el.Runs) != 1 || !strings.Contains(strings.Join(el.Runs[0], " "), want) {
+			t.Fatalf("%s: ran %q, want one elevated run of %q", manager, el.Runs, want)
+		}
+		// INFO: Nothing lands in bin/: the package's Apache is used where it is.
+		if entries, _ := os.ReadDir(dest); len(entries) != 0 {
+			t.Fatalf("%s: staged %d files, want none", manager, len(entries))
+		}
+	}
+	if !slices.Contains(systemCandidates("linux", Apache), "/usr/sbin/apache2") {
+		t.Fatal("Debian's apache2 is not a Linux candidate")
 	}
 }

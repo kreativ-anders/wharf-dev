@@ -372,7 +372,8 @@ class _Unregistered extends StatelessWidget {
 }
 
 /// Before the first project: what is still missing, each with the action
-/// that fixes it, then "Add project…" (features/project-folders.feature,
+/// that fixes it; "Add project…" is the window's own button
+/// (features/project-folders.feature,
 /// "Before the first project, Wharf says what is missing").
 class _Empty extends StatelessWidget {
   const _Empty({required this.daemon});
@@ -396,17 +397,13 @@ class _Empty extends StatelessWidget {
               const SizedBox(height: 12),
               _WebserverReadiness(daemon: daemon, webserver: services.webserver),
               const SizedBox(height: 24),
+              // INFO: No button of its own: the window's "Add project…" is right
+              // below, and two of them read as two different actions.
               Text(
-                'A folder is a project. Pick one from anywhere on this machine — it stays '
-                'where it is.',
+                'A folder is a project. Pick one from anywhere on this machine with '
+                '“Add project…” — it stays where it is.',
                 textAlign: TextAlign.center,
                 style: muted,
-              ),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: () => addProject(context, daemon),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add project…'),
               ),
             ],
           ),
@@ -455,8 +452,8 @@ class _Readiness extends StatelessWidget {
   }
 }
 
-/// PHP: the default version once one is installed, else the recommended one
-/// to download.
+/// PHP: the default version once it is installed, else that version — or the
+/// recommended one — to download.
 class _PhpReadiness extends StatelessWidget {
   const _PhpReadiness({required this.daemon, required this.php});
 
@@ -465,10 +462,14 @@ class _PhpReadiness extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (php.available.isNotEmpty) {
+    // WARNING: Not php.available: wharf.json always lists the default version
+    // there, installed or not, so a machine without PHP would read as ready.
+    if (php.selectedIsInstalled) {
       return _Readiness(ready: true, label: 'PHP ${php.version}');
     }
-    final offer = php.recommended.isNotEmpty
+    final offer = php.downloadable.any((d) => d.version == php.version)
+        ? php.version
+        : php.recommended.isNotEmpty
         ? php.recommended
         : (php.downloadable.isEmpty ? '' : php.downloadable.first.version);
     final Widget? action;

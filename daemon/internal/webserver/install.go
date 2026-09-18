@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/download"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/elevate"
 )
 
 // ErrFetch reports that a webserver could not be downloaded
@@ -27,7 +28,7 @@ var ErrFetch = errors.New("the webserver could not be fetched — check your int
 // get it").
 type Plan struct {
 	Installable bool `json:"installable"`
-	// Via names the source: "download" or "homebrew".
+	// Via names the source: "download", "homebrew" or "package".
 	Via string `json:"via,omitempty"`
 	// Hint is a sentence for the user: what will happen, or what to do.
 	Hint string `json:"hint,omitempty"`
@@ -51,7 +52,8 @@ type Installer interface {
 //     against Homebrew's libpcre2, so without Homebrew they cannot start.
 //   - Apache, Windows: Apache Lounge, the build apache.org itself points to.
 //   - Apache, macOS: nothing to install — macOS ships it.
-//   - Apache, Linux: the distribution's package; Wharf says which.
+//   - Apache, Linux: the distribution's package, installed through its
+//     package manager behind a password prompt.
 type Downloader struct {
 	Client       *http.Client
 	NginxIndex   string
@@ -61,6 +63,37 @@ type Downloader struct {
 	Brew string
 	// Run runs a package manager. Tests replace it.
 	Run func(ctx context.Context, program string, args ...string) error
+	// Elevator runs a Linux package manager with administrator rights.
+	Elevator elevate.Elevator
+	// LookPath finds a Linux package manager; "" means exec.LookPath.
+	LookPath func(file string) (string, error)
+}
+
+// linuxPackage is how one family of distributions installs Apache.
+type linuxPackage struct {
+	manager, install, service string
+}
+
+// linuxPackages are tried in order; the first manager found is the
+// distribution's own.
+var linuxPackages = []linuxPackage{
+	{"apt-get", "DEBIAN_FRONTEND=noninteractive apt-get install -y apache2", "apache2"},
+	{"dnf", "dnf install -y httpd", "httpd"},
+	{"zypper", "zypper --non-interactive install apache2", "apache2"},
+	{"pacman", "pacman -S --noconfirm --needed apache", "httpd"},
+}
+
+func (d *Downloader) linuxPackage() (linuxPackage, bool) {
+	look := d.LookPath
+	if look == nil {
+		look = exec.LookPath
+	}
+	for _, p := range linuxPackages {
+		if _, err := look(p.manager); err == nil {
+			return p, true
+		}
+	}
+	return linuxPackage{}, false
 }
 
 // NewDownloader returns a Downloader pointed at the public sources.
@@ -131,9 +164,13 @@ func (d *Downloader) Plan(name string) Plan {
 		return Plan{Installable: true, Via: "download",
 			Hint: "Downloads the latest Apache from Apache Lounge. It needs the Microsoft Visual C++ Redistributable."}
 	case Apache + "/linux":
-		return Plan{Hint: "Install Apache with your package manager — sudo apt install apache2, or sudo dnf install " +
-			"httpd — then re-scan. Those packages start their own Apache on port 80; stop it with " +
-			"sudo systemctl disable --now apache2 (or httpd)."}
+		if p, ok := d.linuxPackage(); ok {
+			return Plan{Installable: true, Via: "package",
+				Hint: "Installs Apache with " + p.manager + " after asking for your password. The system's own " +
+					"Apache service is switched off, so only Wharf's uses port 80."}
+		}
+		return Plan{Hint: "Install Apache with your package manager, then re-scan. If it starts its own Apache " +
+			"service, stop it with sudo systemctl disable --now apache2 (or httpd)."}
 	}
 	if name == Nginx {
 		if _, _, ok := nginxPlatform(goos, goarch); ok {
@@ -154,6 +191,8 @@ func (d *Downloader) Install(ctx context.Context, name, dest string) error {
 	switch {
 	case plan.Via == "homebrew":
 		err = d.brewInstall(ctx, map[string]string{Nginx: "nginx", Apache: "httpd"}[name])
+	case plan.Via == "package":
+		err = d.packageInstall()
 	case name == Nginx:
 		err = d.downloadNginx(ctx, dest)
 	case name == Apache:
@@ -174,6 +213,25 @@ func (d *Downloader) brewInstall(ctx context.Context, formula string) error {
 	defer cancel()
 	if err := run(ctx, d.brew(), "install", formula); err != nil {
 		return fmt.Errorf("brew install %s failed: %w", formula, err)
+	}
+	return nil
+}
+
+// packageInstall installs Apache from the distribution. Debian's package starts
+// the system's Apache on port 80 and enables it at boot; it is switched off
+// again at once, or the front door could never take the port. The service is
+// left alone on a system without systemd.
+func (d *Downloader) packageInstall() error {
+	p, _ := d.linuxPackage()
+	if d.Elevator == nil {
+		return errors.New("Wharf cannot ask for a password here — run " + p.install + " yourself, then re-scan")
+	}
+	script := p.install + " && { systemctl disable --now " + p.service + " >/dev/null 2>&1 || true; }"
+	if err := d.Elevator.RequestElevatedRun("/bin/sh", []string{"-c", script}, nil); err != nil {
+		if errors.Is(err, elevate.ErrDeclined) {
+			return err
+		}
+		return fmt.Errorf("installing Apache with %s failed — run %s in a terminal to see why: %w", p.manager, p.install, err)
 	}
 	return nil
 }

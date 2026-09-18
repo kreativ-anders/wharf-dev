@@ -172,7 +172,8 @@ wharf/
 └── gui/                       the Flutter desktop app — see gui/README.md
     ├── pubspec.yaml           THE VERSION: `version: X.Y.Z+B` (dev/releasing.md)
     ├── dart_test.yaml          declares the e2e tag (excluded from the default run)
-    ├── assets/tray/           tray icon: template_*.png (macOS), icon_*.png (Linux), icon.ico (Windows)
+    ├── assets/tray/           tray icon: template_*.png (macOS), icon_*.png (Linux), icon.ico (Windows);
+    │                          each again as *_running, the mark with a dot while anything runs
     ├── tool/draw_icons.py     draws the tray and app icons from one mark
     ├── lib/
     │   ├── main.dart          window, tray wiring, close-to-tray
@@ -204,6 +205,8 @@ wharf/
     │   ├── launcher_e2e_test.dart  start / attach / quit against real wharfd (--tags e2e)
     │   ├── daemon_e2e_test.dart drives the real wharfd binary (--tags e2e)
     │   └── e2e_daemon.dart      the binary both e2e tests drive; refuses a build older than daemon/
+    ├── linux/dev.wharf.wharf_gui.desktop  the name and icon a Wayland taskbar finds by app id
+    │                                      (`make gui-desktop` installs it for development)
     └── macos/ linux/ windows/   platform shells; macOS embeds wharfd via the
                                  "Embed wharfd" Xcode build phase, Windows via
                                  a post-build step in windows/runner/CMakeLists.txt
@@ -332,6 +335,7 @@ make run       # run the daemon against a throwaway root, no password prompt
 make gui-test  # GUI unit and widget tests
 make gui-e2e   # GUI driving the real daemon binary (needs `make build` first)
 make gui       # build and launch the desktop app against a throwaway root
+make gui-desktop  # Linux: install the .desktop entry and icon, so the taskbar shows Wharf's
 make check     # everything above that is not interactive
 
 make version                 # the version this checkout builds as

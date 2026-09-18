@@ -59,6 +59,14 @@ Feature: Tray icon actions
     Then the daemon stops every running service and project
     And the tray icon reflects an idle state
 
+  Scenario: The tray icon shows whether anything is running
+    Given no project is running
+    Then the tray icon shows the plain mark
+    When a project starts
+    Then the tray icon shows the mark with a dot
+    And the dot is told by its shape, not only its colour
+    And the icon says the same on every platform, even where the tray has no tooltip
+
   Scenario: Adding a project via the tray
     When the user selects "Add project…" from the tray menu
     Then a folder picker is shown

@@ -62,3 +62,18 @@ Feature: Webserver service management
     Then its own instance listens on the next free port instead, and the config records it
     And the global instance forwards "legacy-app.localhost" to that port
     And a project added while a port is taken is not given that port
+
+  # Linux keeps ports below 1024 for administrators unless told otherwise;
+  # macOS and Windows let any process listen on 80 and 443, so they never ask.
+  Scenario: Linux asks once before the front door first takes port 80
+    Given Linux lets only administrators listen on ports below 1024
+    When the user starts the first project
+    Then Wharf asks for the password once, to let processes listen on ports from 80 up
+    And the front door starts on port 80
+    And no later start asks again, not even after a reboot
+
+  Scenario: Declining the port prompt
+    Given Linux lets only administrators listen on ports below 1024
+    When the user starts a project and dismisses the password prompt
+    Then the project does not start
+    And its row says Wharf needs permission to use ports 80 and 443, and how to give it

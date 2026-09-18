@@ -12,14 +12,23 @@ import "errors"
 // (local-ssl.feature).
 var ErrDeclined = errors.New("elevation declined by user")
 
-// Elevator does the one thing the daemon needs administrator rights for.
+// Elevator does the things the daemon needs administrator rights for.
 type Elevator interface {
 	// RequestElevatedRun runs one program with administrator rights, with env
-	// ("KEY=value") added to its environment. It exists for one caller:
-	// trusting mkcert's local certificate authority, which writes to the
-	// system trust store (local-ssl.feature). It returns ErrDeclined if the
-	// user dismisses the prompt.
+	// ("KEY=value") added to its environment: trusting mkcert's local
+	// certificate authority, which writes to the system trust store
+	// (local-ssl.feature), and installing Apache with a Linux package manager
+	// (webserver-install.feature). It returns ErrDeclined if the user
+	// dismisses the prompt.
 	RequestElevatedRun(program string, args []string, env []string) error
+
+	// AllowLowPorts lets processes without administrator rights listen on
+	// ports from 80 up, so the front door can take 80 and 443
+	// (service-management.feature, "Linux asks once before the front door
+	// first takes port 80"). Where that is allowed already — macOS, Windows,
+	// a Linux that was set up before — it returns nil without a prompt. It
+	// returns ErrDeclined if the user dismisses the prompt.
+	AllowLowPorts() error
 }
 
 // System returns the adapter for the OS the daemon was compiled for.

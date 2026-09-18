@@ -31,6 +31,7 @@ type Daemon struct {
 	root  layout.Root
 	store *config.Store
 	sup   *supervisor.Supervisor
+	elev  elevate.Elevator
 	res   *wruntime.Resolver
 	certs certs.Issuer
 	php   *php.Detector
@@ -194,7 +195,9 @@ func New(opts Options) (*Daemon, error) {
 	}
 	webInstaller := opts.WebInstaller
 	if webInstaller == nil {
-		webInstaller = webserver.NewDownloader()
+		dl := webserver.NewDownloader()
+		dl.Elevator = el
+		webInstaller = dl
 	}
 
 	// WARNING: Set before anything below can publish a snapshot, which reads
@@ -211,6 +214,7 @@ func New(opts Options) (*Daemon, error) {
 		root:         opts.Root,
 		store:        store,
 		sup:          sup,
+		elev:         el,
 		res:          wruntime.New(opts.Root),
 		certs:        issuer,
 		php:          detector,

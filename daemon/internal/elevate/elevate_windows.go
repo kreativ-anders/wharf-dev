@@ -45,3 +45,10 @@ func runAs(argumentList string) error {
 }
 
 func quoteForPowerShell(p string) string { return strings.ReplaceAll(p, "'", "''") }
+
+// lowPortsAllowed is always true here: this OS lets any process listen on the
+// front door's ports (dev/architecture.md §4c).
+func lowPortsAllowed() bool { return true }
+
+// AllowLowPorts has nothing to ask for.
+func (systemElevator) AllowLowPorts() error { return nil }

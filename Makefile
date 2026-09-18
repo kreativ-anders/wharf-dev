@@ -15,7 +15,7 @@ EXE     := $(if $(filter Windows_NT,$(OS)),.exe,)
 # a release Wharf.app is universal, so the daemon it embeds must be too.
 UNIVERSAL := $(and $(filter 1,$(DARWIN_UNIVERSAL)),$(filter Darwin,$(shell uname)))
 
-.PHONY: all build test spec race vet fmt cross clean run check gui gui-test gui-e2e gui-analyze \
+.PHONY: all build test spec race vet fmt cross clean run check gui gui-test gui-e2e gui-analyze gui-desktop \
 	version bump release dmg
 
 all: fmt vet test build
@@ -91,11 +91,29 @@ gui-e2e: build
 DEV_ROOT := $(PWD)/$(BUILD)/dev/root
 FLUTTER_DEVICE ?= $(shell uname | tr 'A-Z' 'a-z' | sed 's/darwin/macos/')
 
-gui: build
+gui: build $(if $(filter linux,$(FLUTTER_DEVICE)),gui-desktop)
 	@mkdir -p $(DEV_ROOT)/www
 	cd gui && WHARF_ROOT=$(DEV_ROOT) \
 		WHARFD_ARGS="--elevator direct" \
 		$(FLUTTER) run -d $(FLUTTER_DEVICE)
+
+# INFO: Linux only. A Wayland compositor shows a window's icon only through the
+# .desktop file named after its app id (APPLICATION_ID in gui/linux/CMakeLists.txt);
+# without one the taskbar shows a generic icon, even under `flutter run`. Installed
+# for this user and hidden from the app menu, as it points at no installed binary.
+APPS_DIR := $(HOME)/.local/share/applications
+ICONS_DIR := $(HOME)/.local/share/icons/hicolor
+APP_ID := dev.wharf.wharf_gui
+
+gui-desktop:
+	@mkdir -p $(APPS_DIR)
+	sed '$$a NoDisplay=true' gui/linux/$(APP_ID).desktop > $(APPS_DIR)/$(APP_ID).desktop
+	@for n in 16 32 64 128 256 512; do \
+		install -Dm644 gui/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_$$n.png \
+			$(ICONS_DIR)/$${n}x$${n}/apps/$(APP_ID).png; \
+	done
+	-update-desktop-database -q $(APPS_DIR)
+	-gtk-update-icon-cache -q -t $(ICONS_DIR)
 
 # ------------------------------------------------------------------ release
 
