@@ -105,6 +105,8 @@ wharf/
 │
 ├── docs/                      the public landing page (GitHub Pages) — HTML + CSS, no JS
 │   ├── index.html             content from features/; FAQ mirrored in its JSON-LD
+│   ├── privacy.html           what Wharf changes on a computer, where it downloads from; this site's data
+│   ├── imprint.html           the legal notice (§ 5 DDG)
 │   ├── style.css              the app's Kirby-plain palette (gui/lib/theme.dart)
 │   ├── icon.svg               favicon: the app mark on its tile
 │   ├── apple-touch-icon.png   the app icon at 180 px

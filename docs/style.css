@@ -343,7 +343,6 @@ h3 { margin: 0 0 0.4rem; font-size: 1.05rem; line-height: 1.35; }
   box-shadow: 0 24px 48px -16px rgb(0 0 0 / 0.25);
   font-size: 0.85rem;
 }
-.tray-head { padding: 0.35rem 0.6rem; color: var(--dim); font-size: 0.75rem; font-weight: 600; }
 .tray ul { list-style: none; margin: 0; padding: 0; }
 .tray li { display: flex; align-items: center; gap: 0.55rem; padding: 0.3rem 0.6rem; border-radius: 5px; }
 .tray li:first-child { background: var(--surface); }
@@ -435,13 +434,6 @@ h3 { margin: 0 0 0.4rem; font-size: 1.05rem; line-height: 1.35; }
 .band .code { background: var(--bg); }
 #config .code { background: var(--surface); }
 
-.split {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
-  gap: 3rem;
-  align-items: center;
-}
-
 .pair {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
@@ -456,14 +448,7 @@ h3 { margin: 0 0 0.4rem; font-size: 1.05rem; line-height: 1.35; }
 .pair figcaption { margin-bottom: 0.6rem; color: var(--dim); font-size: 0.88rem; }
 .pair figcaption code { background: none; padding: 0; }
 
-/* What it is not */
-
-.nots { list-style: none; margin: 0; padding: 0; max-width: 46rem; }
-.nots li { padding-block: 1rem; border-top: 1px solid var(--line); color: var(--dim); }
-.nots li:last-child { border-bottom: 1px solid var(--line); }
-.nots strong { color: var(--fg); margin-right: 0.3rem; }
-
-/* Sources table */
+/* Tables (privacy.html: where every download comes from) */
 
 .table { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
 table { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
@@ -523,3 +508,177 @@ tbody td:last-child { color: var(--dim); white-space: nowrap; }
 .faq details[open] summary::after { content: "−"; }
 .faq details p { color: var(--dim); padding-bottom: 1.1rem; }
 .faq details p + p { margin-top: -0.3rem; }
+
+/* Footer links to the imprint and privacy pages */
+
+footer.site { flex-wrap: wrap; }
+.legal-links { display: flex; gap: 1.25rem; margin-left: auto; }
+.legal-links a { color: var(--dim); }
+.legal-links a:hover,
+.legal-links a[aria-current] { color: var(--fg); }
+
+/* Imprint and privacy: a smaller head than the landing page's hero */
+
+.page-head { padding-block: 3.5rem 3rem; }
+.page-head h1 { font-size: clamp(2rem, 5.5vw, 3.25rem); }
+
+.facts { margin: 0 0 2rem; }
+.facts div {
+  display: grid;
+  grid-template-columns: minmax(0, 12rem) 1fr;
+  gap: 0.25rem 1.5rem;
+  padding-block: 1rem;
+  border-top: 1px solid var(--line);
+}
+.facts div:last-child { border-bottom: 1px solid var(--line); }
+.facts dt { font-weight: 600; }
+.facts dd { margin: 0; color: var(--dim); }
+@media (max-width: 36rem) {
+  .facts div { grid-template-columns: 1fr; }
+}
+
+/* Privacy, laid out like the app's Settings window: a side navigation, one
+   page beside it (features/settings.feature, "Settings pages are chosen from
+   a side navigation"). The selected entry is marked by a bar, bold text and
+   its background — never by colour alone. */
+
+.settings.window { max-width: none; margin-bottom: 5rem; overflow: visible; }
+.settings .titlebar { border-radius: 12px 12px 0 0; }
+
+.settings-body { display: grid; grid-template-columns: 13rem minmax(0, 1fr); }
+
+.side {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0.5rem;
+  border-right: 1px solid var(--line);
+  min-height: 100%;
+}
+.side a {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: 2.5rem;
+  padding: 0 0.75rem;
+  border-left: 3px solid transparent;
+  border-radius: 4px;
+  color: var(--fg);
+  font-size: 0.95rem;
+  text-decoration: none;
+}
+.side a span { width: 1.1rem; text-align: center; color: var(--dim); }
+.side a:hover { background: var(--surface); }
+
+.settings:not(:has(.pane :target)) .side a:first-child,
+.settings:has(#computer:target) .side a[href="#computer"],
+.settings:has(#downloads:target) .side a[href="#downloads"],
+.settings:has(#website:target) .side a[href="#website"],
+.settings:has(#rights:target) .side a[href="#rights"] {
+  background: var(--surface);
+  border-left-color: var(--fg);
+  font-weight: 600;
+}
+
+.pane { padding: 0.5rem 2rem 2.5rem; }
+.pane > section { padding-block: 1.5rem; scroll-margin-top: 1rem; }
+.pane > section + section { border-top: 1px solid var(--line); }
+.pane h2 { margin: 0 0 0.6rem; font-size: 1.15rem; letter-spacing: -0.01em; }
+.pane p { color: var(--dim); }
+.pane-intro { max-width: var(--measure); margin-bottom: 1.25rem !important; }
+.pane-note { margin-top: 1rem !important; font-size: 0.9rem; }
+.pane .legend { margin: 0 0 0.5rem; }
+
+/* What Wharf changes: one row per place, a mark and its words */
+
+.places { list-style: none; margin: 0; padding: 0; }
+.places li {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr);
+  gap: 0.9rem;
+  padding-block: 1.1rem;
+}
+.places li + li { border-top: 1px solid var(--line); }
+.places h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.7rem; margin-bottom: 0.3rem; }
+.places p { font-size: 0.97rem; max-width: var(--measure); }
+.places p + p { margin-top: 0.5rem; }
+.places .mark { margin-top: 0.35rem; }
+
+.mark { display: inline-block; flex: none; width: 0.7rem; height: 0.7rem; border-radius: 50%; }
+.mark.is-writes { background: var(--fg); }
+.mark.is-never { border: 2px solid var(--idle); }
+
+.when {
+  padding: 0.12rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--dim);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.undo { font-size: 0.9rem !important; }
+.undo::before { content: "↺ "; }
+
+@media (max-width: 44rem) {
+  .settings-body { grid-template-columns: minmax(0, 1fr); }
+  .side {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    min-height: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .side a { flex: none; border-left: 0; border-bottom: 3px solid transparent; border-radius: 4px 4px 0 0; }
+  .settings:not(:has(.pane :target)) .side a:first-child,
+  .settings:has(#computer:target) .side a[href="#computer"],
+  .settings:has(#downloads:target) .side a[href="#downloads"],
+  .settings:has(#website:target) .side a[href="#website"],
+  .settings:has(#rights:target) .side a[href="#rights"] { border-bottom-color: var(--fg); }
+  .pane { padding-inline: 1.1rem; }
+}
+
+/* The window mock, as the app draws it today: the name and mark in the bar,
+   "Cast off" and "Add project…" in opposite corners below the list
+   (single-application.feature, "Casting off from the main window"). */
+
+:root { --castoff: #0f7c80; }
+@media (prefers-color-scheme: dark) { :root { --castoff: #5fc4c8; } }
+
+.appname { display: inline-flex; align-items: center; gap: 0.5rem; }
+.appname .pier { width: 1.1rem; height: 1.1rem; }
+.chip.is-stop-line { color: var(--failed); border-color: var(--failed); }
+.chip.is-stop-line b { color: var(--failed); }
+.chip.is-plain { border-color: transparent; color: var(--dim); }
+
+.fabs {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 1.25rem 1.1rem;
+}
+.fab {
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  background: var(--ink);
+  color: var(--on-ink);
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fab.is-castoff { background: var(--castoff); color: var(--bg); }
+
+/* Open source and privacy, side by side */
+
+.pair-even {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 3rem 4rem;
+}
+.pair-even h2 { margin-bottom: 1.25rem; }
+.pair-even .cta { margin-top: 1.5rem; }

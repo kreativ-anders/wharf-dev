@@ -39,6 +39,8 @@
         "url": "https://kreativ-anders.github.io/wharf-dev/",
         "image": "https://kreativ-anders.github.io/wharf-dev/og.png",
         "codeRepository": "https://github.com/kreativ-anders/wharf-dev",
+        "license": "https://opensource.org/licenses/MIT",
+        "isAccessibleForFree": true,
         "featureList": [
           "Every project at its own name.localhost address, with no hosts file and no password prompt",
           "HTTPS for a project with one switch, using mkcert",
@@ -46,7 +48,7 @@
           "nginx or Apache, chosen per project",
           "One php.ini for every PHP version",
           "Per-project logs",
-          "One-click Kirby project scaffolding",
+          "Add any folder: rules for Kirby, Laravel, WordPress and more are detected",
           "Tray menu for start, stop and restart",
           "One flat, hand-editable JSON config file"
         ]
@@ -62,7 +64,7 @@
           {
             "@type": "Question",
             "name": "Will Wharf ask for my password?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Adding or creating a project never does. The one prompt comes the first time you turn on HTTPS: your computer has to be told once to trust Wharf's certificates. Saying no is fine — HTTPS stays on, browsers show a warning until you trust it, and Settings offers to ask again." }
+            "acceptedAnswer": { "@type": "Answer", "text": "Adding a project never does. The one prompt comes the first time you turn on HTTPS: your computer has to be told once to trust Wharf's certificates. Saying no is fine — HTTPS stays on, browsers show a warning until you trust it, and Settings offers to ask again." }
           },
           {
             "@type": "Question",
@@ -77,7 +79,12 @@
           {
             "@type": "Question",
             "name": "Do I have to move my projects into a special folder?",
-            "acceptedAnswer": { "@type": "Answer", "text": "No. Any folder in www/ is a project, and a folder anywhere else can be added with Add folder… and stays where it is. Removing such a project never touches its files." }
+            "acceptedAnswer": { "@type": "Answer", "text": "No. Choose Add project… and pick the folder wherever it is — a Git checkout in your code folder is fine. It stays where it is, and removing the project never touches its files." }
+          },
+          {
+            "@type": "Question",
+            "name": "What is the www folder for?",
+            "acceptedAnswer": { "@type": "Answer", "text": "It is optional: a place inside Wharf's own folder (~/Wharf/www) for anyone who likes all projects in one spot. A folder put there shows up in the app, ready to add with one click, and its name is the project's name. Most projects live somewhere else, and Add project… takes them from there." }
           },
           {
             "@type": "Question",
@@ -87,17 +94,27 @@
           {
             "@type": "Question",
             "name": "Is Wharf only for Kirby?",
-            "acceptedAnswer": { "@type": "Answer", "text": "No — any folder of PHP is a project. Kirby is the reference: its starter kit is one click away. Ready-made nginx and Apache rules for Kirby, Laravel, WordPress, Statamic, Symfony, Craft CMS and Drupal are built in, one pick per project." }
+            "acceptedAnswer": { "@type": "Answer", "text": "No — any folder of PHP is a project. When you add one, Wharf recognises Kirby, Laravel, WordPress, Statamic, Symfony, Craft CMS and Drupal and picks ready-made nginx and Apache rules for it. You can change the pick, or choose none, for each project." }
           },
           {
             "@type": "Question",
             "name": "What about MySQL, PostgreSQL, Node.js or Mailpit?",
-            "acceptedAnswer": { "@type": "Answer", "text": "They are on the roadmap: how they will behave is written down, but they are deliberately not built yet. The first version does PHP, and does it well." }
+            "acceptedAnswer": { "@type": "Answer", "text": "They are planned, but not built yet. The first version does PHP, and does it well." }
           },
           {
             "@type": "Question",
             "name": "Can I install an older nginx or Apache for one project?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Not yet. Wharf has one version of nginx and one of Apache, and installs the newest. nginx and Apache do not offer ready-made downloads themselves, and the places Wharf gets them from usually offer only the newest version. What works today: each project can use either nginx or Apache, and its address stays the same." }
+            "acceptedAnswer": { "@type": "Answer", "text": "Not yet. Wharf installs the newest nginx and Apache, because the places it gets them from rarely offer older versions. What works today: each project can use either nginx or Apache, and its address stays the same." }
+          },
+          {
+            "@type": "Question",
+            "name": "Is Wharf free?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. Wharf is open source under the MIT licence: free to use, for personal and client work alike. The code is on GitHub." }
+          },
+          {
+            "@type": "Question",
+            "name": "Does Wharf collect any data?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No. There is no account, no analytics and no crash reporting. Wharf goes online only to download something you asked for. The privacy page lists every file it changes on your computer." }
           },
           {
             "@type": "Question",
@@ -120,9 +137,9 @@
     </a>
     <nav aria-label="Main">
       <a href="#features">Features</a>
-      <a href="#config">Config</a>
       <a href="#status">Status</a>
       <a href="#faq">FAQ</a>
+      <a href="privacy.html">Privacy</a>
       <a href="https://github.com/kreativ-anders/wharf-dev">GitHub</a>
     </nav>
   </header>
@@ -140,7 +157,7 @@
       </p>
       <p class="cta">
         <a class="button" href="#how">See how it works</a>
-        <a class="button ghost" href="https://github.com/kreativ-anders/wharf-dev">Read the source</a>
+        <a class="button ghost" href="https://github.com/kreativ-anders/wharf-dev">Open source on GitHub</a>
       </p>
       <p class="note"><span class="status is-busy" aria-hidden="true"></span> Early development. The app runs on macOS today; there are no downloads yet.</p>
 
@@ -148,8 +165,8 @@
         <div class="window" aria-hidden="true">
           <div class="titlebar"><span class="lights"><i></i><i></i><i></i></span><span>Wharf</span></div>
           <div class="toolbar">
-            <strong>Projects</strong>
-            <span class="tools"><span class="chip">Add folder…</span><span class="chip">New project</span><span class="chip is-stop"><b>■</b> Stop all</span></span>
+            <strong class="appname"><svg class="pier" viewBox="0 0 100 100"><path d="M0 10h100v15H0zM16 10h15v52H16zM69 10h15v52H69zM0 72.5L5 74.66 10 76.61 15 78.16 20 79.16 25 79.5 30 79.16 35 78.16 40 76.61 45 74.66 50 72.5 55 70.34 60 68.39 65 66.84 70 65.84 75 65.5 80 65.84 85 66.84 90 68.39 95 70.34 100 72.5V87.5L95 85.34 90 83.39 85 81.84 80 80.84 75 80.5 70 80.84 65 81.84 60 83.39 55 85.34 50 87.5 45 89.66 40 91.61 35 93.16 30 94.16 25 94.5 20 94.16 15 93.16 10 91.61 5 89.66 0 87.5z"/></svg>Wharf</strong>
+            <span class="tools"><span class="chip is-stop-line"><b>■</b> Stop all</span><span class="chip is-plain">⚙</span></span>
           </div>
           <ul class="rows">
             <li>
@@ -168,27 +185,27 @@
               <span class="acts"><span class="act"><b>↗</b> Open</span><span class="act is-empty"></span><span class="act"><b>⋯</b> Settings</span><span class="act is-start"><b>▸</b> Start</span></span>
             </li>
           </ul>
+          <div class="fabs"><span class="fab is-castoff">⛵ Cast off</span><span class="fab">+ Add project…</span></div>
         </div>
 
         <div class="tray" aria-hidden="true">
-          <p class="tray-head">Wharf</p>
           <ul>
+            <li>Open Wharf</li>
+            <li class="sep"></li>
             <li><span class="status is-running"></span>my-kirby-site<span class="chev">›</span></li>
             <li><span class="status is-running"></span>legacy-app<span class="chev">›</span></li>
             <li><span class="status is-idle"></span>client-site<span class="chev">›</span></li>
             <li class="sep"></li>
             <li>Add project…</li>
-            <li>Open Wharf</li>
             <li>Stop all</li>
             <li class="sep"></li>
-            <li>Quit Wharf</li>
+            <li>Quit</li>
           </ul>
         </div>
 
         <figcaption>
-          The one main view: a list of projects. Each row shows whether it is
-          running — as a shape, not only a colour — its address, and what serves
-          it. The tray menu shows the same thing.
+          One window, one list of projects: whether each one runs, its
+          address, and what serves it. The tray menu shows the same.
         </figcaption>
       </figure>
     </section>
@@ -201,8 +218,9 @@
         <ol class="steps">
           <li>
             <h3>Pick a folder</h3>
-            <p>Every folder in <code>www/</code> is a project. Any other folder
-            can be added right where it lives — your code never moves.</p>
+            <p>“Add project…” takes any folder right where it lives — your code
+            never moves. Wharf proposes a name and the rules for your CMS; one
+            click, and it runs.</p>
           </li>
           <li>
             <h3>Start it from the tray</h3>
@@ -227,107 +245,51 @@
 
       <ul class="grid">
         <li>
-          <h3>Real addresses, no prompts</h3>
+          <h3>Real addresses, no password</h3>
           <p>Each project answers at <code>&lt;name&gt;.localhost</code>, which
-          your computer knows by itself — Safari included. Adding a project
-          never touches the hosts file or asks for a password.</p>
+          your computer knows by itself. No hosts file, no port numbers.</p>
         </li>
         <li>
           <h3>HTTPS with one switch</h3>
-          <p>Turn it on and Wharf fetches mkcert, checks it, and makes a
-          certificate. Your computer asks once to trust it. Say no, and the
-          project still works.</p>
+          <p>Turn it on, and Wharf makes a certificate your browser trusts.
+          Your computer asks once.</p>
         </li>
         <li>
-          <h3>The PHP you already have</h3>
-          <p>PHP versions on your computer are found and used where they are.
-          Any supported version is one click to download, and each shows how
-          long it still gets fixes.</p>
+          <h3>The PHP you need</h3>
+          <p>PHP already on your computer is used where it is. Any supported
+          version is one click away, and each project can pick its own.</p>
         </li>
         <li>
-          <h3>One PHP version per project</h3>
-          <p>An old client site on PHP 8.2 next to a fresh one on 8.4 — set it
-          in the project's settings. Everything else keeps the default.</p>
+          <h3>nginx or Apache</h3>
+          <p>Choose one for everything, or give a single project the other.
+          Its address stays the same.</p>
         </li>
         <li>
-          <h3>nginx or Apache, per project</h3>
-          <p>Switch the webserver for everyone, or give one project the other
-          one. Its address stays the same.</p>
+          <h3>Knows your CMS</h3>
+          <p>Kirby, Laravel, WordPress, Statamic, Symfony, Craft CMS or Drupal:
+          Wharf recognises the folder and picks the right webserver rules.</p>
         </li>
         <li>
-          <h3>One <code>php.ini</code> for all</h3>
-          <p><code>memory_limit</code>, upload sizes, <code>display_errors</code>:
-          one file, read by every PHP version. Save it, and only PHP
-          restarts.</p>
+          <h3>Your own settings</h3>
+          <p>One <code>php.ini</code> for every PHP version, and webserver rules
+          per project — plain files, edited right in Wharf.</p>
         </li>
         <li>
-          <h3>Your own webserver settings</h3>
-          <p>A per-project <code>.nginx.conf</code> or <code>.apache.conf</code>,
-          applied when you save. If the webserver refuses it, you see its own
-          error with the file and line — right away.</p>
-        </li>
-        <li>
-          <h3>Rules for your CMS</h3>
-          <p>Config templates for Kirby, Laravel, WordPress and more: pick one
-          per project, edit it in Wharf, or save your own. Plain nginx and
-          Apache syntax, nothing hidden.</p>
-        </li>
-        <li>
-          <h3>Logs, one folder per project</h3>
-          <p>Requests and errors for each project — PHP's warnings included —
-          land in <code>data/log/projects/&lt;name&gt;/</code>, one click away
-          in its settings.</p>
-        </li>
-        <li>
-          <h3>Kirby in one click</h3>
-          <p>“New project” fetches the Kirby starter kit and starts it. Pages,
-          Panel and media just work, and <code>content/</code> and
-          <code>site/</code> are never served as files.</p>
+          <h3>Logs per project</h3>
+          <p>Requests and errors, PHP's warnings included — one folder per
+          project, one click away.</p>
         </li>
         <li>
           <h3>Lives in your tray</h3>
-          <p>Start, stop, restart and open projects without opening a window.
-          The tray and the window always show the same thing.</p>
+          <p>Start, stop and open projects without a window. Quit Wharf, and
+          everything it started stops.</p>
         </li>
         <li>
-          <h3>One application</h3>
-          <p>Launch Wharf and it works. Quit, and everything it started stops.
-          Even if it crashes, nothing is left running behind your back.</p>
-        </li>
-        <li>
-          <h3>Accessible by default</h3>
-          <p>Readable contrast in light and dark, status shown by shape as well
-          as colour, every button labelled, and the keyboard reaches
-          everything.</p>
+          <h3>Accessible</h3>
+          <p>Readable in light and dark, status shown by shape as well as
+          colour, and the keyboard reaches everything.</p>
         </li>
       </ul>
-    </section>
-
-    <!-- Front door -->
-    <section class="band" aria-labelledby="door-title">
-      <div class="wrap split">
-        <div class="prose">
-          <p class="eyebrow">Under the hood</p>
-          <h2 id="door-title">One front door on port 80.</h2>
-          <p>One copy of the active webserver serves every project, each with
-          its own generated config file. A project that uses the other
-          webserver gets its own copy, reachable only from your computer, and
-          the front door passes its requests through.</p>
-          <p>HTTPS ends at the front door, so it works the same either way. A
-          name no project has is turned away, never answered by the wrong
-          project.</p>
-          <p>The front door answers your computer only: nobody else on the
-          network reaches your projects.</p>
-        </div>
-        <pre class="code diagram" role="img" aria-label="Diagram: the browser reaches nginx on ports 80 and 443. nginx serves my-kirby-site and client-site directly and passes legacy-app to Apache on 127.0.0.1 port 8081."><span class="dim">browser</span>
-   │
-   ▼
-nginx  :80  :443      <span class="dim">the front door</span>
-   ├──► my-kirby-site     <span class="dim">served directly</span>
-   ├──► client-site       <span class="dim">served directly</span>
-   └──► legacy-app  ──►  apache
-                         <span class="dim">127.0.0.1:8081</span></pre>
-      </div>
     </section>
 
     <!-- Config -->
@@ -369,60 +331,26 @@ nginx  :80  :443      <span class="dim">the front door</span>
       </div>
     </section>
 
-    <!-- Spec-driven -->
-    <section class="band" aria-labelledby="spec-title">
-      <div class="wrap split">
+    <!-- Open source and privacy -->
+    <section id="open" class="band" aria-labelledby="open-title">
+      <div class="wrap pair-even">
         <div class="prose">
-          <p class="eyebrow">Written down first</p>
-          <h2 id="spec-title">Every promise on this page is a test.</h2>
-          <p>Everything Wharf does is described in plain English before it is
-          built. Each description is checked by a test, and the build fails the
-          moment the two disagree.</p>
-          <p><a href="https://github.com/kreativ-anders/wharf-dev/tree/main/features">Read all the scenarios</a></p>
+          <p class="eyebrow">Open source</p>
+          <h2 id="open-title">Free, and yours to read.</h2>
+          <p>Wharf is open source under the MIT licence. Read how it works,
+          report what breaks, or send a fix.</p>
+          <p class="cta">
+            <a class="button" href="https://github.com/kreativ-anders/wharf-dev">Source on GitHub</a>
+            <a class="button ghost" href="https://github.com/kreativ-anders/wharf-dev/issues">Report an issue</a>
+          </p>
         </div>
-<pre class="code gherkin"><span class="dim"># features/pretty-urls.feature</span>
-<b>Scenario:</b> Adding a project never asks for a password
-  <b>When</b> the user adds or scaffolds a project
-  <b>Then</b> the hosts file is not written
-  <b>And</b>  no elevation prompt is shown</pre>
-      </div>
-    </section>
-
-    <!-- What it is not -->
-    <section class="wrap" aria-labelledby="not-title">
-      <p class="eyebrow">Kirby-inspired minimalism</p>
-      <h2 id="not-title">What Wharf is not.</h2>
-      <ul class="nots">
-        <li><strong>Not a container.</strong> No Docker, no VM — ordinary programs, so your files are as fast as your disk.</li>
-        <li><strong>Not a dashboard.</strong> No charts, no onboarding carousel. One list of projects; details behind a click.</li>
-        <li><strong>Not a database.</strong> Your whole setup is one JSON file you can edit by hand.</li>
-        <li><strong>Not three different apps.</strong> It works the same on Windows, macOS and Linux.</li>
-        <li><strong>Not a big first download.</strong> Wharf uses what you have and installs only when you ask.</li>
-      </ul>
-    </section>
-
-    <!-- Sources -->
-    <section class="band" aria-labelledby="sources-title">
-      <div class="wrap">
-        <p class="eyebrow">Trust</p>
-        <h2 id="sources-title">Where every download comes from.</h2>
-        <p class="intro">Whatever is already on your computer is used first. When
-        Wharf does install something, it picks the best source for your system —
-        and never leaves a half-installed folder behind.</p>
-        <div class="table">
-          <table>
-            <thead><tr><th scope="col">What</th><th scope="col">Source</th><th scope="col">Checked by</th></tr></thead>
-            <tbody>
-              <tr><th scope="row">PHP · macOS, Linux</th><td>static-php-cli builds, with every extension Kirby needs</td><td>HTTPS</td></tr>
-              <tr><th scope="row">PHP · Windows</th><td>windows.php.net, official NTS x64 builds</td><td>SHA-256</td></tr>
-              <tr><th scope="row">nginx · Linux, Windows</th><td>static builds, newest version</td><td>SHA-1 from the index</td></tr>
-              <tr><th scope="row">nginx · macOS</th><td>Homebrew</td><td>Homebrew</td></tr>
-              <tr><th scope="row">Apache · Windows</th><td>Apache Lounge, newest 2.4</td><td>SHA-256</td></tr>
-              <tr><th scope="row">Apache · macOS</th><td>the one macOS ships — nothing to install</td><td>—</td></tr>
-              <tr><th scope="row">Apache · Linux</th><td>your system's package; Settings names the command</td><td>—</td></tr>
-              <tr><th scope="row">mkcert</th><td>a pinned GitHub release</td><td>SHA-256, pinned</td></tr>
-            </tbody>
-          </table>
+        <div class="prose">
+          <p class="eyebrow">Privacy</p>
+          <h2>Nothing leaves your computer.</h2>
+          <p>No account, no analytics, no crash reports. Wharf downloads only
+          what you ask for, and never touches your hosts file or your project
+          folders.</p>
+          <p><a href="privacy.html">See everything Wharf changes on your computer</a></p>
         </div>
       </div>
     </section>
@@ -437,21 +365,20 @@ nginx  :80  :443      <span class="dim">the front door</span>
         <span><span class="status is-idle" aria-hidden="true"></span> Not yet</span>
       </p>
       <dl class="state">
-        <div><dt><span class="status is-running" aria-hidden="true"></span>Core service</dt><dd><span class="sr-only">Done. </span>Every scenario has a test</dd></div>
+        <div><dt><span class="status is-running" aria-hidden="true"></span>Projects, addresses, tray</dt><dd><span class="sr-only">Done. </span>Add, start, stop, open</dd></div>
         <div><dt><span class="status is-running" aria-hidden="true"></span>PHP, nginx, Apache, HTTPS</dt><dd><span class="sr-only">Done. </span>Used if present, installed on request</dd></div>
         <div><dt><span class="status is-busy" aria-hidden="true"></span>Desktop app</dt><dd><span class="sr-only">Partly. </span>Runs on macOS; Windows and Linux builds next</dd></div>
-        <div><dt><span class="status is-idle" aria-hidden="true"></span>Installers</dt><dd><span class="sr-only">Not yet. </span>DMG, MSI and AppImage not started</dd></div>
+        <div><dt><span class="status is-busy" aria-hidden="true"></span>Downloads</dt><dd><span class="sr-only">Partly. </span>A macOS DMG is built; no release published yet</dd></div>
       </dl>
 
       <h3 class="roadmap-title">On the roadmap</h3>
-      <p class="intro">Written down, deliberately not built. The first version does PHP, and does it well.</p>
+      <p class="intro">Planned, not built yet. The first version does PHP, and does it well.</p>
       <ul class="tags">
         <li>MySQL / PostgreSQL</li>
         <li>Mailpit</li>
         <li>Node.js</li>
         <li>Go</li>
         <li>Python</li>
-        <li>WordPress &amp; Laravel templates</li>
         <li>Update check, only when you ask</li>
       </ul>
     </section>
@@ -470,7 +397,7 @@ nginx  :80  :443      <span class="dim">the front door</span>
           </details>
           <details>
             <summary>Will Wharf ask for my password?</summary>
-            <p>Adding or creating a project never does. The one prompt comes the
+            <p>Adding a project never does. The one prompt comes the
             first time you turn on HTTPS: your computer has to be told once to
             trust Wharf's certificates. Saying no is fine — HTTPS stays on,
             browsers show a warning until you trust it, and Settings offers to
@@ -494,9 +421,17 @@ nginx  :80  :443      <span class="dim">the front door</span>
           </details>
           <details>
             <summary>Do I have to move my projects into a special folder?</summary>
-            <p>No. Any folder in <code>www/</code> is a project, and a folder
-            anywhere else can be added with “Add folder…” and stays where it is.
-            Removing such a project never touches its files.</p>
+            <p>No. Choose “Add project…” and pick the folder wherever it is — a
+            Git checkout in your code folder is fine. It stays where it is, and
+            removing the project never touches its files.</p>
+          </details>
+          <details>
+            <summary>What is the <code>www</code> folder for?</summary>
+            <p>It is optional: a place inside Wharf's own folder
+            (<code>~/Wharf/www</code>) for anyone who likes all projects in one
+            spot. A folder put there shows up in the app, ready to add with one
+            click, and its name is the project's name. Most projects live
+            somewhere else, and “Add project…” takes them from there.</p>
           </details>
           <details>
             <summary>Can I use Wharf without the app?</summary>
@@ -506,33 +441,35 @@ nginx  :80  :443      <span class="dim">the front door</span>
           </details>
           <details>
             <summary>Is Wharf only for Kirby?</summary>
-            <p>No — any folder of PHP is a project. Kirby is the reference: its
-            starter kit is one click away. Ready-made nginx and Apache rules for
-            Kirby, Laravel, WordPress, Statamic, Symfony, Craft CMS and Drupal
-            are built in, one pick per project.</p>
+            <p>No — any folder of PHP is a project. When you add one, Wharf
+            recognises Kirby, Laravel, WordPress, Statamic, Symfony, Craft CMS
+            and Drupal and picks ready-made nginx and Apache rules for it. You
+            can change the pick, or choose none, for each project.</p>
           </details>
           <details>
             <summary>What about MySQL, PostgreSQL, Node.js or Mailpit?</summary>
-            <p>They are on the roadmap: how they will behave is written down, but
-            they are deliberately not built yet. The first version does PHP, and
-            does it well.</p>
+            <p>They are planned, but not built yet. The first version does PHP,
+            and does it well.</p>
           </details>
           <details>
             <summary>Can I install an older nginx or Apache for one project?</summary>
-            <p>Not yet. Wharf has one version of nginx and one of Apache. When it
-            installs one, it gets the newest version. <em>Re-scan</em> only looks
-            for what is already on your computer — it does not check for
-            updates.</p>
-            <p>Why: nginx and Apache do not offer ready-made downloads
-            themselves, so Wharf gets them from somewhere else, and those places
-            usually offer only the newest version. On a Mac, nginx comes from
-            Homebrew, which has just the current version. On Linux, Apache comes
-            from your system's package manager, which has just one version.</p>
-            <p>What works today: each project can use either nginx or Apache. So
-            a project that needs Apache can run on Apache while all others run
-            on nginx — and its address stays the same. Choosing a webserver
-            <em>version</em> per project, as you already can for PHP, is planned
-            wherever older versions are available to download.</p>
+            <p>Not yet. Wharf installs the newest nginx and Apache, because the
+            places it gets them from rarely offer older versions. What works
+            today: each project can use either nginx or Apache, and its address
+            stays the same.</p>
+          </details>
+          <details>
+            <summary>Is Wharf free?</summary>
+            <p>Yes. Wharf is open source under the MIT licence: free to use, for
+            personal and client work alike. The code is on
+            <a href="https://github.com/kreativ-anders/wharf-dev">GitHub</a>.</p>
+          </details>
+          <details>
+            <summary>Does Wharf collect any data?</summary>
+            <p>No. There is no account, no analytics and no crash reporting.
+            Wharf goes online only to download something you asked for. The
+            <a href="privacy.html">privacy page</a> lists every file it changes
+            on your computer.</p>
           </details>
           <details>
             <summary>Can I download Wharf?</summary>
@@ -547,9 +484,10 @@ nginx  :80  :443      <span class="dim">the front door</span>
 
   <footer class="site wrap">
     <svg class="pier" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><path d="M0 10h100v15H0zM16 10h15v52H16zM69 10h15v52H69zM0 72.5L5 74.66 10 76.61 15 78.16 20 79.16 25 79.5 30 79.16 35 78.16 40 76.61 45 74.66 50 72.5 55 70.34 60 68.39 65 66.84 70 65.84 75 65.5 80 65.84 85 66.84 90 68.39 95 70.34 100 72.5V87.5L95 85.34 90 83.39 85 81.84 80 80.84 75 80.5 70 80.84 65 81.84 60 83.39 55 85.34 50 87.5 45 89.66 40 91.61 35 93.16 30 94.16 25 94.5 20 94.16 15 93.16 10 91.61 5 89.66 0 87.5z"/></svg>
-    <p>Wharf is a working title. Inspired by the minimalism of
-    <a href="https://getkirby.com">Kirby</a>.
-    <a href="https://github.com/kreativ-anders/wharf-dev">Source on GitHub</a>.</p>
+    <p>Wharf is open source under the MIT licence. Inspired by the minimalism
+    of <a href="https://getkirby.com">Kirby</a>.
+    <a href="https://github.com/kreativ-anders/wharf-dev">Source on GitHub</a></p>
+    <p class="legal-links"><a href="imprint.html">Imprint</a> <a href="privacy.html">Privacy</a></p>
   </footer>
 </body>
 </html>

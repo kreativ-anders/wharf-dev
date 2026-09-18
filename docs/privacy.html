@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy — Wharf</title>
+  <meta name="description" content="What Wharf changes on your computer, what it downloads and from where, and what this website does with your data: nothing is collected.">
+  <link rel="canonical" href="https://kreativ-anders.github.io/wharf-dev/privacy.html">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1c1c1c" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="site wrap">
+    <a class="brand" href="./" aria-label="Wharf, home">
+      <svg class="pier" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><path d="M0 10h100v15H0zM16 10h15v52H16zM69 10h15v52H69zM0 72.5L5 74.66 10 76.61 15 78.16 20 79.16 25 79.5 30 79.16 35 78.16 40 76.61 45 74.66 50 72.5 55 70.34 60 68.39 65 66.84 70 65.84 75 65.5 80 65.84 85 66.84 90 68.39 95 70.34 100 72.5V87.5L95 85.34 90 83.39 85 81.84 80 80.84 75 80.5 70 80.84 65 81.84 60 83.39 55 85.34 50 87.5 45 89.66 40 91.61 35 93.16 30 94.16 25 94.5 20 94.16 15 93.16 10 91.61 5 89.66 0 87.5z"/></svg>
+      Wharf
+    </a>
+    <nav aria-label="Main">
+      <a href="./#features">Features</a>
+      <a href="./#faq">FAQ</a>
+      <a href="https://github.com/kreativ-anders/wharf-dev">GitHub</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="page-head wrap" aria-labelledby="page-title">
+      <p class="eyebrow">Privacy</p>
+      <h1 id="page-title">Nothing leaves your computer.<br><span class="soft">Here is everything that changes on it.</span></h1>
+      <p class="lede">Wharf has no account, no analytics and no crash reports.
+      It runs on your computer and talks to the internet only to download
+      something you asked for. This page lists every file it writes outside
+      its own folder, and every place it downloads from.</p>
+    </section>
+
+    <!-- Laid out like the app's Settings window: pages on the left, one page on the right. -->
+    <div class="wrap">
+      <div class="settings window">
+        <div class="titlebar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span><span>Privacy</span></div>
+        <div class="settings-body">
+          <nav class="side" aria-label="Privacy sections">
+            <a href="#computer"><span aria-hidden="true">⌂</span> Your computer</a>
+            <a href="#downloads"><span aria-hidden="true">↓</span> Downloads</a>
+            <a href="#website"><span aria-hidden="true">◎</span> This website</a>
+            <a href="#rights"><span aria-hidden="true">§</span> Your rights</a>
+          </nav>
+
+          <div class="pane">
+            <!-- Your computer -->
+            <section id="computer" aria-labelledby="computer-title">
+              <h2 id="computer-title">Your computer</h2>
+              <p class="pane-intro">Most of what Wharf writes stays in one
+              folder. Outside it, Wharf changes only the places below, and
+              says so in the app when it does.</p>
+              <p class="legend">
+                <span><span class="mark is-writes" aria-hidden="true"></span> Wharf writes here</span>
+                <span><span class="mark is-never" aria-hidden="true"></span> Wharf never writes here</span>
+              </p>
+
+              <ul class="places">
+                <li>
+                  <span class="mark is-writes" aria-hidden="true"></span>
+                  <div>
+                    <h3>The Wharf folder <span class="when">On first start</span></h3>
+                    <p><code>~/Wharf</code> — PHP and webservers it installed,
+                    your settings, generated configs, certificates and logs.</p>
+                    <p class="undo">To undo: quit Wharf and delete the folder.</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="mark is-writes" aria-hidden="true"></span>
+                  <div>
+                    <h3>Your shell's startup files <span class="when">On first start</span></h3>
+                    <p>So that <code>php</code> in a terminal is the PHP Wharf
+                    uses, it adds one marked block to <code>~/.zshrc</code>,
+                    <code>~/.bashrc</code>, <code>~/.profile</code> and fish's
+                    config — whichever exist. On Windows, it adds one folder to
+                    your user <code>PATH</code> instead. Every other line stays
+                    as it was, and no password is needed.</p>
+                    <p class="undo">To undo: turn off <em>Settings → PHP → Use in
+                    terminal</em>. Wharf removes its block and nothing else.</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="mark is-writes" aria-hidden="true"></span>
+                  <div>
+                    <h3>Your computer's trusted certificates <span class="when">When you turn on HTTPS</span></h3>
+                    <p>For HTTPS without browser warnings, Wharf uses mkcert to
+                    make a certificate authority of your own, and adds it to your
+                    system's trusted certificates and to Firefox's. Your
+                    computer asks for your password first. Say no, and HTTPS
+                    still works, with a browser warning.</p>
+                    <p>The authority's key stays on your computer, in mkcert's
+                    folder. Anyone with that key could make certificates your
+                    browser trusts, so never share it.</p>
+                    <p class="undo">To undo: run <code>mkcert -uninstall</code>.</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="mark is-writes" aria-hidden="true"></span>
+                  <div>
+                    <h3>Homebrew, on a Mac <span class="when">When you install nginx</span></h3>
+                    <p>On macOS, nginx comes from Homebrew: Wharf runs
+                    <code>brew install nginx</code> for you.</p>
+                    <p class="undo">To undo: <code>brew uninstall nginx</code>.</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="mark is-never" aria-hidden="true"></span>
+                  <div>
+                    <h3>Your project folders</h3>
+                    <p>Wharf reads them, and writes nothing into them. Removing a
+                    project leaves its folder alone. The one exception is up to
+                    you: when you reset Wharf, you can tick <em>Also delete the
+                    projects in www/</em>.</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="mark is-never" aria-hidden="true"></span>
+                  <div>
+                    <h3>The hosts file</h3>
+                    <p>Projects answer at <code>name.localhost</code>, which your
+                    computer knows by itself. Adding a project never asks for a
+                    password.</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="mark is-never" aria-hidden="true"></span>
+                  <div>
+                    <h3>PHP and webservers you already had</h3>
+                    <p>Wharf uses them where they are. Removing a PHP version it
+                    did not download only hides it in Wharf.</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="mark is-never" aria-hidden="true"></span>
+                  <div>
+                    <h3>Anything running after you quit</h3>
+                    <p>Quit Wharf, and everything it started stops. Nothing starts
+                    at login. Your projects answer your computer only — nobody
+                    else on the network can reach them.</p>
+                  </div>
+                </li>
+              </ul>
+            </section>
+
+            <!-- Downloads -->
+            <section id="downloads" aria-labelledby="downloads-title">
+              <h2 id="downloads-title">Downloads</h2>
+              <p class="pane-intro">Wharf downloads nothing on its own. It
+              connects to the places below only when you choose
+              <em>Download</em> or <em>Install</em>, or turn on HTTPS — and to
+              see which PHP release it would download when you open the PHP
+              settings. Like any download, the server sees your IP address.
+              Wharf sends nothing else: no ID, no usage data.</p>
+
+              <div class="table">
+                <table>
+                  <thead><tr><th scope="col">What</th><th scope="col">From</th><th scope="col">Checked by</th></tr></thead>
+                  <tbody>
+                    <tr><th scope="row">PHP · macOS, Linux</th><td><a href="https://static-php.dev">static-php.dev</a></td><td>HTTPS</td></tr>
+                    <tr><th scope="row">PHP · Windows</th><td><a href="https://windows.php.net">windows.php.net</a>, the official builds</td><td>SHA-256</td></tr>
+                    <tr><th scope="row">nginx · Linux, Windows</th><td><a href="https://jirutka.github.io/nginx-binaries/">nginx-binaries</a> on GitHub</td><td>SHA-1</td></tr>
+                    <tr><th scope="row">nginx · macOS</th><td><a href="https://brew.sh">Homebrew</a></td><td>Homebrew</td></tr>
+                    <tr><th scope="row">Apache · Windows</th><td><a href="https://www.apachelounge.com">Apache Lounge</a></td><td>SHA-256</td></tr>
+                    <tr><th scope="row">Apache · macOS, Linux</th><td>nothing to download: macOS has it, Linux uses your system's package</td><td>—</td></tr>
+                    <tr><th scope="row">mkcert</th><td><a href="https://github.com/FiloSottile/mkcert">mkcert</a>, one fixed release on GitHub</td><td>SHA-256</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="pane-note">Wharf does not check for its own updates.
+              <em>Copy debug information</em> in Settings copies to your
+              clipboard only; you decide where to paste it.</p>
+            </section>
+
+            <!-- This website -->
+            <section id="website" aria-labelledby="website-title">
+              <h2 id="website-title">This website</h2>
+              <ul class="places">
+                <li>
+                  <span class="mark is-never" aria-hidden="true"></span>
+                  <div>
+                    <h3>No cookies, no analytics, no tracking</h3>
+                    <p>This site sets no cookies, loads no scripts, and uses no
+                    fonts or anything else from other servers.</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="mark is-writes" aria-hidden="true"></span>
+                  <div>
+                    <h3>Hosted by GitHub Pages</h3>
+                    <p>GitHub, Inc. serves this site. To deliver it and keep it
+                    secure, GitHub logs your IP address and the page you asked
+                    for, and keeps these logs under its
+                    <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">privacy
+                    statement</a>. GitHub may process this data in the USA; it
+                    is certified under the EU–U.S. Data Privacy Framework. The
+                    legal basis is our legitimate interest in running this site
+                    reliably (Art. 6(1)(f) GDPR).</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="mark is-writes" aria-hidden="true"></span>
+                  <div>
+                    <h3>Links to GitHub</h3>
+                    <p>Wharf's source code is on GitHub. Following a link there
+                    means GitHub's privacy statement applies.</p>
+                  </div>
+                </li>
+              </ul>
+            </section>
+
+            <!-- Your rights -->
+            <section id="rights" aria-labelledby="rights-title">
+              <h2 id="rights-title">Your rights</h2>
+              <p>Responsible for this website is Manuel Steinberg — see the
+              <a href="imprint.html">imprint</a> for the address. Write to
+              <a href="mailto:impressum@kreativ-anders.de">impressum@kreativ-anders.de</a>
+              about your data at any time.</p>
+              <p>Under the GDPR you have the right to access your data, to have
+              it corrected or deleted, to restrict or object to its processing,
+              and to receive it in a portable form. You may also complain to a
+              data protection authority — for us, the Bavarian State Office for
+              Data Protection Supervision (<a href="https://www.lda.bayern.de">BayLDA</a>).</p>
+              <p class="pane-note">Last updated: 18 September 2026.</p>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site wrap">
+    <svg class="pier" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><path d="M0 10h100v15H0zM16 10h15v52H16zM69 10h15v52H69zM0 72.5L5 74.66 10 76.61 15 78.16 20 79.16 25 79.5 30 79.16 35 78.16 40 76.61 45 74.66 50 72.5 55 70.34 60 68.39 65 66.84 70 65.84 75 65.5 80 65.84 85 66.84 90 68.39 95 70.34 100 72.5V87.5L95 85.34 90 83.39 85 81.84 80 80.84 75 80.5 70 80.84 65 81.84 60 83.39 55 85.34 50 87.5 45 89.66 40 91.61 35 93.16 30 94.16 25 94.5 20 94.16 15 93.16 10 91.61 5 89.66 0 87.5z"/></svg>
+    <p>Wharf is open source under the MIT licence.
+    <a href="https://github.com/kreativ-anders/wharf-dev">Source on GitHub</a></p>
+    <p class="legal-links"><a href="imprint.html">Imprint</a> <a href="privacy.html" aria-current="page">Privacy</a></p>
+  </footer>
+</body>
+</html>
