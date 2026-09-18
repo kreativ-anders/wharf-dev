@@ -16,7 +16,6 @@ import (
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/elevate"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/layout"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/php"
-	"github.com/kreativ-anders/wharf-dev/daemon/internal/project"
 	wruntime "github.com/kreativ-anders/wharf-dev/daemon/internal/runtime"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/shellpath"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/supervisor"
@@ -34,7 +33,6 @@ type Daemon struct {
 	sup   *supervisor.Supervisor
 	res   *wruntime.Resolver
 	certs certs.Issuer
-	scaf  *project.Scaffolder
 	php   *php.Detector
 	log   *slog.Logger
 
@@ -112,7 +110,6 @@ type Options struct {
 	Supervisor *supervisor.Supervisor
 	Elevator   elevate.Elevator
 	Certs      certs.Issuer
-	Fetcher    project.Fetcher
 	// Detector finds PHP installations. The default one probes the machine;
 	// tests supply one that only sees what they staged.
 	Detector *php.Detector
@@ -169,10 +166,6 @@ func New(opts Options) (*Daemon, error) {
 	if issuer == nil {
 		issuer = certs.New(opts.Root, el)
 	}
-	scaf := project.NewScaffolder(opts.Root)
-	if opts.Fetcher != nil {
-		scaf.Fetcher = opts.Fetcher
-	}
 	detector := opts.Detector
 	if detector == nil {
 		detector = php.NewDetector(filepath.Join(opts.Root.Bin(), "php"))
@@ -220,7 +213,6 @@ func New(opts Options) (*Daemon, error) {
 		sup:          sup,
 		res:          wruntime.New(opts.Root),
 		certs:        issuer,
-		scaf:         scaf,
 		php:          detector,
 		phpInstaller: installer,
 		downloading:  map[string]bool{},

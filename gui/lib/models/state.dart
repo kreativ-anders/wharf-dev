@@ -549,16 +549,37 @@ class CustomConfigRules {
   );
 }
 
-/// A quick-app template (features/quick-app-php.feature).
-class Template {
-  const Template({required this.id, required this.name, required this.runtime});
-  final String id;
-  final String name;
-  final String runtime;
+/// What "Add project…" proposes for a chosen folder, before anything is
+/// registered (features/project-folders.feature) — a contract with
+/// core.Proposal.
+class FolderProposal {
+  const FolderProposal({
+    required this.path,
+    required this.name,
+    this.fixed = false,
+    this.template = '',
+    this.project = '',
+  });
 
-  factory Template.fromJson(Map<String, dynamic> json) => Template(
-    id: json['id'] as String? ?? '',
+  final String path;
+
+  /// The project name made from the folder's.
+  final String name;
+
+  /// True for a folder in www/: its name is the folder's and cannot change.
+  final bool fixed;
+
+  /// The config template detected in the folder; empty for none.
+  final String template;
+
+  /// The project this folder already is; empty while it is none.
+  final String project;
+
+  factory FolderProposal.fromJson(Map<String, dynamic> json) => FolderProposal(
+    path: json['path'] as String? ?? '',
     name: json['name'] as String? ?? '',
-    runtime: json['runtime'] as String? ?? '',
+    fixed: json['fixed'] as bool? ?? false,
+    template: json['template'] as String? ?? '',
+    project: json['project'] as String? ?? '',
   );
 }

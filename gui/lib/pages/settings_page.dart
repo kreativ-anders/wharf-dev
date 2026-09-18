@@ -538,7 +538,7 @@ class _WebserverSection extends StatelessWidget {
                         !server.installed && !server.installable && server.installHint.isNotEmpty,
                     secondary: server.installed
                         ? null
-                        : _InstallAction(daemon: daemon, server: server),
+                        : InstallWebserverAction(daemon: daemon, server: server),
                   ),
                 ),
             ],
@@ -711,8 +711,9 @@ class _ConfigTemplatesSection extends StatelessWidget {
 
 /// What a missing webserver offers: installing it, a progress mark while it
 /// installs, or — where Wharf cannot install it — the folder it belongs in.
-class _InstallAction extends StatelessWidget {
-  const _InstallAction({required this.daemon, required this.server});
+/// Settings shows it, and so does everything that leads to adding a project.
+class InstallWebserverAction extends StatelessWidget {
+  const InstallWebserverAction({super.key, required this.daemon, required this.server});
 
   final Daemon daemon;
   final Server server;

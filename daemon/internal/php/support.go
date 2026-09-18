@@ -44,7 +44,7 @@ var Releases = []Release{
 }
 
 // MinimumForKirby is the oldest version Kirby 4 and 5 run on. Offering
-// anything older would scaffold a starter kit that cannot boot.
+// anything older would serve a Kirby site that cannot boot.
 const MinimumForKirby = "8.1"
 
 // Known returns the release entry for a version.

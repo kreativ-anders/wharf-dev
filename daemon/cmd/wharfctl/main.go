@@ -36,6 +36,11 @@ const usage = `usage: wharfctl [--root DIR] <command> [args]
 
   status                     show services and projects
   add <name|path>            register a folder in www/ by name, or any folder by path
+       --name N              the project name, if not the folder's
+       --template T | ""     the config template, or none; detected if left out
+       --webserver W         pin it to nginx or apache
+       --start               start it once it is registered
+  inspect <path>             what "Add project…" would propose for a folder
   rm <name>                  unregister a project (the folder is left alone)
   start <name>               start a project
   stop <name>                stop a project
@@ -62,8 +67,6 @@ const usage = `usage: wharfctl [--root DIR] <command> [args]
        --php V | --php ""    override or clear the PHP version
        --webserver W | ""    override or clear the webserver
        --ssl true|false      enable or disable SSL
-  new <template> <name> [webserver]  scaffold a project (kirby or empty), optionally pinned to nginx or apache
-  templates                  list quick-app templates
   watch                      stream state changes until interrupted
 `
 
@@ -116,19 +119,44 @@ func run() error {
 		}
 		// INFO: Anything that looks like a path is a folder from anywhere; a bare
 		// name is a folder in www/ (project-folders.feature).
-		params := map[string]string{"name": args[1]}
+		params := map[string]any{"name": args[1]}
 		if strings.ContainsAny(args[1], `/\`) || args[1] == "." {
 			abs, err := filepath.Abs(args[1])
 			if err != nil {
 				return err
 			}
-			params = map[string]string{"path": abs}
+			params = map[string]any{"path": abs}
+			if err := addFlags(args[2:], params); err != nil {
+				return err
+			}
 		}
 		var p core.Project
 		if err := c.Call(ctx, ipc.MethodProjectAdd, params, &p); err != nil {
 			return err
 		}
 		printProject(p)
+		return nil
+
+	case "inspect":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: wharfctl inspect <path>")
+		}
+		abs, err := filepath.Abs(args[1])
+		if err != nil {
+			return err
+		}
+		var out core.Proposal
+		if err := c.Call(ctx, ipc.MethodProjectInspect, map[string]string{"path": abs}, &out); err != nil {
+			return err
+		}
+		template := out.Template
+		if template == "" {
+			template = "none"
+		}
+		fmt.Printf("name      %s\ntemplate  %s\n", out.Name, template)
+		if out.Project != "" {
+			fmt.Printf("already   the project %s\n", out.Project)
+		}
 		return nil
 
 	case "rm", "start", "stop", "restart":
@@ -195,35 +223,6 @@ func run() error {
 			fmt.Fprintf(os.Stderr, "# no custom %s config yet — this is where it would start\n", out.Webserver)
 		}
 		fmt.Print(out.Content)
-		return nil
-
-	case "new":
-		if len(args) < 3 {
-			return fmt.Errorf("usage: wharfctl new <template> <name> [webserver]")
-		}
-		params := map[string]string{"template": args[1], "name": args[2]}
-		if len(args) > 3 {
-			params["webserver"] = args[3]
-		}
-		var p core.Project
-		if err := c.Call(ctx, ipc.MethodProjectScaffold, params, &p); err != nil {
-			return err
-		}
-		printProject(p)
-		return nil
-
-	case "templates":
-		var out []struct {
-			ID      string `json:"id"`
-			Name    string `json:"name"`
-			Runtime string `json:"runtime"`
-		}
-		if err := c.Call(ctx, ipc.MethodTemplates, nil, &out); err != nil {
-			return err
-		}
-		for _, t := range out {
-			fmt.Printf("%-10s %-12s %s\n", t.ID, t.Name, t.Runtime)
-		}
 		return nil
 
 	case "watch":
@@ -476,4 +475,24 @@ func printState(st core.State) {
 	if len(st.Unregistered) > 0 {
 		fmt.Printf("\nunregistered folders in www/: %s\n", strings.Join(st.Unregistered, ", "))
 	}
+}
+
+// addFlags reads add's flags into params, as the "Add project…" sheet sends
+// them.
+func addFlags(args []string, params map[string]any) error {
+	for i := 0; i < len(args); i++ {
+		switch flag := args[i]; flag {
+		case "--start":
+			params["start"] = true
+		case "--name", "--template", "--webserver":
+			if i+1 >= len(args) {
+				return fmt.Errorf("%s needs a value", flag)
+			}
+			i++
+			params[strings.TrimPrefix(flag, "--")] = args[i]
+		default:
+			return fmt.Errorf("unknown flag %s for add", flag)
+		}
+	}
+	return nil
 }

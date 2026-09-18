@@ -11,7 +11,6 @@ import 'models/state.dart';
 /// Method names, mirroring daemon/internal/ipc/protocol.go.
 class Method {
   static const state = 'state.get';
-  static const templates = 'templates.list';
   static const setWebserver = 'services.setWebserver';
   static const setPhpVersion = 'services.setPHPVersion';
   static const addPhpVersion = 'services.addPHPVersion';
@@ -34,7 +33,7 @@ class Method {
   static const projectStop = 'projects.stop';
   static const projectRestart = 'projects.restart';
   static const projectSettings = 'projects.settings';
-  static const projectScaffold = 'projects.scaffold';
+  static const projectInspect = 'projects.inspect';
   static const customConfigRead = 'projects.customConfig.read';
   static const customConfigSave = 'projects.customConfig.save';
   static const customConfigDelete = 'projects.customConfig.delete';
@@ -69,7 +68,6 @@ class Daemon extends ChangeNotifier {
   Timer? _retry;
 
   WharfState state = WharfState.empty;
-  List<Template> templates = const [];
   Connection connection = Connection.connecting;
 
   /// The last thing that went wrong, shown as a dismissible line rather than a
@@ -110,8 +108,6 @@ class Daemon extends ChangeNotifier {
       unawaited(client.done.then((_) => _onDisconnected()));
 
       await refresh();
-      final list = await client.callList(Method.templates);
-      templates = list.map((e) => Template.fromJson(e as Map<String, dynamic>)).toList();
 
       _set(() {
         connection = Connection.connected;
@@ -275,10 +271,12 @@ class Daemon extends ChangeNotifier {
   Future<void> open(Future<void> Function(String) opener, String path) =>
       _guard(() => opener(path));
 
-  /// Registers an existing folder. A declined elevation prompt is reported as
+  /// Registers a folder in www/ by name, with the config template detected
+  /// in it.
   Future<void> addProject(String name) => _add({'name': name});
 
-  /// Registers a folder from anywhere; one outside www/ stays where it is
+  /// Registers a folder from anywhere, as it is — the tray's "Add project…",
+  /// which opens no window. One outside www/ stays where it is
   /// (features/project-folders.feature).
   Future<void> addFolder(String path) => _add({'path': path});
 
@@ -289,21 +287,43 @@ class Daemon extends ChangeNotifier {
     });
   }
 
-  /// Creates a project from a template, pinned to [webserver] unless that is
-  /// empty, and returns it — or null if the daemon refused
-  /// (features/quick-app-php.feature).
-  Future<Project?> scaffold(String templateId, String name, {String webserver = ''}) async {
-    Project? created;
+  /// What "Add project…" proposes for the folder at [path], or null — with a
+  /// notice saying why — when the daemon cannot look at it.
+  Future<FolderProposal?> inspectFolder(String path) async {
+    FolderProposal? proposal;
     await _guard(() async {
-      final result = await _require().call(Method.projectScaffold, {
-        'template': templateId,
-        'name': name,
-        if (webserver.isNotEmpty) 'webserver': webserver,
-      });
-      created = Project.fromJson(result);
-      await refresh();
+      proposal = FolderProposal.fromJson(
+        await _require().call(Method.projectInspect, {'path': path}),
+      );
     });
-    return created;
+    return proposal;
+  }
+
+  /// Registers the folder at [path] as the "Add project…" sheet confirmed it:
+  /// under [name], with [template] (empty for none), pinned to [webserver]
+  /// unless that is empty, and started unless [start] is false. Throws, so
+  /// the sheet can say what is wrong — a name that is taken — and stay open.
+  Future<Project> addFolderAs(
+    String path, {
+    required String name,
+    required String template,
+    String webserver = '',
+    bool start = true,
+  }) async {
+    _set(() => _pending++);
+    try {
+      final result = await _require().call(Method.projectAdd, {
+        'path': path,
+        'name': name,
+        'template': template,
+        if (webserver.isNotEmpty) 'webserver': webserver,
+        'start': start,
+      });
+      await refresh();
+      return Project.fromJson(result);
+    } finally {
+      _set(() => _pending--);
+    }
   }
 
   /// Applies per-project overrides. A null field leaves a setting alone; an

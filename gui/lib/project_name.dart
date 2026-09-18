@@ -1,8 +1,9 @@
 // INFO: The daemon's project.Slug (daemon/internal/project/registry.go), mirrored so
-// the "New project" field can rewrite itself without a round trip. The daemon
-// applies the same rewrite again and has the last word; both are tested
-// against daemon/internal/project/testdata/slug.json
-// (features/quick-app-php.feature, "A typed name becomes a project name").
+// the "Add project…" sheet's name field can rewrite itself without a round
+// trip. The daemon applies the same rewrite again and has the last word; both
+// are tested against daemon/internal/project/testdata/slug.json
+// (features/project-folders.feature, "The proposed name comes from the folder
+// name").
 
 // INFO: Letters with a conventional spelled-out form or no base letter to fall back
 // to. The umlauts are listed decomposed as well, as macOS stores them.

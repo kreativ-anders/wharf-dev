@@ -1,9 +1,6 @@
 package project
 
 import (
-	"archive/zip"
-	"bytes"
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -28,7 +25,7 @@ func TestValidateName(t *testing.T) {
 	}
 }
 
-// features/quick-app-php.feature — "A typed name becomes a project name"
+// features/project-folders.feature — "The proposed name comes from the folder name"
 func TestSlugRewritesTypedNames(t *testing.T) {
 	// INFO: The GUI's field is tested against the same table
 	// (gui/test/project_name_test.dart), so the two cannot drift apart.
@@ -84,91 +81,4 @@ func TestDiscoverListsFoldersOnly(t *testing.T) {
 			t.Fatalf("Discover = %v, want %v (sorted, no dotfiles, no files)", got, want)
 		}
 	}
-}
-
-func TestScaffoldStripsTheArchiveRootFolder(t *testing.T) {
-	root := layout.Root{Dir: t.TempDir()}
-	if err := root.Ensure(); err != nil {
-		t.Fatal(err)
-	}
-	s := &Scaffolder{Root: root, Fetcher: zipFetcher(map[string]string{
-		"starterkit-main/index.php":       "<?php",
-		"starterkit-main/site/config.php": "<?php",
-	})}
-
-	if err := s.Create(context.Background(), Template{ID: "kirby", ZipURL: "https://example.invalid/kit.zip"}, "site"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(filepath.Join(root.ProjectDir("site"), "index.php")); err != nil {
-		t.Fatalf("index.php is not at the project root: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(root.ProjectDir("site"), "starterkit-main")); err == nil {
-		t.Fatal("the archive's wrapper folder was not stripped")
-	}
-}
-
-func TestScaffoldRefusesPathTraversalInAnArchive(t *testing.T) {
-	root := layout.Root{Dir: t.TempDir()}
-	if err := root.Ensure(); err != nil {
-		t.Fatal(err)
-	}
-	// WARNING: A zip that tries to write outside the project folder. Template archives
-	// come off the internet, so this is untrusted input.
-	s := &Scaffolder{Root: root, Fetcher: zipFetcher(map[string]string{
-		"kit/ok.php":            "<?php",
-		"kit/../../escaped.txt": "pwned",
-	})}
-
-	err := s.Create(context.Background(), Template{ID: "kirby", ZipURL: "https://example.invalid/kit.zip"}, "site")
-	if err == nil {
-		t.Fatal("an archive escaping its destination should be refused")
-	}
-	if _, statErr := os.Stat(filepath.Join(root.Dir, "escaped.txt")); statErr == nil {
-		t.Fatal("a file was written outside the project folder")
-	}
-	if _, statErr := os.Stat(root.ProjectDir("site")); statErr == nil {
-		t.Fatal("a partial project folder was left behind")
-	}
-}
-
-func TestScaffoldRefusesAnExistingFolder(t *testing.T) {
-	root := layout.Root{Dir: t.TempDir()}
-	if err := root.Ensure(); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(root.ProjectDir("site"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := s(root).Create(context.Background(), Template{ID: "kirby", ZipURL: "https://example.invalid/kit.zip"}, "site"); err == nil {
-		t.Fatal("scaffolding over an existing folder should be refused")
-	}
-}
-
-func s(root layout.Root) *Scaffolder {
-	return &Scaffolder{Root: root, Fetcher: zipFetcher(map[string]string{"kit/index.php": "<?php"})}
-}
-
-// zipFetcher unpacks an in-memory archive, standing in for the network.
-type zipFetcher map[string]string
-
-func (z zipFetcher) Fetch(_ context.Context, _ string, destDir string) error {
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
-	for name, body := range z {
-		w, err := zw.Create(name)
-		if err != nil {
-			return err
-		}
-		if _, err := w.Write([]byte(body)); err != nil {
-			return err
-		}
-	}
-	if err := zw.Close(); err != nil {
-		return err
-	}
-	zr, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
-	if err != nil {
-		return err
-	}
-	return unzipStripRoot(zr, destDir)
 }

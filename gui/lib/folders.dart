@@ -62,14 +62,16 @@ class EditorUnavailable implements Exception {
   String toString() => 'No text editor would open $path — open it by hand.';
 }
 
-/// "Add folder…": a folder picker that starts in www/ but accepts any folder.
-/// One outside www/ stays where it is (features/project-folders.feature).
+/// Asks for a folder: a picker that starts in www/ but accepts any folder.
+/// A variable so widget tests can answer it without a dialog appearing.
+Future<String?> Function(String www) pickFolder = (www) =>
+    getDirectoryPath(initialDirectory: www.isEmpty ? null : www, confirmButtonText: 'Choose');
+
+/// The tray's "Add project…": the chosen folder is added as it is, without a
+/// window. One outside www/ stays where it is
+/// (features/tray-actions.feature, "Adding a project via the tray").
 Future<void> pickAndAddFolder(Daemon daemon) async {
-  final www = daemon.state.www;
-  final picked = await getDirectoryPath(
-    initialDirectory: www.isEmpty ? null : www,
-    confirmButtonText: 'Add',
-  );
+  final picked = await pickFolder(daemon.state.www);
   if (picked == null) return;
   await daemon.addFolder(picked);
 }

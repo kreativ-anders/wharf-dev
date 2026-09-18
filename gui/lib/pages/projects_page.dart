@@ -4,10 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 import '../daemon.dart';
-import '../folders.dart';
 import '../models/state.dart';
-import '../project_name.dart';
 import '../theme.dart';
+import 'add_project.dart';
 import 'project_sheet.dart';
 import 'settings_page.dart';
 
@@ -34,13 +33,14 @@ class ProjectsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // INFO: Desktop conventions: ⌘, opens settings, ⌘O adds a folder, ⌘N starts a
-    // new project — so the keyboard reaches everything the pointer does.
+    // INFO: Desktop conventions: ⌘, opens settings; ⌘O and ⌘N both add a
+    // project, the one way in — so the keyboard reaches everything the
+    // pointer does.
     return CallbackShortcuts(
       bindings: {
         _shortcut(LogicalKeyboardKey.comma): () => _openSettings(context),
-        _shortcut(LogicalKeyboardKey.keyO): () => pickAndAddFolder(daemon),
-        _shortcut(LogicalKeyboardKey.keyN): () => _newProject(context),
+        _shortcut(LogicalKeyboardKey.keyO): () => addProject(context, daemon),
+        _shortcut(LogicalKeyboardKey.keyN): () => addProject(context, daemon),
       },
       child: Focus(autofocus: true, child: _scaffold(context)),
     );
@@ -88,16 +88,6 @@ class ProjectsPage extends StatelessWidget {
               ),
             ),
           IconButton(
-            tooltip: 'Open www folder',
-            icon: const Icon(Icons.folder_open, size: 20),
-            onPressed: state.www.isEmpty ? null : () => daemon.open(openFolder, state.www),
-          ),
-          IconButton(
-            tooltip: 'Add folder…',
-            icon: const Icon(Icons.create_new_folder_outlined, size: 20),
-            onPressed: () => pickAndAddFolder(daemon),
-          ),
-          IconButton(
             tooltip: 'Settings',
             icon: const Icon(Icons.settings_outlined, size: 20),
             onPressed: () => _openSettings(context),
@@ -113,8 +103,8 @@ class ProjectsPage extends StatelessWidget {
           Expanded(child: _body(context, state)),
         ],
       ),
-      // INFO: Leaving stands opposite arriving: Cast off bottom left, New project
-      // bottom right (features/single-application.feature, "Casting off from
+      // INFO: Leaving stands opposite arriving: Cast off bottom left, Add
+      // project bottom right (features/single-application.feature, "Casting off from
       // the main window"). The row between them lets taps through to the list.
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: Padding(
@@ -134,9 +124,9 @@ class ProjectsPage extends StatelessWidget {
               ),
             const Spacer(),
             FloatingActionButton.extended(
-              onPressed: () => _newProject(context),
+              onPressed: () => addProject(context, daemon),
               icon: const Icon(Icons.add, size: 20),
-              label: const Text('New project'),
+              label: const Text('Add project…'),
             ),
           ],
         ),
@@ -184,25 +174,6 @@ class ProjectsPage extends StatelessWidget {
         if (state.unregistered.isNotEmpty) _Unregistered(daemon: daemon, names: state.unregistered),
       ],
     );
-  }
-
-  /// Name, template, webserver, then the new project's settings — where its
-  /// webserver config is one click away (features/quick-app-php.feature).
-  Future<void> _newProject(BuildContext context) async {
-    final webserver = daemon.state.services.webserver;
-    final result = await showDialog<_NewProject>(
-      context: context,
-      builder: (_) => _NewProjectDialog(
-        templates: daemon.templates,
-        activeWebserver: webserver.active,
-        webservers: webserver.available,
-      ),
-    );
-    if (result == null) return;
-    final created = await daemon.scaffold(result.templateId, result.name, webserver: result.webserver);
-    if (created != null && context.mounted) {
-      await showProjectSheet(context, daemon, created);
-    }
   }
 }
 
@@ -297,9 +268,7 @@ class _Actions extends StatelessWidget {
     Widget action(ProjectAction a, IconData icon, Color color) => IconButton(
       tooltip: '${a.label} ${project.name}',
       color: color,
-      style: IconButton.styleFrom(
-        backgroundColor: color.withValues(alpha: WharfColors.actionTint),
-      ),
+      style: IconButton.styleFrom(backgroundColor: color.withValues(alpha: WharfColors.actionTint)),
       icon: Icon(icon, size: 20),
       onPressed: () => daemon.projectAction(a, project.name),
     );
@@ -359,8 +328,9 @@ class _Actions extends StatelessWidget {
   }
 }
 
-/// Folders in www/ that are not projects yet. Adding one is a single tap —
-/// "drop a folder in www/" is the intended way in.
+/// Folders in www/ that are not projects yet. "Add" opens the same sheet as
+/// a folder chosen in the picker (features/project-folders.feature, "Adding a
+/// folder found in www/").
 class _Unregistered extends StatelessWidget {
   const _Unregistered({required this.daemon, required this.names});
 
@@ -388,7 +358,10 @@ class _Unregistered extends StatelessWidget {
                 // INFO: "Add" alone does not tell a screen reader what it adds.
                 Tooltip(
                   message: 'Add $name as a project',
-                  child: TextButton(onPressed: () => daemon.addProject(name), child: const Text('Add')),
+                  child: TextButton(
+                    onPressed: () => addProject(context, daemon, path: wwwFolder(daemon, name)),
+                    child: const Text('Add'),
+                  ),
                 ),
               ],
             ),
@@ -398,6 +371,9 @@ class _Unregistered extends StatelessWidget {
   }
 }
 
+/// Before the first project: what is still missing, each with the action
+/// that fixes it, then "Add project…" (features/project-folders.feature,
+/// "Before the first project, Wharf says what is missing").
 class _Empty extends StatelessWidget {
   const _Empty({required this.daemon});
   final Daemon daemon;
@@ -405,41 +381,158 @@ class _Empty extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final muted = Theme.of(context).textTheme.bodySmall;
-    final www = daemon.state.www;
+    final services = daemon.state.services;
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(48),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('No projects yet', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 10),
-            Text(
-              'A folder is a project. Add one from anywhere on this machine — it '
-              'stays where it is — or put one in\n$www/ and it shows up here.',
-              textAlign: TextAlign.center,
-              style: muted,
-            ),
-            const SizedBox(height: 20),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.center,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('No projects yet', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 20),
+              _PhpReadiness(daemon: daemon, php: services.php),
+              const SizedBox(height: 12),
+              _WebserverReadiness(daemon: daemon, webserver: services.webserver),
+              const SizedBox(height: 24),
+              Text(
+                'A folder is a project. Pick one from anywhere on this machine — it stays '
+                'where it is.',
+                textAlign: TextAlign.center,
+                style: muted,
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: () => addProject(context, daemon),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Add project…'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One thing a project needs, ready or not. Ready or missing is said in
+/// words and by the icon's shape, never by colour alone.
+class _Readiness extends StatelessWidget {
+  const _Readiness({required this.ready, required this.label, this.detail = '', this.action});
+
+  final bool ready;
+  final String label;
+  final String detail;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = WharfColors.of(context);
+    final muted = Theme.of(context).textTheme.bodySmall;
+    return MergeSemantics(
+      child: Row(
+        children: [
+          Icon(
+            ready ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: 20,
+            color: ready ? c.running : c.dimmed,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                OutlinedButton.icon(
-                  onPressed: () => pickAndAddFolder(daemon),
-                  icon: const Icon(Icons.create_new_folder_outlined, size: 18),
-                  label: const Text('Add folder…'),
-                ),
-                TextButton.icon(
-                  onPressed: www.isEmpty ? null : () => daemon.open(openFolder, www),
-                  icon: const Icon(Icons.folder_open, size: 18),
-                  label: const Text('Open www folder'),
-                ),
+                Text('$label — ${ready ? 'ready' : 'missing'}'),
+                if (detail.isNotEmpty) Text(detail, style: muted),
               ],
             ),
-          ],
+          ),
+          if (action != null) ...[const SizedBox(width: 12), action!],
+        ],
+      ),
+    );
+  }
+}
+
+/// PHP: the default version once one is installed, else the recommended one
+/// to download.
+class _PhpReadiness extends StatelessWidget {
+  const _PhpReadiness({required this.daemon, required this.php});
+
+  final Daemon daemon;
+  final Php php;
+
+  @override
+  Widget build(BuildContext context) {
+    if (php.available.isNotEmpty) {
+      return _Readiness(ready: true, label: 'PHP ${php.version}');
+    }
+    final offer = php.recommended.isNotEmpty
+        ? php.recommended
+        : (php.downloadable.isEmpty ? '' : php.downloadable.first.version);
+    final Widget? action;
+    if (offer.isEmpty) {
+      action = null;
+    } else if (php.downloading.contains(offer)) {
+      action = Semantics(
+        label: 'Downloading PHP $offer',
+        child: const SizedBox.square(
+          dimension: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
         ),
+      );
+    } else {
+      action = FilledButton(
+        onPressed: () => daemon.installPhp(offer),
+        child: Text('Download PHP $offer'),
+      );
+    }
+    return _Readiness(
+      ready: false,
+      label: 'PHP',
+      detail: offer.isEmpty
+          ? 'No PHP found on this machine — see Settings → PHP.'
+          : 'No PHP found on this machine.',
+      action: action,
+    );
+  }
+}
+
+/// The webserver: the active one once any is installed, else each one Wharf
+/// can install — or how to get the one it cannot.
+class _WebserverReadiness extends StatelessWidget {
+  const _WebserverReadiness({required this.daemon, required this.webserver});
+
+  final Daemon daemon;
+  final Webserver webserver;
+
+  @override
+  Widget build(BuildContext context) {
+    final installed = webserver.servers.where((s) => s.installed).toList();
+    if (installed.isNotEmpty) {
+      final shown = installed.firstWhere(
+        (s) => s.name == webserver.active,
+        orElse: () => installed.first,
+      );
+      final version = shown.version.isEmpty ? '' : ' ${shown.version}';
+      return _Readiness(ready: true, label: 'Webserver: ${shown.name}$version');
+    }
+    final hints = [
+      for (final s in webserver.servers)
+        if (!s.installable && s.installHint.isNotEmpty) s.installHint,
+    ];
+    return _Readiness(
+      ready: false,
+      label: 'Webserver',
+      detail: ['No webserver found on this machine.', ...hints].join('\n'),
+      action: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final s in webserver.servers)
+            if (s.installable || s.installing) InstallWebserverAction(daemon: daemon, server: s),
+        ],
       ),
     );
   }
@@ -492,132 +585,6 @@ class _Disconnected extends StatelessWidget {
           style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer, fontSize: 12),
         ),
       ),
-    );
-  }
-}
-
-class _NewProject {
-  const _NewProject(this.templateId, this.name, this.webserver);
-  final String templateId;
-  final String name;
-
-  /// Empty when the active webserver was picked: the project follows the
-  /// global one.
-  final String webserver;
-}
-
-class _NewProjectDialog extends StatefulWidget {
-  const _NewProjectDialog({
-    required this.templates,
-    required this.activeWebserver,
-    required this.webservers,
-  });
-  final List<Template> templates;
-  final String activeWebserver;
-  final List<String> webservers;
-
-  @override
-  State<_NewProjectDialog> createState() => _NewProjectDialogState();
-}
-
-class _NewProjectDialogState extends State<_NewProjectDialog> {
-  final _controller = TextEditingController();
-  late final _focus = FocusNode()..addListener(_rewriteOnLeave);
-  late String _template = widget.templates.isEmpty ? '' : widget.templates.first.id;
-  late String _webserver = widget.activeWebserver;
-
-  @override
-  void dispose() {
-    _focus.dispose();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  // INFO: The field becomes the project name once the user is done with it, never
-  // under the cursor while they type (features/quick-app-php.feature, "A
-  // typed name becomes a project name").
-  void _rewriteOnLeave() {
-    if (!_focus.hasFocus) _rewrite();
-  }
-
-  void _rewrite() {
-    final name = projectName(_controller.text);
-    // INFO: Input with nothing usable stays as typed, next to the error explaining it.
-    if (name.isEmpty || name == _controller.text) return;
-    _controller.value = TextEditingValue(
-      text: name,
-      selection: TextSelection.collapsed(offset: name.length),
-    );
-  }
-
-  void _submit() {
-    final name = projectName(_controller.text);
-    if (name.isEmpty) return;
-    _rewrite();
-    // INFO: The active webserver is what every project gets anyway; only the other
-    // one is an override.
-    final pinned = _webserver == widget.activeWebserver ? '' : _webserver;
-    Navigator.pop(context, _NewProject(_template, name, pinned));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final muted = Theme.of(context).textTheme.bodySmall;
-    final typed = _controller.text.trim();
-    final name = projectName(typed);
-    return AlertDialog(
-      title: const Text('New project'),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 360),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: _controller,
-              focusNode: _focus,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: 'Name',
-                helperText: 'Becomes lowercase letters, digits and hyphens',
-                errorText: typed.isNotEmpty && name.isEmpty ? 'Use at least one letter or digit' : null,
-              ),
-              onChanged: (_) => setState(() {}),
-              onSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 20),
-            DropdownButtonFormField<String>(
-              initialValue: _template,
-              decoration: const InputDecoration(labelText: 'Template'),
-              items: [
-                for (final t in widget.templates)
-                  DropdownMenuItem(value: t.id, child: Text(t.name)),
-              ],
-              onChanged: (v) => setState(() => _template = v ?? _template),
-            ),
-            const SizedBox(height: 20),
-            DropdownButtonFormField<String>(
-              initialValue: _webserver,
-              decoration: const InputDecoration(labelText: 'Webserver'),
-              items: [
-                for (final w in widget.webservers) DropdownMenuItem(value: w, child: Text(w)),
-              ],
-              onChanged: (v) => setState(() => _webserver = v ?? _webserver),
-            ),
-            const SizedBox(height: 16),
-            // INFO: The URL is the same whichever webserver is picked: the front
-            // door forwards, so it never needs a port.
-            Text(
-              name.isEmpty ? 'Its address will be http://<name>.localhost' : 'http://$name.localhost',
-              style: muted,
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        FilledButton(onPressed: name.isEmpty ? null : _submit, child: const Text('Create')),
-      ],
     );
   }
 }

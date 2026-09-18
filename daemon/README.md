@@ -42,7 +42,7 @@ The one password prompt left is trusting mkcert's certificate authority;
 | `internal/shellpath` | **Platform-specific**: `bin/path`'s php, and `bin/path` on the user's PATH (shell startup files / user environment) |
 | `internal/supervisor` | Process lifecycle, port waiting, state transitions |
 | `internal/runtime` | Config → process specs; generates nginx/apache/php-fpm config |
-| `internal/project` | Folder-as-project discovery, quick-app scaffolding |
+| `internal/project` | Folder-as-project discovery, name rewriting, config template detection |
 | `internal/certs` | mkcert: pinned download, local CA trust, per-project certificates |
 | `internal/download` | HTTPS fetch with checksum, untar/unzip — for PHP builds and mkcert |
 | `internal/php` | Release timeline, support status, detection, downloads |
@@ -76,10 +76,10 @@ Every change broadcasts a **full** snapshot rather than a delta, so the GUI has
 no merge logic and the tray menu and main window cannot disagree about what is
 running (`features/tray-actions.feature`).
 
-Methods: `ping`, `state.get`, `templates.list`, `services.setWebserver`,
-`services.addPHPVersion`, `services.stopAll`, `projects.add`,
-`projects.remove`, `projects.start`, `projects.stop`, `projects.settings`,
-`projects.scaffold`.
+Methods: `ping`, `state.get`, `services.setWebserver`,
+`services.addPHPVersion`, `services.stopAll`, `projects.inspect`,
+`projects.add`, `projects.remove`, `projects.start`, `projects.stop`,
+`projects.settings`.
 
 Error codes the GUI branches on: `elevation_denied`, `missing_binary`,
 `offline`, `not_found`, `conflict`, `bad_request`, `unknown_method`,
@@ -96,13 +96,14 @@ shipped in releases, and goes once Wharf has a stable one:
 wharfctl status
 wharfctl add my-kirby-site        # register a folder already in www/
 wharfctl add ~/Code/client-site   # or any folder, left where it is
+wharfctl add ~/Code/shop --template laravel --webserver apache --start
+wharfctl inspect ~/Code/shop      # the name and config template "Add project…" proposes
 wharfctl php install 8.4          # download a PHP build into bin/php/8.4
 wharfctl php terminal on          # put the default PHP (bin/path) on the terminal PATH
 wharfctl ssl                      # install mkcert, trust its authority
 wharfctl config my-kirby-site         # its custom config, or the rules it would start from
 wharfctl webserver install nginx  # install a webserver
 wharfctl appearance dark          # system, light or dark
-wharfctl new kirby my-kirby-site  # scaffold from the Kirby starter kit
 wharfctl set my-kirby-site --php 8.1 --ssl true
 wharfctl set legacy-app --webserver apache
 wharfctl set legacy-app --webserver ""   # clear the override
@@ -121,10 +122,9 @@ Each `@v1` scenario in `features/` has a test named after it:
 | `local-ssl.feature` | `internal/core/local_ssl_test.go` |
 | `php-runtime.feature` | `internal/core/php_runtime_test.go` |
 | `php-terminal.feature` | `internal/core/php_terminal_test.go`, `internal/shellpath/shellpath_unix_test.go` |
-| `project-folders.feature` | `internal/core/project_folders_test.go` |
+| `project-folders.feature` | `internal/core/project_folders_test.go`, `internal/project/detect_test.go` |
 | `webserver-install.feature` | `internal/core/webserver_install_test.go` |
 | `pretty-urls.feature` | `internal/core/pretty_urls_test.go` |
-| `quick-app-php.feature` | `internal/core/quick_app_test.go` |
 | `settings.feature` | `internal/core/settings_test.go` |
 | `tray-actions.feature` | `internal/core/tray_actions_test.go` |
 

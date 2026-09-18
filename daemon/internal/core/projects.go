@@ -15,41 +15,113 @@ import (
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/supervisor"
 )
 
-// AddProject registers an existing folder under www/ as a project.
+// AddProject registers an existing folder under www/ as a project, with the
+// config template detected in it.
 func (d *Daemon) AddProject(ctx context.Context, name string) (Project, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.addProjectLocked(ctx, name, "", "", "")
+	if err := project.ValidateName(name); err != nil {
+		return Project{}, invalid("%s", err)
+	}
+	return d.addProjectLocked(ctx, name, "", "", project.Detect(d.root.ProjectDir(name)))
 }
 
-// AddFolder registers the folder at path, wherever it is — the folder
-// picker's action (project-folders.feature). A folder directly in www/ is
-// added by name as usual; any other folder stays where it is and its location
-// is recorded, under a name derived from the folder's own.
-func (d *Daemon) AddFolder(ctx context.Context, path string) (Project, error) {
+// Proposal is what "Add project…" proposes for a folder before anything is
+// registered (project-folders.feature, "Adding a project with the folder
+// picker").
+type Proposal struct {
+	Path string `json:"path"`
+	// Name is the project name made from the folder's. Fixed is true for a
+	// folder in www/, whose name is the folder's and cannot be changed.
+	Name  string `json:"name"`
+	Fixed bool   `json:"fixed"`
+	// Template is the config template detected in the folder; "" for none.
+	Template string `json:"template"`
+	// Project is the project this folder already is; "" while it is none
+	// (project-folders.feature, "Choosing a folder that is already a
+	// project").
+	Project string `json:"project"`
+}
+
+// InspectFolder proposes a name and a config template for the folder at
+// path, and says whether it is a project already. It registers nothing.
+func (d *Daemon) InspectFolder(path string) (Proposal, error) {
+	abs, err := folderAt(path)
+	if err != nil {
+		return Proposal{}, err
+	}
+	out := Proposal{Path: abs, Template: project.Detect(abs)}
+	cfg := d.store.Get()
+	if sameDir(filepath.Dir(abs), d.root.WWW()) {
+		out.Name, out.Fixed = filepath.Base(abs), true
+		if _, ok := cfg.Project(out.Name); ok {
+			out.Project = out.Name
+		}
+		return out, nil
+	}
+	out.Name = project.Slug(filepath.Base(abs))
+	for _, p := range cfg.Projects {
+		if p.Path != "" && sameDir(p.Path, abs) {
+			out.Project = p.Name
+		}
+	}
+	return out, nil
+}
+
+// Adding is what the user confirmed in the "Add project…" sheet. A zero
+// value adds the folder under its own name, with the detected config
+// template, served by the active webserver, and does not start it.
+type Adding struct {
+	// Name replaces the name made from the folder's; it gets the same
+	// rewrite. A folder in www/ keeps its own.
+	Name string
+	// Template is the config template's id, "" for none; nil detects one.
+	Template *string
+	// Webserver pins the project to one; "" follows the active webserver.
+	Webserver string
+	// Start starts the project once it is registered.
+	Start bool
+}
+
+// AddFolder registers the folder at path, wherever it is — the "Add
+// project…" sheet's action (project-folders.feature). A folder directly in
+// www/ is added by name as usual; any other folder stays where it is and its
+// location is recorded.
+func (d *Daemon) AddFolder(ctx context.Context, path string, a Adding) (Project, error) {
+	abs, err := folderAt(path)
+	if err != nil {
+		return Project{}, err
+	}
+	template := ""
+	if a.Template == nil {
+		template = project.Detect(abs)
+	} else if template = *a.Template; template != "" && !d.res.Templates().Exists(template) {
+		return Project{}, notFound("no config template named %q", template)
+	}
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return Project{}, invalid("%s is not a usable path: %v", path, err)
-	}
-	if info, err := os.Stat(abs); err != nil || !info.IsDir() {
-		return Project{}, notFound("no folder at %s", abs)
-	}
 	if sameDir(filepath.Dir(abs), d.root.WWW()) {
-		return d.addProjectLocked(ctx, filepath.Base(abs), "", "", "")
+		return d.addedLocked(ctx, filepath.Base(abs), "", a.Webserver, template, a.Start)
 	}
 
-	name := project.Slug(filepath.Base(abs))
+	// INFO: wharfctl and anything else on the socket get the rewrite the GUI's
+	// field applies (project-folders.feature, "The proposed name comes from
+	// the folder name").
+	typed := a.Name
+	if typed == "" {
+		typed = filepath.Base(abs)
+	}
+	name := project.Slug(typed)
 	if name == "" {
-		return Project{}, invalid("the folder name %q has no letter or digit to make a project name from — rename the folder", filepath.Base(abs))
+		return Project{}, invalid("%q has no letter or digit to make a project name from — use at least one", typed)
 	}
 	if err := config.CheckProject(config.Project{Name: name, Path: abs}); err != nil {
 		return Project{}, invalid("%s", err)
 	}
 	if project.Exists(d.root, name) {
-		return Project{}, conflict("a folder named %q is already in www/ — rename one of the two folders", name)
+		return Project{}, conflict("the name %q is taken by a folder in www/ — pick another name", name)
 	}
 	cfg := d.store.Get()
 	for _, p := range cfg.Projects {
@@ -57,7 +129,53 @@ func (d *Daemon) AddFolder(ctx context.Context, path string) (Project, error) {
 			return Project{}, conflict("%s is already the project %q", abs, p.Name)
 		}
 	}
-	return d.addProjectLocked(ctx, name, abs, "", "")
+	if _, taken := cfg.Project(name); taken {
+		return Project{}, conflict("the name %q is taken by another project — pick another name", name)
+	}
+	return d.addedLocked(ctx, name, abs, a.Webserver, template, a.Start)
+}
+
+// addedLocked registers a project, then starts it if asked: adding from the
+// sheet means wanting the project up, and its row shows it starting.
+func (d *Daemon) addedLocked(ctx context.Context, name, path, server, template string, start bool) (Project, error) {
+	p, err := d.addProjectLocked(ctx, name, path, server, template)
+	if err != nil || !start {
+		return p, err
+	}
+	// INFO: The start runs once mu is free, so the sheet closes at once and the
+	// row shows the project coming up.
+	go func() {
+		startCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 60*time.Second)
+		defer cancel()
+		defer d.track()()
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		cfg := d.store.Get()
+		// INFO: Removed again before its start came round: nothing to start.
+		entry, ok := cfg.Project(name)
+		if !ok {
+			return
+		}
+		if err := d.startProjectLocked(startCtx, cfg, entry); err != nil {
+			d.log.Error("start added project", "project", name, "err", err)
+		}
+	}()
+	cfg := d.store.Get()
+	entry, _ := cfg.Project(name)
+	return d.projectState(cfg, entry), nil
+}
+
+// folderAt resolves path to an absolute path, and refuses one that is not a
+// folder.
+func folderAt(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", invalid("%s is not a usable path: %v", path, err)
+	}
+	if info, err := os.Stat(abs); err != nil || !info.IsDir() {
+		return "", notFound("no folder at %s", abs)
+	}
+	return abs, nil
 }
 
 // sameDir compares folders after resolving symlinks, so that /tmp and
@@ -110,8 +228,8 @@ func (d *Daemon) addProjectLocked(ctx context.Context, name, path, server, templ
 		return Project{}, err
 	}
 
-	// INFO: Nothing to reload: a new project is not started, and the front door
-	// serves started projects only.
+	// INFO: Nothing to reload: registering starts nothing — addedLocked starts it
+	// afterwards when asked — and the front door serves started projects only.
 	d.publish()
 	return d.projectState(next, entry), nil
 }
@@ -408,65 +526,6 @@ func (d *Daemon) applySettingsChange(ctx context.Context, cfg *config.Config, be
 	}
 	return d.applyFrontDoor(ctx, cfg)
 }
-
-// Scaffold creates a project from a quick-app template and registers it,
-// pinned to server when one was picked; left empty, the project follows the
-// global webserver (quick-app-php.feature, "Choosing the webserver while
-// creating a project").
-func (d *Daemon) Scaffold(ctx context.Context, templateID, name, server string) (Project, error) {
-	defer d.track()()
-
-	tpl, ok := project.TemplateByID(templateID)
-	if !ok {
-		return Project{}, notFound("no template named %q", templateID)
-	}
-	// INFO: wharfctl and anything else on the socket get the rewrite the GUI's
-	// field applies (quick-app-php.feature, "A typed name becomes a project
-	// name").
-	typed := name
-	if name = project.Slug(typed); name == "" {
-		return Project{}, invalid("%q has no letter or digit to make a project name from — use at least one", typed)
-	}
-	// INFO: Checked before anything is downloaded, so a bad choice leaves no folder.
-	if server != "" && !slices.Contains(d.store.Get().Services.Webserver.Available, server) {
-		return Project{}, invalid("%q is not an available webserver", server)
-	}
-	// WARNING: The download runs outside mu. A starter kit takes a while to
-	// fetch, and every other action — the tray's too — would wait behind it.
-	// Create stages the folder and refuses a name www/ already holds, and
-	// registering re-checks under mu.
-	if err := d.scaf.Create(ctx, tpl, name); err != nil {
-		return Project{}, err
-	}
-
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	p, err := d.addProjectLocked(ctx, name, "", server, tpl.ConfigTemplate)
-	if err != nil {
-		// WARNING: The folder exists but could not be registered; leaving it behind
-		// with no config entry would be a project the GUI cannot see.
-		os.RemoveAll(d.root.ProjectDir(name))
-		return Project{}, err
-	}
-
-	cfg := d.store.Get()
-	entry, _ := cfg.Project(name)
-	// INFO: Scaffolding implies wanting the project up: the GUI shows "starting"
-	// while this runs.
-	go func() {
-		startCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 60*time.Second)
-		defer cancel()
-		d.mu.Lock()
-		defer d.mu.Unlock()
-		if err := d.startProjectLocked(startCtx, cfg, entry); err != nil {
-			d.log.Error("start scaffolded project", "project", name, "err", err)
-		}
-	}()
-	return p, nil
-}
-
-// Templates lists the registered quick-app templates.
-func (d *Daemon) Templates() []project.Template { return project.Templates }
 
 // unregistered lists folders sitting in www/ that are not projects yet — the
 // "drop a folder in www/" path made visible.

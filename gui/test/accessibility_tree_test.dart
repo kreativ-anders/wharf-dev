@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wharf_gui/daemon.dart';
+import 'package:wharf_gui/folders.dart';
 import 'package:wharf_gui/models/state.dart';
 import 'package:wharf_gui/pages/projects_page.dart';
 import 'package:wharf_gui/theme.dart';
@@ -18,6 +19,8 @@ import 'package:wharf_gui/theme.dart';
 void main() {
   _AxBinding();
   setUp(_engine.reset);
+  // INFO: "Add project…" asks the system for a folder; the tests answer for it.
+  setUp(() => pickFolder = (_) async => '/Users/x/Code/My Site');
   tearDown(() {
     for (final move in _engine.moves) {
       debugPrint('MOVE $move');
@@ -51,8 +54,6 @@ void main() {
     final mouse = await _mouse(tester);
 
     for (final tip in [
-      'Open www folder',
-      'Add folder…',
       'Settings',
       'Open http://my-kirby-site.localhost',
       'Restart my-kirby-site',
@@ -91,7 +92,7 @@ void main() {
       },
     ),
     ('the project sheet', (tester) => tester.tap(find.text('my-kirby-site'))),
-    ('the new project dialog', (tester) => tester.tap(find.text('New project'))),
+    ('the add project sheet', (tester) => tester.tap(find.text('Add project…'))),
     ('settings', (tester) => tester.tap(find.byTooltip('Settings'))),
   ]) {
     testWidgets('the window deactivated and back, over $name', (tester) async {
@@ -470,11 +471,11 @@ void main() {
     semantics.dispose();
   }, variant: _windows);
 
-  testWidgets('a new project dialog, filled in and cancelled', (tester) async {
+  testWidgets('the add project sheet, filled in and cancelled', (tester) async {
     final semantics = tester.ensureSemantics();
     await _app(tester, _FakeDaemon());
 
-    await tester.tap(find.text('New project'));
+    await tester.tap(find.text('Add project…'));
     await _wait(tester);
     await tester.enterText(find.byType(TextField), 'My Site');
     await _wait(tester);
@@ -593,10 +594,11 @@ class _FakeDaemon extends Daemon {
         {'name': 'site-$i', 'state': 'stopped', 'url': 'http://site-$i.localhost'},
     ]);
     state = WharfState.fromJson(_json);
-    templates = [
-      Template.fromJson({'id': 'kirby', 'name': 'Kirby', 'runtime': 'php'}),
-    ];
   }
+
+  @override
+  Future<FolderProposal?> inspectFolder(String path) async =>
+      FolderProposal(path: path, name: 'my-site', template: 'kirby');
 
   final Map<String, dynamic> _json = jsonDecode(_snapshot) as Map<String, dynamic>;
 
@@ -685,7 +687,8 @@ const _snapshot = '''
     {"name": "legacy-app", "state": "stopped", "url": "http://legacy-app.localhost",
      "webserver": "nginx", "php_version": "8.1", "dir": "/Users/x/Wharf/www/legacy-app"}
   ],
-  "unregistered": []
+  "unregistered": [],
+  "config_templates": [{"id": "kirby", "name": "Kirby", "builtin": true, "changed": false, "projects": []}]
 }
 ''';
 

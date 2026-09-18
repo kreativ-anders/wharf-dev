@@ -54,7 +54,7 @@ Kirby-plain, taken from getkirby.com's own palette (`gui/lib/theme.dart`):
 - **Colour only where it means something**: a project's status, a PHP
   version's support status, and what a project action does — Start green,
   Stop red (as is "Stop all"), Restart blue, each on a light tint of its own
-  colour. "Cast off" — stop everything and quit, opposite "New project" — is
+  colour. "Cast off" — stop everything and quit, opposite "Add project…" — is
   harbour teal (185°): the one action about Wharf itself rather than a
   project, so it takes a hue no status uses. Kirby's hues (green 80°,
   orange 28°, red 0°, blue 210°), with lightness picked for contrast rather

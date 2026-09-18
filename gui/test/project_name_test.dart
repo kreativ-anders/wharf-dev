@@ -5,7 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wharf_gui/project_name.dart';
 
 void main() {
-  // features/quick-app-php.feature — "A typed name becomes a project name"
+  // features/project-folders.feature — "The proposed name comes from the folder
+  // name"
   test('typed names are rewritten exactly as the daemon rewrites them', () {
     // INFO: The daemon is tested against the same table, so the two cannot drift.
     final raw = File('../daemon/internal/project/testdata/slug.json')

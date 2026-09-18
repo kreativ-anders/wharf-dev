@@ -56,7 +56,10 @@ const (
 	MethodProjectStop     = "projects.stop"
 	MethodProjectRestart  = "projects.restart"
 	MethodProjectSettings = "projects.settings"
-	MethodProjectScaffold = "projects.scaffold"
+	// Inspect answers with what "Add project…" proposes for a folder — its
+	// name, its detected config template, the project it already is — and
+	// registers nothing (project-folders.feature).
+	MethodProjectInspect = "projects.inspect"
 
 	// A project's custom config, for the webserver serving it
 	// (app-configuration.feature). Read answers with its rules — or, while it
@@ -65,8 +68,6 @@ const (
 	MethodCustomConfigRead   = "projects.customConfig.read"
 	MethodCustomConfigSave   = "projects.customConfig.save"
 	MethodCustomConfigDelete = "projects.customConfig.delete"
-
-	MethodTemplates = "templates.list"
 
 	// Config templates (config-templates.feature). Read answers with the
 	// rules for one webserver, Create with the new template; Save and Delete

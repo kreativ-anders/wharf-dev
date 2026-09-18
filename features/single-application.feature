@@ -34,7 +34,7 @@ Feature: One application
   Scenario: Casting off from the main window
     Given one or more projects are running
     When the user looks at the main window
-    Then "Cast off" stands in the corner opposite "New project"
+    Then "Cast off" stands in the corner opposite "Add project…"
     When the user chooses "Cast off" and confirms it
     Then every running service and project is stopped
     And the application quits, stopping its daemon — even one it attached to

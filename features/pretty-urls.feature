@@ -20,7 +20,7 @@ Feature: Pretty URLs under .localhost
     And no port is part of that URL, whichever webserver serves it
 
   Scenario: Adding a project never asks for a password
-    When the user adds or scaffolds a project
+    When the user adds a project
     Then the hosts file is not written
     And no elevation prompt is shown
 

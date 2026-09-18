@@ -33,6 +33,19 @@ class _PhpSettingsDaemon extends Daemon {
       open(state.services.php.settings);
 }
 
+/// A fixture daemon whose "Start" takes until [done] completes, the way a
+/// daemon busy with something else answers late.
+class _SlowDaemon extends Daemon {
+  _SlowDaemon(String json, this.done) : super(root: '/tmp/wharf-test') {
+    state = WharfState.fromJson(jsonDecode(json) as Map<String, dynamic>);
+  }
+
+  final Future<void> done;
+
+  @override
+  Future<void> startProject(String name) => open((_) => done, name);
+}
+
 /// A fixture daemon that records every reset it is asked for.
 class _ResetDaemon extends Daemon {
   _ResetDaemon(String json) : super(root: '/tmp/wharf-test') {
@@ -151,11 +164,7 @@ void main() {
   testWidgets('the window shows it is working until an action is done', (tester) async {
     final semantics = tester.ensureSemantics();
     final opening = Completer<void>();
-    final previous = openFolder;
-    openFolder = (_) => opening.future;
-    addTearDown(() => openFolder = previous);
-
-    final daemon = fixture(_twoProjects);
+    final daemon = _SlowDaemon(_twoProjects, opening.future);
     await tester.pumpWidget(
       wrap(
         ListenableBuilder(
@@ -166,7 +175,7 @@ void main() {
     );
     expect(find.byType(LinearProgressIndicator), findsNothing);
 
-    await tester.tap(find.byTooltip('Open www folder'));
+    await tester.tap(find.byTooltip('Start legacy-app'));
     await tester.pump();
     expect(find.bySemanticsLabel('Working…'), findsOneWidget);
 
@@ -298,7 +307,7 @@ void main() {
   });
 
   // features/single-application.feature — "Casting off from the main window"
-  testWidgets('cast off stands opposite New project, stops everything, then quits', (tester) async {
+  testWidgets('cast off stands opposite Add project, stops everything, then quits', (tester) async {
     final daemon = _CastOffDaemon(_twoProjects);
     var quit = 0;
     await tester.pumpWidget(
@@ -314,7 +323,7 @@ void main() {
     );
 
     final castOff = find.widgetWithText(FloatingActionButton, 'Cast off');
-    final newProject = find.widgetWithText(FloatingActionButton, 'New project');
+    final newProject = find.widgetWithText(FloatingActionButton, 'Add project…');
     final middle = tester.getSize(find.byType(Scaffold)).width / 2;
     expect(tester.getCenter(castOff).dx, lessThan(middle));
     expect(tester.getCenter(newProject).dx, greaterThan(middle));
@@ -389,17 +398,6 @@ void main() {
     expect(opened, ['/Users/x/Code/my-kirby-site']);
   });
 
-  // features/project-folders.feature — "Opening the www folder"
-  testWidgets('the www folder opens from the project list', (tester) async {
-    final opened = captureOpened();
-    final daemon = fixture(_twoProjects);
-    await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
-
-    await tester.tap(find.byTooltip('Open www folder'));
-
-    expect(opened, ['/Users/x/Wharf/www']);
-  });
-
   // features/local-ssl.feature — "Trust is declined"
   testWidgets('an SSL project whose certificates are not trusted says browsers will warn', (
     tester,
@@ -426,69 +424,6 @@ void main() {
     // INFO: legacy-app runs on Apache behind the nginx front door: still no port.
     expect(find.text('https://legacy-app.localhost'), findsOneWidget);
     expect(find.textContaining(':80'), findsNothing);
-  });
-
-  // features/quick-app-php.feature — "Choosing the webserver while creating a
-  // project"
-  testWidgets('a new project gets a name, a template and a webserver', (tester) async {
-    final daemon = fixture(_twoProjects);
-    daemon.templates = const [
-      Template(id: 'kirby', name: 'Kirby', runtime: 'php'),
-      Template(id: 'empty', name: 'Empty folder', runtime: 'php'),
-    ];
-    await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
-
-    await tester.tap(find.text('New project'));
-    await tester.pumpAndSettle();
-    expect(find.widgetWithText(TextField, 'Name'), findsOneWidget);
-    expect(find.text('Kirby'), findsOneWidget);
-    // INFO: The active webserver is picked to begin with; there is no "Default".
-    expect(find.text('nginx'), findsOneWidget);
-    expect(find.textContaining('Default'), findsNothing);
-
-    await tester.tap(find.text('nginx'));
-    await tester.pumpAndSettle();
-    expect(find.text('apache').last, findsOneWidget);
-    await tester.tap(find.text('apache').last);
-    await tester.pumpAndSettle();
-    expect(find.text('apache'), findsOneWidget);
-
-    await tester.enterText(find.widgetWithText(TextField, 'Name'), 'blog');
-    await tester.pump();
-    // INFO: The address does not depend on the webserver picked.
-    expect(find.text('http://blog.localhost'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Create'), findsOneWidget);
-  });
-
-  // features/quick-app-php.feature — "A typed name becomes a project name"
-  testWidgets('the name field becomes a project name once the user leaves it', (tester) async {
-    final daemon = fixture(_twoProjects);
-    daemon.templates = const [Template(id: 'empty', name: 'Empty folder', runtime: 'php')];
-    await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
-    await tester.tap(find.text('New project'));
-    await tester.pumpAndSettle();
-
-    final field = find.widgetWithText(TextField, 'Name');
-    await tester.enterText(field, 'Müller & Söhne');
-    await tester.pump();
-    // INFO: While typing, the field keeps what was typed; the address already
-    // shows the rewritten name.
-    expect(find.text('Müller & Söhne'), findsOneWidget);
-    expect(find.text('http://mueller-soehne.localhost'), findsOneWidget);
-
-    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-    await tester.pump();
-    expect(find.text('Müller & Söhne'), findsNothing);
-    expect(find.text('mueller-soehne'), findsOneWidget);
-
-    // INFO: A name with no letter or digit in it is refused, asking for at least one
-    await tester.enterText(field, '!!!');
-    await tester.pump();
-    expect(find.text('Use at least one letter or digit'), findsOneWidget);
-    expect(
-      tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Create')).onPressed,
-      isNull,
-    );
   });
 
   // features/settings.feature — "Reset asks first"
@@ -545,21 +480,6 @@ void main() {
 
     expect(find.text('dropped-in'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Add'), findsOneWidget);
-  });
-
-  testWidgets('an empty state explains that a folder is a project', (tester) async {
-    final daemon = fixture(
-      '{"root":"/Users/x/Wharf","www":"/Users/x/Wharf/www","projects":[],"unregistered":[]}',
-    );
-    await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
-
-    expect(find.text('No projects yet'), findsOneWidget);
-    expect(find.textContaining('/Users/x/Wharf/www/'), findsOneWidget);
-    // INFO: No drag-and-drop wording: it is a folder picker, and the folder can be
-    // anywhere.
-    expect(find.textContaining('Drop'), findsNothing);
-    expect(find.widgetWithText(OutlinedButton, 'Add folder…'), findsOneWidget);
-    expect(find.widgetWithText(TextButton, 'Open www folder'), findsOneWidget);
   });
 
   // features/service-management.feature — "Port conflict on switch"

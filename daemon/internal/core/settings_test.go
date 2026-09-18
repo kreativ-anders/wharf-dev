@@ -311,7 +311,7 @@ func TestResettingWharf(t *testing.T) {
 	if err := os.MkdirAll(elsewhere, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.d.AddFolder(h.ctx(), elsewhere); err != nil {
+	if _, err := h.d.AddFolder(h.ctx(), elsewhere, Adding{}); err != nil {
 		t.Fatal(err)
 	}
 	h.saveCustomConfig("my-kirby-site", "client_max_body_size 64m;")
@@ -413,7 +413,7 @@ func TestResettingWharfAndDeletingTheProjectsInWWW(t *testing.T) {
 	if err := os.MkdirAll(elsewhere, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.d.AddFolder(h.ctx(), elsewhere); err != nil {
+	if _, err := h.d.AddFolder(h.ctx(), elsewhere, Adding{}); err != nil {
 		t.Fatal(err)
 	}
 

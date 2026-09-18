@@ -88,8 +88,8 @@ var accented = func() map[rune]rune {
 // Slug turns what a user typed, or a folder name from anywhere on the machine,
 // into a project name: "Müller & Söhne" becomes "mueller-soehne". The name
 // must also work as a hostname, which an arbitrary folder name need not. It
-// returns "" when nothing usable is left (quick-app-php.feature, "A typed name
-// becomes a project name"). The GUI mirrors this in gui/lib/project_name.dart;
+// returns "" when nothing usable is left (project-folders.feature, "The
+// proposed name comes from the folder name"). The GUI mirrors this in gui/lib/project_name.dart;
 // both are tested against testdata/slug.json.
 func Slug(typed string) string {
 	s := spelled.Replace(strings.ToLower(typed))

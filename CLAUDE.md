@@ -120,8 +120,7 @@ wharf/
 │   ├── php-terminal.feature         bin/path runs the default PHP; "Use in terminal" puts it on PATH
 │   ├── pretty-urls.feature          <name>.localhost; the hosts file is never touched
 │   ├── project-logs.feature         one log folder per project, opened from its settings
-│   ├── project-folders.feature      folders from anywhere, opening them
-│   ├── quick-app-php.feature        Kirby scaffolding
+│   ├── project-folders.feature      "Add project…": what is missing first, folder picker, detection, opening folders
 │   ├── roadmap-services.feature     @roadmap only — do not implement
 │   ├── service-management.feature   webserver switching, port conflicts
 │   ├── settings.feature             global settings surface
@@ -140,7 +139,7 @@ wharf/
 │       ├── configtemplate/    config templates: the built-in rules (builtin/*.conf) and config/templates/
 │       ├── core/              THE BEHAVIOUR — one method per user action
 │       │   ├── core.go        the daemon: construction, first run, settings, reset, shutdown
-│       │   ├── projects.go    add, remove, start, stop, restart, overrides, scaffolding
+│       │   ├── projects.go    inspect a folder, add, remove, start, stop, restart, overrides
 │       │   ├── php.go         PHP versions: detect, adopt, download, remove or hide, backends
 │       │   ├── webserver.go   webservers: detect, install, switch the active one
 │       │   ├── frontdoor.go   what the front door serves; own instances' ports
@@ -159,7 +158,7 @@ wharf/
 │       ├── layout/            the portable root: bin/ www/ config/ data/
 │       ├── php/               release timeline, support status, detection, downloads
 │       ├── proctree/          PLATFORM-SPECIFIC: a service and its workers, stopped as one; is a process alive
-│       ├── project/           folder-as-project discovery, name rewriting, template scaffolding
+│       ├── project/           folder-as-project discovery, name rewriting, config template detection
 │       ├── runtime/           config → process specs; the front door, one generated file per project
 │       ├── shellpath/         PLATFORM-SPECIFIC: bin/path's php, and bin/path on the user's PATH (startup files / user environment)
 │       ├── specsync/          THE SYNC GUARD (§1)
@@ -176,8 +175,8 @@ wharf/
     │   ├── main.dart          window, tray wiring, close-to-tray
     │   ├── daemon.dart        THE APP'S STATE — one snapshot from the daemon
     │   ├── daemon_launcher.dart  finds, starts and stops wharfd: one application
-    │   ├── folders.dart       opening folders and files, the "Add folder…" picker
-    │   ├── project_name.dart  the daemon's name rewrite, mirrored for the "New project" field
+    │   ├── folders.dart       opening folders and files, the folder picker, the tray's add
+    │   ├── project_name.dart  the daemon's name rewrite, mirrored for the "Add project…" name field
     │   ├── theme.dart         Kirby-plain light/dark palette, status mark (shape + colour)
     │   ├── tray.dart          the tray menu (features/tray-actions.feature)
     │   ├── ipc/
@@ -185,7 +184,8 @@ wharf/
     │   │   └── client.dart    newline-delimited JSON client
     │   ├── models/state.dart  the snapshot shape — a contract with core/state.go
     │   └── pages/
-    │       ├── projects_page.dart  THE ONE PRIMARY VIEW
+    │       ├── projects_page.dart  THE ONE PRIMARY VIEW; before the first project, what is missing
+    │       ├── add_project.dart    "Add project…": folder picker, then the sheet proposing name, template, webserver
     │       ├── project_sheet.dart  per-project overrides, config template, custom config and logs, behind a tap
     │       ├── config_editor.dart  the line-numbered editor for config templates and custom configs, and "New template…"
     │       └── settings_page.dart  side navigation: General, Webserver (config templates), PHP (picker, php.ini), SSL
@@ -193,6 +193,7 @@ wharf/
     │   ├── state_test.dart      snapshot parsing
     │   ├── theme_test.dart      WCAG contrast of the palette, both themes
     │   ├── widgets_test.dart    what each view renders
+    │   ├── add_project_test.dart  "Add project…" and the window before the first project
     │   ├── config_templates_test.dart  the config template list, editor and project picker; the custom config editor
     │   ├── accessibility_tree_test.dart  semantics updates replayed through the Windows engine's AXTree commit
     │   ├── project_name_test.dart  the name rewrite, against the daemon's own table

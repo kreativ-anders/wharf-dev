@@ -40,7 +40,7 @@ func TestAddingAProjectNeverAsksForAPassword(t *testing.T) {
 	h := newHarness(t)
 
 	h.mustAdd("my-kirby-site")
-	if _, err := h.d.Scaffold(h.ctx(), "empty", "blank", ""); err != nil {
+	if _, err := h.d.AddFolder(h.ctx(), outsideFolder(t, "Code", "Blank"), Adding{}); err != nil {
 		t.Fatal(err)
 	}
 

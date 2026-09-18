@@ -47,7 +47,7 @@ Feature: Webserver installation
     And the main nginx config includes exactly those files
 
   Scenario: A Kirby project needs no custom webserver config
-    Given the Kirby starter kit is a project with the "Kirby" config template
+    Given a Kirby site is a project with the "Kirby" config template
     When it is served by nginx or by Apache
     Then its pages, the Panel and its media are served
     And "content/", "site/", "kirby/" and dot-files are never served as files

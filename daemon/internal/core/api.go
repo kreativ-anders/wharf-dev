@@ -9,7 +9,6 @@ import (
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/elevate"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/ipc"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/php"
-	"github.com/kreativ-anders/wharf-dev/daemon/internal/project"
 	wruntime "github.com/kreativ-anders/wharf-dev/daemon/internal/runtime"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/shellpath"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/webserver"
@@ -35,8 +34,16 @@ type (
 	resetParams struct {
 		DeleteProjects bool `json:"delete_projects"`
 	}
+	// INFO: One struct, not Adding embedded: both carry "name", and the outer
+	// one would hide the inner.
 	addParams struct {
-		Name string `json:"name"`
+		Name      string  `json:"name"`
+		Path      string  `json:"path"`
+		Template  *string `json:"template"`
+		Webserver string  `json:"webserver"`
+		Start     bool    `json:"start"`
+	}
+	pathParams struct {
 		Path string `json:"path"`
 	}
 	settingsParams struct {
@@ -53,11 +60,6 @@ type (
 		Webserver string `json:"webserver"`
 		Content   string `json:"content"`
 	}
-	scaffoldParams struct {
-		Template  string `json:"template"`
-		Name      string `json:"name"`
-		Webserver string `json:"webserver"`
-	}
 )
 
 // Register wires the daemon's methods onto an IPC server and arranges for
@@ -67,7 +69,6 @@ func (d *Daemon) Register(srv *ipc.Server) {
 
 	srv.Handle(ipc.MethodPing, query(func(context.Context) any { return map[string]string{"pong": "wharf"} }))
 	srv.Handle(ipc.MethodState, query(func(context.Context) any { return d.State() }))
-	srv.Handle(ipc.MethodTemplates, query(func(context.Context) any { return d.Templates() }))
 	srv.Handle(ipc.MethodDetectPHP, query(func(ctx context.Context) any { return d.RefreshPHP(ctx) }))
 
 	// INFO: An action answers with the snapshot it leaves behind, so the GUI
@@ -127,7 +128,7 @@ func (d *Daemon) Register(srv *ipc.Server) {
 		// INFO: A name adds a folder from www/; a path adds a folder from
 		// anywhere (project-folders.feature).
 		if p.Path != "" {
-			return d.AddFolder(ctx, p.Path)
+			return d.AddFolder(ctx, p.Path, Adding{Name: p.Name, Template: p.Template, Webserver: p.Webserver, Start: p.Start})
 		}
 		return d.AddProject(ctx, p.Name)
 	}))
@@ -144,8 +145,8 @@ func (d *Daemon) Register(srv *ipc.Server) {
 	srv.Handle(ipc.MethodConfigTemplateCreate, handler(func(ctx context.Context, p nameParams) (any, error) {
 		return d.CreateConfigTemplate(ctx, p.Name)
 	}))
-	srv.Handle(ipc.MethodProjectScaffold, handler(func(ctx context.Context, p scaffoldParams) (any, error) {
-		return d.Scaffold(ctx, p.Template, p.Name, p.Webserver)
+	srv.Handle(ipc.MethodProjectInspect, handler(func(_ context.Context, p pathParams) (any, error) {
+		return d.InspectFolder(p.Path)
 	}))
 }
 
@@ -218,7 +219,7 @@ func asIPCError(err error) error {
 		return nil
 	case errors.Is(err, elevate.ErrDeclined):
 		return ipc.Errorf(ipc.CodeElevationDenied, "%s", err.Error())
-	case errors.Is(err, project.ErrOffline), errors.Is(err, php.ErrDownload), errors.Is(err, certs.ErrFetch),
+	case errors.Is(err, php.ErrDownload), errors.Is(err, certs.ErrFetch),
 		errors.Is(err, webserver.ErrFetch):
 		return ipc.Errorf(ipc.CodeOffline, "%s", err.Error())
 	case errors.Is(err, certs.ErrMkcertMissing):

@@ -69,8 +69,12 @@ open build/macos/Build/Products/Release/Wharf.app
 The macOS build embeds `wharfd` inside `Wharf.app`, so the app is
 self-contained. Building needs Go installed (`brew install go`).
 
-Then add a project: pick any folder with "Add folder…" — it stays where it is —
-or put one in `~/Wharf/www/` and it appears in the app, ready to add.
+Then add a project: "Add project…" asks for a folder — it stays where it is —
+and proposes a name, the config template it detects (Kirby, Laravel,
+WordPress, …) and a webserver; "Add" starts it. A folder put in
+`~/Wharf/www/` appears in the app, ready to add the same way. Before the
+first project the window says whether PHP and a webserver are there, and
+installs what is missing when asked.
 Adding a project writes nothing outside the Wharf folder and asks for no
 password: every project is `http://<name>.localhost`, which the OS resolves by
 itself.
@@ -88,7 +92,7 @@ never starts one. It is for development and debugging, not part of a release:
 ```sh
 ./build/wharfctl status
 ./build/wharfctl php                        # what PHP this machine has
-./build/wharfctl new kirby my-kirby-site    # scaffold from the Kirby starter kit
+./build/wharfctl inspect ~/Code/site        # what "Add project…" would propose
 ```
 
 ### Everything else

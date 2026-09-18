@@ -100,6 +100,41 @@ void main() {
     expect(config, isNot(contains('null')));
   });
 
+  // features/project-folders.feature — "Adding a project with the folder picker"
+  test('a folder from anywhere is proposed, then added as the sheet confirmed it', () async {
+    await _waitForFile(endpointPathFor(root.path));
+    final gui = Daemon(root: root.path);
+    addTearDown(gui.dispose);
+    await gui.start();
+
+    final code = await Directory.systemTemp.createTemp('wharf-e2e-code');
+    addTearDown(() => code.delete(recursive: true));
+    final shop = await Directory('${code.path}/Client Shop').create();
+    await File('${shop.path}/artisan').writeAsString('#!/usr/bin/env php');
+
+    // INFO: The Go proposal arrives in the Dart model field by field.
+    final proposal = await gui.inspectFolder(shop.path);
+    expect(proposal, isNotNull, reason: gui.notice);
+    expect(proposal!.name, 'client-shop');
+    expect(proposal.template, 'laravel');
+    expect(proposal.fixed, isFalse);
+    expect(proposal.project, isEmpty);
+
+    // WARNING: Not started: a start would run this machine's real webserver.
+    final added = await gui.addFolderAs(proposal.path, name: 'shop', template: '', start: false);
+    expect(added.name, 'shop');
+    final project = gui.state.projects.firstWhere((p) => p.name == 'shop');
+    expect(project.linked, isTrue);
+    expect(project.template, isEmpty);
+
+    // INFO: Asked again, the folder names the project it now is.
+    expect((await gui.inspectFolder(shop.path))!.project, 'shop');
+    await expectLater(
+      gui.addFolderAs(shop.path, name: 'again', template: '', start: false),
+      throwsA(isA<DaemonError>()),
+    );
+  });
+
   // features/tray-actions.feature — "Opening the main window"
   test('a change made elsewhere reaches the GUI without it asking', () async {
     await _waitForFile(endpointPathFor(root.path));
