@@ -32,6 +32,9 @@ type (
 	onParams struct {
 		On bool `json:"on"`
 	}
+	resetParams struct {
+		DeleteProjects bool `json:"delete_projects"`
+	}
 	addParams struct {
 		Name string `json:"name"`
 		Path string `json:"path"`
@@ -43,6 +46,12 @@ type (
 	customConfigParams struct {
 		Name      string `json:"name"`
 		Webserver string `json:"webserver"`
+		Content   string `json:"content"`
+	}
+	configTemplateParams struct {
+		ID        string `json:"id"`
+		Webserver string `json:"webserver"`
+		Content   string `json:"content"`
 	}
 	scaffoldParams struct {
 		Template  string `json:"template"`
@@ -68,7 +77,6 @@ func (d *Daemon) Register(srv *ipc.Server) {
 		ipc.MethodSetupSSL:         d.SetupSSL,
 		ipc.MethodPHPReleases:      d.CheckPHPReleases,
 		ipc.MethodStopAll:          d.StopAll,
-		ipc.MethodReset:            d.Reset,
 	} {
 		srv.Handle(method, d.stateAfter(act))
 	}
@@ -91,7 +99,20 @@ func (d *Daemon) Register(srv *ipc.Server) {
 		srv.Handle(method, action(d, func(ctx context.Context, p versionParams) error { return act(ctx, p.Version) }))
 	}
 	srv.Handle(ipc.MethodUnhidePHP, action(d, func(ctx context.Context, p dirParams) error { return d.UnhidePHP(ctx, p.Dir) }))
+	srv.Handle(ipc.MethodReset, action(d, func(ctx context.Context, p resetParams) error { return d.Reset(ctx, p.DeleteProjects) }))
 	srv.Handle(ipc.MethodSetPHPTerminal, action(d, func(ctx context.Context, p onParams) error { return d.SetPHPTerminal(ctx, p.On) }))
+	srv.Handle(ipc.MethodConfigTemplateSave, action(d, func(ctx context.Context, p configTemplateParams) error {
+		return d.SaveConfigTemplate(ctx, p.ID, p.Webserver, p.Content)
+	}))
+	srv.Handle(ipc.MethodConfigTemplateDelete, action(d, func(ctx context.Context, p configTemplateParams) error {
+		return d.DeleteConfigTemplate(ctx, p.ID)
+	}))
+	srv.Handle(ipc.MethodCustomConfigSave, action(d, func(ctx context.Context, p customConfigParams) error {
+		return d.SaveCustomConfig(ctx, p.Name, p.Webserver, p.Content)
+	}))
+	srv.Handle(ipc.MethodCustomConfigDelete, action(d, func(ctx context.Context, p customConfigParams) error {
+		return d.DeleteCustomConfig(ctx, p.Name, p.Webserver)
+	}))
 	srv.Handle(ipc.MethodSetAppearance, action(d, func(_ context.Context, p modeParams) error { return d.SetAppearance(p.Mode) }))
 
 	// INFO: These answer with what they made or changed, not the snapshot.
@@ -113,9 +134,15 @@ func (d *Daemon) Register(srv *ipc.Server) {
 	srv.Handle(ipc.MethodProjectSettings, handler(func(ctx context.Context, p settingsParams) (any, error) {
 		return d.UpdateSettings(ctx, p.Name, p.Settings)
 	}))
-	srv.Handle(ipc.MethodProjectCustomConfig, handler(func(ctx context.Context, p customConfigParams) (any, error) {
-		path, err := d.CustomConfig(ctx, p.Name, p.Webserver)
-		return map[string]string{"path": path}, err
+	srv.Handle(ipc.MethodCustomConfigRead, handler(func(_ context.Context, p customConfigParams) (any, error) {
+		return d.ReadCustomConfig(p.Name)
+	}))
+	srv.Handle(ipc.MethodConfigTemplateRead, handler(func(_ context.Context, p configTemplateParams) (any, error) {
+		body, err := d.ReadConfigTemplate(p.ID, p.Webserver)
+		return map[string]string{"content": body}, err
+	}))
+	srv.Handle(ipc.MethodConfigTemplateCreate, handler(func(ctx context.Context, p nameParams) (any, error) {
+		return d.CreateConfigTemplate(ctx, p.Name)
 	}))
 	srv.Handle(ipc.MethodProjectScaffold, handler(func(ctx context.Context, p scaffoldParams) (any, error) {
 		return d.Scaffold(ctx, p.Template, p.Name, p.Webserver)

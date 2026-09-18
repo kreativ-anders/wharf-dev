@@ -20,8 +20,10 @@ Future<void> main() async {
       size: Size(560, 720),
       minimumSize: Size(420, 480),
       title: 'Wharf',
+      // WARNING: No transparent backgroundColor. macOS paints the title bar
+      // with the window's background, and a clear one lets whatever sits
+      // behind the window show through the title.
       titleBarStyle: TitleBarStyle.normal,
-      backgroundColor: Colors.transparent,
     ),
     () async {
       await windowManager.show();
@@ -40,13 +42,13 @@ class WharfApp extends StatefulWidget {
 }
 
 /// Extra wharfd arguments from the environment. Only `make gui` sets this, to
-/// point the daemon at a throwaway hosts file; a user never needs it.
+/// keep the daemon from raising a password prompt; a user never needs it.
 List<String> _daemonArgsFromEnv() {
   final raw = Platform.environment['WHARFD_ARGS'] ?? '';
   return raw.split(RegExp(r'\s+')).where((a) => a.isNotEmpty).toList();
 }
 
-class _WharfAppState extends State<WharfApp> with WindowListener {
+class _WharfAppState extends State<WharfApp> with WindowListener, WidgetsBindingObserver {
   // INFO: Built once. The app rebuilds on every snapshot, and a fresh
   // ThemeData each time would be compared and resolved anew each time.
   static final _lightTheme = wharfTheme(Brightness.light);
@@ -55,11 +57,15 @@ class _WharfAppState extends State<WharfApp> with WindowListener {
   final _daemon = Daemon(daemonArgs: _daemonArgsFromEnv());
   final _navigator = GlobalKey<NavigatorState>();
   TrayController? _tray;
+  Brightness? _titleBarBrightness;
 
   @override
   void initState() {
     super.initState();
     windowManager.addListener(this);
+    WidgetsBinding.instance.addObserver(this);
+    _daemon.addListener(_syncTitleBar);
+    _syncTitleBar();
     // INFO: Closing the window leaves the tray running: this is a tray-resident app,
     // and quitting is an explicit choice in the tray menu.
     windowManager.setPreventClose(true);
@@ -110,7 +116,26 @@ class _WharfAppState extends State<WharfApp> with WindowListener {
   }
 
   @override
+  void didChangePlatformBrightness() => _syncTitleBar();
+
+  /// The native title bar follows the system appearance on its own; when
+  /// Settings picks Light or Dark, it must be told, or a dark page sits under
+  /// a light title bar.
+  void _syncTitleBar() {
+    final brightness = switch (themeModeFor(_daemon.state.appearance)) {
+      ThemeMode.light => Brightness.light,
+      ThemeMode.dark => Brightness.dark,
+      ThemeMode.system => WidgetsBinding.instance.platformDispatcher.platformBrightness,
+    };
+    if (brightness == _titleBarBrightness) return;
+    _titleBarBrightness = brightness;
+    windowManager.setBrightness(brightness);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _daemon.removeListener(_syncTitleBar);
     windowManager.removeListener(this);
     _tray?.dispose();
     _daemon.dispose();

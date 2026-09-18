@@ -3,14 +3,15 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/ipc"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/php"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/runtime"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/supervisor"
@@ -239,90 +240,139 @@ func (h *harness) countStarts(id string) int {
 	return n
 }
 
-// features/app-configuration.feature — "Custom webserver directives for one
-// project"
-func TestCustomWebserverDirectivesForOneProject(t *testing.T) {
+// saveCustomConfig saves a project's custom config for the webserver serving
+// it, starting from the rules the editor opens with and adding a line inside
+// the server block.
+func (h *harness) saveCustomConfig(name, line string) string {
+	h.t.Helper()
+	rules, err := h.d.ReadCustomConfig(name)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	body := rules.Content
+	if !rules.Exists {
+		anchor := "  root \"{{root}}\";\n"
+		if rules.Webserver == "apache" {
+			anchor = "  DocumentRoot \"{{root}}\"\n"
+		}
+		if !strings.Contains(body, anchor) {
+			h.t.Fatalf("no %q to add to in:\n%s", anchor, body)
+		}
+		body = strings.Replace(body, anchor, anchor+"  "+line+"\n", 1)
+	}
+	if err := h.d.SaveCustomConfig(h.ctx(), name, rules.Webserver, body); err != nil {
+		h.t.Fatalf("save custom config: %v", err)
+	}
+	return h.root.CustomConfig(name, rules.Webserver)
+}
+
+// features/app-configuration.feature — "A project's custom config starts from
+// its config template"
+func TestAProjectsCustomConfigStartsFromItsConfigTemplate(t *testing.T) {
 	h := newHarness(t)
 	h.mustAdd("my-kirby-site")
 	h.mustAdd("other-site")
+	h.pickTemplate("my-kirby-site", "kirby")
 
-	path, err := h.d.CustomConfig(h.ctx(), "my-kirby-site", "nginx")
-	if err != nil {
-		t.Fatalf("create custom config: %v", err)
-	}
-
-	// INFO: Then "config/vhosts/my-kirby-site.nginx.conf" is created with a
-	// commented starting point
-	if want := filepath.Join(h.root.Dir, "config", "vhosts", "my-kirby-site.nginx.conf"); path != want {
-		t.Fatalf("path = %s, want %s", path, want)
-	}
-	body, err := os.ReadFile(path)
+	// INFO: Then the editor opens on the Kirby template's nginx server block, its
+	// placeholders included
+	rules, err := h.d.ReadCustomConfig("my-kirby-site")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
-		if !strings.HasPrefix(line, "#") {
-			t.Fatalf("the starting point has a live directive %q", line)
+	if rules.Webserver != "nginx" || rules.Exists {
+		t.Fatalf("rules = %s, exists %v; want nginx's starting point", rules.Webserver, rules.Exists)
+	}
+	for _, want := range []string{
+		"started from the Kirby config template", "{{listen}}", "{{ssl}}", "server_name {{server_name}};",
+		"rewrite ^/(content|site|kirby)/(.*)$ /error last;",
+		// INFO: And a warning says Wharf fills in each {{…}} and a fixed value breaks
+		// the project
+		"Keep every {{…}}", `A fixed "listen 80;"`,
+	} {
+		if !strings.Contains(rules.Content, want) {
+			t.Fatalf("starting point lacks %q:\n%s", want, rules.Content)
 		}
 	}
-	if cc := h.project("my-kirby-site").CustomConfigs; !slices.ContainsFunc(cc, func(c CustomConfig) bool {
-		return c.Webserver == "nginx" && c.Exists && c.Active
-	}) {
-		t.Fatalf("snapshot does not show the file: %+v", cc)
+	if strings.Contains(rules.Content, "built into Wharf") {
+		t.Fatalf("the template's own header came along:\n%s", rules.Content)
 	}
 
-	// INFO: And its contents are included in "my-kirby-site"'s nginx server block
+	// INFO: And saving writes "config/vhosts/my-kirby-site.nginx.conf"
+	path := h.saveCustomConfig("my-kirby-site", "client_max_body_size 64m;")
+	if want := filepath.Join(h.root.Dir, "config", "vhosts", "my-kirby-site.nginx.conf"); path != want {
+		t.Fatalf("path = %s, want %s", path, want)
+	}
+	if c := h.project("my-kirby-site").CustomConfig; !c.Exists || c.Webserver != "nginx" || c.Path != path {
+		t.Fatalf("snapshot = %+v", c)
+	}
+	if again, _ := h.d.ReadCustomConfig("my-kirby-site"); !again.Exists || !strings.Contains(again.Content, "client_max_body_size 64m;") {
+		t.Fatalf("reading it again = %+v", again)
+	}
+
+	// INFO: And "my-kirby-site" is served with that file instead of its config
+	// template: a Kirby rule taken out of the file is gone from its block.
+	body, _ := os.ReadFile(path)
+	os.WriteFile(path, []byte(strings.Replace(string(body), "  rewrite /\\.(?!well-known/) /error last;\n", "", 1)), 0o644)
 	for _, name := range []string{"my-kirby-site", "other-site"} {
 		if err := h.d.StartProject(h.ctx(), name); err != nil {
 			t.Fatal(err)
 		}
 	}
 	conf := h.readGenerated("nginx.conf")
-	include := `include "` + filepath.ToSlash(path) + `";`
-	if !strings.Contains(vhostBlock(t, conf, "my-kirby-site.localhost"), include) {
-		t.Fatalf("custom config not included:\n%s", conf)
+	block := vhostBlock(t, conf, "my-kirby-site.localhost")
+	if !strings.Contains(block, "client_max_body_size 64m;") || strings.Contains(block, "well-known") {
+		t.Fatalf("my-kirby-site is not served with its custom config:\n%s", block)
 	}
-	// INFO: And no other project's server block includes it
-	if strings.Contains(vhostBlock(t, conf, "other-site.localhost"), "include \""+filepath.ToSlash(h.root.VhostDir())) {
-		t.Fatal("other-site includes a custom config")
+	if strings.Contains(conf, "{{") {
+		t.Fatalf("a placeholder is left:\n%s", conf)
 	}
-
-	// INFO: Asking again returns the same file and leaves the user's edits alone.
-	os.WriteFile(path, []byte("client_max_body_size 64m;\n"), 0o644)
-	if again, _ := h.d.CustomConfig(h.ctx(), "my-kirby-site", "nginx"); again != path {
-		t.Fatalf("second call returned %s", again)
-	}
-	if body, _ := os.ReadFile(path); string(body) != "client_max_body_size 64m;\n" {
-		t.Fatal("an existing custom config was overwritten")
+	// INFO: And no other project uses it
+	if strings.Contains(vhostBlock(t, conf, "other-site.localhost"), "client_max_body_size 64m;") {
+		t.Fatal("other-site got my-kirby-site's custom config")
 	}
 }
 
-// features/app-configuration.feature — "Each webserver keeps its own custom
-// config"
-func TestEachWebserverKeepsItsOwnCustomConfig(t *testing.T) {
+// features/app-configuration.feature — "A custom config belongs to the
+// webserver serving the project"
+func TestACustomConfigBelongsToTheWebserverServingTheProject(t *testing.T) {
 	h := newHarness(t)
 	h.mustAdd("my-kirby-site")
-	nginxFile, _ := h.d.CustomConfig(h.ctx(), "my-kirby-site", "nginx")
-	apacheFile, _ := h.d.CustomConfig(h.ctx(), "my-kirby-site", "apache")
+	h.pickTemplate("my-kirby-site", "kirby")
+	nginxFile := h.saveCustomConfig("my-kirby-site", "client_max_body_size 64m;")
 
+	// INFO: Then its settings offer its nginx custom config and no Apache one
+	if c := h.project("my-kirby-site").CustomConfig; c.Webserver != "nginx" || !c.Exists {
+		t.Fatalf("snapshot = %+v, want the nginx file", c)
+	}
+	rules, _ := h.d.ReadCustomConfig("my-kirby-site")
+	err := h.d.SaveCustomConfig(h.ctx(), "my-kirby-site", "apache", rules.Content)
+	var ipcErr *ipc.Error
+	if !errors.As(asIPCError(err), &ipcErr) || ipcErr.Code != ipc.CodeConflict {
+		t.Fatalf("saving an apache config for an nginx project: %v", err)
+	}
+	if _, err := os.Stat(h.root.CustomConfig("my-kirby-site", "apache")); !os.IsNotExist(err) {
+		t.Fatal("an apache config was written")
+	}
+
+	// INFO: When "my-kirby-site" is switched to apache
 	apache := "apache"
 	if _, err := h.d.UpdateSettings(h.ctx(), "my-kirby-site", Settings{Webserver: &apache}); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
-		t.Fatal(err)
+	// INFO: Then "Customize…" starts from its config template's Apache rules
+	if c := h.project("my-kirby-site").CustomConfig; c.Webserver != "apache" || c.Exists {
+		t.Fatalf("snapshot = %+v, want apache's, not yet created", c)
+	}
+	rules, err = h.d.ReadCustomConfig("my-kirby-site")
+	if err != nil || rules.Webserver != "apache" || rules.Exists || !strings.Contains(rules.Content, "<VirtualHost {{listen}}>") {
+		t.Fatalf("rules = %+v, %v", rules, err)
 	}
 
-	// INFO: Then only the apache config is included
-	conf := h.readGenerated("project-my-kirby-site-apache.conf")
-	if !strings.Contains(conf, `Include "`+filepath.ToSlash(apacheFile)+`"`) {
-		t.Fatalf("apache config not included:\n%s", conf)
+	// INFO: And the nginx file is kept, and used again once nginx serves it
+	if _, err := os.Stat(nginxFile); err != nil {
+		t.Fatalf("the nginx file is gone: %v", err)
 	}
-	if strings.Contains(conf, filepath.ToSlash(nginxFile)) {
-		t.Fatal("the nginx file is included in apache's config")
-	}
-
-	// INFO: And switching it back to "nginx" includes only the nginx config
 	cleared := ""
 	if _, err := h.d.UpdateSettings(h.ctx(), "my-kirby-site", Settings{Webserver: &cleared}); err != nil {
 		t.Fatal(err)
@@ -330,9 +380,93 @@ func TestEachWebserverKeepsItsOwnCustomConfig(t *testing.T) {
 	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
 		t.Fatal(err)
 	}
+	if !strings.Contains(vhostBlock(t, h.readGenerated("nginx.conf"), "my-kirby-site.localhost"), "client_max_body_size 64m;") {
+		t.Fatal("the nginx file is not used once nginx serves the project again")
+	}
+}
+
+// features/app-configuration.feature — "A custom config keeps Wharf's
+// placeholders"
+func TestACustomConfigKeepsWharfsPlaceholders(t *testing.T) {
+	h := newHarness(t)
+	h.mustAdd("my-kirby-site")
+	h.mustAdd("other-site")
+	for _, name := range []string{"my-kirby-site", "other-site"} {
+		if err := h.d.StartProject(h.ctx(), name); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// INFO: When the user saves a custom config with a fixed port in place of
+	// {{listen}}
+	rules, _ := h.d.ReadCustomConfig("my-kirby-site")
+	fixed := strings.Replace(rules.Content, "  {{listen}}\n", "  listen 8080;\n", 1)
+	err := h.d.SaveCustomConfig(h.ctx(), "my-kirby-site", "nginx", fixed)
+
+	// INFO: Then the save is refused, naming each placeholder that is missing
+	var ipcErr *ipc.Error
+	if !errors.As(asIPCError(err), &ipcErr) || ipcErr.Code != ipc.CodeBadRequest ||
+		!strings.Contains(err.Error(), "{{listen}}") || strings.Contains(err.Error(), "{{ssl}}") {
+		t.Fatalf("saving without {{listen}}: %v", err)
+	}
+	path := h.root.CustomConfig("my-kirby-site", "nginx")
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("the refused rules were saved")
+	}
+
+	// INFO: And a file edited in another editor without them keeps
+	// "my-kirby-site" from starting, naming the file
+	os.MkdirAll(filepath.Dir(path), 0o755)
+	if err := os.WriteFile(path, []byte(fixed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h.d.ApplyCustomConfigs(h.ctx())
+	p := h.project("my-kirby-site")
+	if p.State != string(supervisor.StateFailed) || !strings.Contains(p.Error, filepath.ToSlash(path)) ||
+		!strings.Contains(p.Error, "{{listen}}") {
+		t.Fatalf("my-kirby-site = %q %q", p.State, p.Error)
+	}
+	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err == nil || !strings.Contains(err.Error(), "{{listen}}") {
+		t.Fatalf("starting it again: %v", err)
+	}
+
+	// INFO: And every other project keeps being served
+	if !h.sup.Running(runtimeWebserverID) || h.project("other-site").State != string(supervisor.StateRunning) {
+		t.Fatal("the front door went down with it")
+	}
+	conf := h.readGenerated("nginx.conf")
+	if strings.Contains(conf, "listen 8080;") || strings.Contains(conf, "server_name my-kirby-site.localhost;") {
+		t.Fatalf("the broken rules reached the front door:\n%s", conf)
+	}
+}
+
+// features/app-configuration.feature — "Removing a custom config returns to
+// the config template"
+func TestRemovingACustomConfigReturnsToTheConfigTemplate(t *testing.T) {
+	h := newHarness(t)
+	h.mustAdd("my-kirby-site")
+	h.pickTemplate("my-kirby-site", "kirby")
+	path := h.saveCustomConfig("my-kirby-site", "client_max_body_size 64m;")
+	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
+		t.Fatal(err)
+	}
+
+	// INFO: When the user chooses "Use config template" in the editor and confirms
+	if err := h.d.DeleteCustomConfig(h.ctx(), "my-kirby-site", "nginx"); err != nil {
+		t.Fatal(err)
+	}
+
+	// INFO: Then "config/vhosts/my-kirby-site.nginx.conf" is deleted
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("the file is still there: %v", err)
+	}
+	if h.project("my-kirby-site").CustomConfig.Exists {
+		t.Fatal("the snapshot still shows the file")
+	}
+	// INFO: And "my-kirby-site" is served with its config template again
 	block := vhostBlock(t, h.readGenerated("nginx.conf"), "my-kirby-site.localhost")
-	if !strings.Contains(block, filepath.ToSlash(nginxFile)) || strings.Contains(block, filepath.ToSlash(apacheFile)) {
-		t.Fatalf("want only the nginx file included:\n%s", block)
+	if strings.Contains(block, "client_max_body_size 64m;") || !strings.Contains(block, "rewrite ^/(content|site|kirby)/(.*)$ /error last;") {
+		t.Fatalf("not served with the Kirby template again:\n%s", block)
 	}
 }
 
@@ -343,20 +477,19 @@ func TestSavingACustomConfigAppliesIt(t *testing.T) {
 	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
 		t.Fatal(err)
 	}
-	path, err := h.d.CustomConfig(h.ctx(), "my-kirby-site", "nginx")
-	if err != nil {
-		t.Fatal(err)
-	}
+	path := h.saveCustomConfig("my-kirby-site", "client_max_body_size 64m;")
 	before := h.countStarts(runtimeWebserverID)
 
-	// INFO: Nothing changed since the file was created: no restart.
+	// INFO: Nothing changed since the file was saved: no restart.
 	h.d.ApplyCustomConfigs(h.ctx())
 	if got := h.countStarts(runtimeWebserverID); got != before {
 		t.Fatalf("an unchanged file restarted the webserver (%d → %d)", before, got)
 	}
 
 	// INFO: When the user saves a change to that file
-	if err := os.WriteFile(path, []byte("client_max_body_size 64m;\n"), 0o644); err != nil {
+	body, _ := os.ReadFile(path)
+	changed := strings.Replace(string(body), "client_max_body_size 64m;", "client_max_body_size 128m;", 1)
+	if err := os.WriteFile(path, []byte(changed), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	later := time.Now().Add(2 * time.Second)
@@ -370,6 +503,9 @@ func TestSavingACustomConfigAppliesIt(t *testing.T) {
 	if !h.sup.Running(runtimeWebserverID) {
 		t.Fatal("webserver not running after the restart")
 	}
+	if !strings.Contains(h.readGenerated("nginx.conf"), "client_max_body_size 128m;") {
+		t.Fatal("the restarted webserver does not have the change")
+	}
 }
 
 // features/app-configuration.feature — "A custom config the webserver
@@ -380,15 +516,13 @@ func TestACustomConfigTheWebserverRefusesNamesTheProblem(t *testing.T) {
 	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
 		t.Fatal(err)
 	}
-	path, err := h.d.CustomConfig(h.ctx(), "my-kirby-site", "nginx")
-	if err != nil {
-		t.Fatal(err)
-	}
+	path := h.saveCustomConfig("my-kirby-site", "client_max_body_size 64m;")
 
 	// INFO: When the user saves a change that nginx refuses to start with
-	complaint := `"server" directive is not allowed here in ` + path + `:17`
+	complaint := `unknown directive "client_max_body" in ` + path + `:17`
 	h.runner.Refuse[runtimeWebserverID] = "2026/09/11 10:13:20 [emerg] 71176#0: " + complaint + "\n"
-	os.WriteFile(path, []byte("server {\n  listen 8080;\n}\n"), 0o644)
+	body, _ := os.ReadFile(path)
+	os.WriteFile(path, []byte(strings.Replace(string(body), "client_max_body_size", "client_max_body", 1)), 0o644)
 	later := time.Now().Add(2 * time.Second)
 	os.Chtimes(path, later, later)
 

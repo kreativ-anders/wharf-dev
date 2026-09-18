@@ -1,9 +1,16 @@
+import 'dart:ffi' show Abi;
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 import '../daemon.dart';
 import '../folders.dart';
+import '../ipc/endpoint.dart';
 import '../models/state.dart';
 import '../theme.dart';
+import 'config_editor.dart';
 
 /// The settings pages, in the order the navigation lists them. A roadmap
 /// service — a database, mail, another runtime — becomes one more entry
@@ -109,8 +116,11 @@ class _SettingsPageState extends State<SettingsPage> {
         _SectionHeader('Config file'),
         _ConfigSection(daemon: daemon, config: state.config),
         const SizedBox(height: 28),
-        _SectionHeader('Version'),
-        _VersionSection(version: state.version),
+        _SectionHeader('About'),
+        _AboutSection(daemon: daemon, state: state),
+        const SizedBox(height: 28),
+        _SectionHeader('Help'),
+        _HelpSection(state: state),
         const SizedBox(height: 28),
         _SectionHeader('Reset'),
         _ResetSection(daemon: daemon),
@@ -118,6 +128,9 @@ class _SettingsPageState extends State<SettingsPage> {
       SettingsSection.webserver => [
         _SectionHeader('Webserver'),
         _WebserverSection(webserver: services.webserver, daemon: daemon),
+        const SizedBox(height: 28),
+        _SectionHeader('Config templates'),
+        _ConfigTemplatesSection(daemon: daemon, templates: state.configTemplates),
       ],
       SettingsSection.php => [
         _SectionHeader('PHP runtime'),
@@ -129,10 +142,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _SectionHeader('Terminal'),
         _PhpTerminalSection(daemon: daemon, php: services.php),
       ],
-      SettingsSection.ssl => [
-        _SectionHeader('SSL'),
-        _SslSection(daemon: daemon, ssl: state.ssl),
-      ],
+      SettingsSection.ssl => [_SectionHeader('SSL'), _SslSection(daemon: daemon, ssl: state.ssl)],
     };
   }
 }
@@ -331,14 +341,62 @@ class _ConfigSection extends StatelessWidget {
   }
 }
 
-/// The running version, selectable for a bug report, and the update check
-/// that is not built yet (features/settings.feature, "General shows the
-/// version, and no update check yet"). The button is shown disabled rather
+/// The running version and where it runs: the version, selectable for a
+/// bug report, the update check that is not built yet (features/settings.feature,
+/// "General shows the version, and no update check yet") and the Wharf folder in
+/// use ("General names the Wharf folder in use"). The update button is shown disabled rather
 /// than left out, and the note says why, so nobody goes looking for it.
-class _VersionSection extends StatelessWidget {
-  const _VersionSection({required this.version});
+class _AboutSection extends StatelessWidget {
+  const _AboutSection({required this.daemon, required this.state});
 
-  final String version;
+  final Daemon daemon;
+  final WharfState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final small = Theme.of(context).textTheme.bodySmall;
+    final unusual = state.root.isNotEmpty && state.root != usualWharfFolder();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SelectableText(state.version.isEmpty ? 'Version unknown' : 'Wharf ${state.version}'),
+          const SizedBox(height: 4),
+          Text(
+            'Wharf does not check for updates yet. When it does, it will only look when you ask.',
+            style: small,
+          ),
+          const SizedBox(height: 12),
+          const OutlinedButton(onPressed: null, child: Text('Check for updates')),
+          const SizedBox(height: 20),
+          Text('Wharf folder', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 4),
+          SelectableText(state.root.isEmpty ? 'Unknown' : state.root),
+          if (unusual) ...[
+            const SizedBox(height: 4),
+            Text('Not the usual ${usualWharfFolder()}: WHARF_ROOT points here.', style: small),
+          ],
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: state.root.isEmpty ? null : () => daemon.open(openFolder, state.root),
+            icon: const Icon(Icons.folder_open, size: 16),
+            label: const Text('Open Wharf folder'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Where to go when something is wrong: the repository, where issues are
+/// reported, and the debug information a report needs
+/// (features/settings.feature, "Help links to the repository", "Copying debug
+/// information").
+class _HelpSection extends StatelessWidget {
+  const _HelpSection({required this.state});
+
+  final WharfState state;
 
   @override
   Widget build(BuildContext context) {
@@ -347,18 +405,82 @@ class _VersionSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SelectableText(version.isEmpty ? 'Version unknown' : 'Wharf $version'),
-          const SizedBox(height: 4),
           Text(
-            'Wharf does not check for updates yet. When it does, it will only look when you ask.',
+            'Report a problem on GitHub. The debug information tells what Wharf runs with; '
+            'Wharf sends it nowhere, you paste it where you like.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
-          const SizedBox(height: 12),
-          const OutlinedButton(onPressed: null, child: Text('Check for updates')),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => openLink(repositoryUrl),
+                icon: const Icon(Icons.open_in_new, size: 16),
+                label: const Text('Wharf on GitHub'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _copy(context),
+                icon: const Icon(Icons.copy, size: 16),
+                label: const Text('Copy debug information'),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
+
+  Future<void> _copy(BuildContext context) async {
+    await Clipboard.setData(ClipboardData(text: debugInformation(state)));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Debug information copied.')));
+  }
+}
+
+/// Wharf's repository, where issues are reported.
+const repositoryUrl = 'https://github.com/kreativ-anders/wharf-dev';
+
+/// How web links are opened. A variable so widget tests can see what would
+/// have been opened without a browser appearing.
+Future<void> Function(String url) openLink = launchUrlString;
+
+/// ~/Wharf, as this machine spells it. A variable so widget tests do not
+/// depend on the home folder of whoever runs them.
+String Function() usualWharfFolder = usualRoot;
+
+/// What "Copy debug information" puts on the clipboard: plain text for a bug
+/// report, sent nowhere by Wharf (features/settings.feature, "Copying debug
+/// information").
+String debugInformation(WharfState state, {String? system, String? architecture}) {
+  final php = state.services.php;
+  final phpFull = php.installs
+      .where((i) => i.version == php.version && i.fullVersion.isNotEmpty)
+      .map((i) => i.fullVersion)
+      .firstOrNull;
+  final web = state.services.webserver;
+  final server = web.servers.where((s) => s.name == web.active).firstOrNull;
+  final webVersion = server == null || !server.installed
+      ? ' (not installed)'
+      : server.version.isEmpty
+      ? ''
+      : ' ${server.version}';
+  final ssl = !state.ssl.installed
+      ? 'mkcert not installed'
+      : state.ssl.trusted
+      ? 'trusted'
+      : 'not trusted';
+  return [
+    'Wharf ${state.version.isEmpty ? 'unknown' : state.version}',
+    'System: ${system ?? '${Platform.operatingSystem} ${Platform.operatingSystemVersion}'}',
+    'Architecture: ${architecture ?? Abi.current()}',
+    'Wharf folder: ${state.root.isEmpty ? 'unknown' : state.root}',
+    'Webserver: ${web.active.isEmpty ? 'none' : '${web.active}$webVersion'}',
+    'PHP: ${php.version.isEmpty ? 'none' : phpFull ?? '${php.version} (not installed)'}',
+    'SSL: $ssl',
+  ].join('\n');
 }
 
 /// The default webserver. "Stopped" on its own reads as broken when it only
@@ -440,8 +562,9 @@ class _WebserverSection extends StatelessWidget {
 
   /// Name and version. Where the copy came from is left out: the answer
   /// differs per platform and changes nothing the user does.
-  String _title(Server server) =>
-      !server.installed || server.version.isEmpty ? server.name : '${server.name} ${server.version}';
+  String _title(Server server) => !server.installed || server.version.isEmpty
+      ? server.name
+      : '${server.name} ${server.version}';
 
   String _describe(Server server) {
     if (server.installing) return 'Installing…';
@@ -451,11 +574,138 @@ class _WebserverSection extends StatelessWidget {
       return '$expected\n${server.installHint}';
     }
     if (server.name != webserver.active) {
-      return server.projects.isEmpty ? 'Not used by any project' : 'Used by projects that choose it';
+      return server.projects.isEmpty
+          ? 'Not used by any project'
+          : 'Used by projects that choose it';
     }
     if (webserver.switching) return 'switching webserver…';
     if (webserver.isRunning) return 'Running';
     return 'Starts with the first project';
+  }
+}
+
+/// The config templates: Wharf's own for common CMS and frameworks, then the
+/// user's. Each opens in Wharf's editor; a changed built-in one can be
+/// restored, the user's own deleted (features/config-templates.feature).
+class _ConfigTemplatesSection extends StatelessWidget {
+  const _ConfigTemplatesSection({required this.daemon, required this.templates});
+
+  final Daemon daemon;
+  final List<ConfigTemplate> templates;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).textTheme.bodySmall;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
+          child: Text(
+            'The nginx and Apache rules a kind of project needs. A project picks one in its '
+            'settings; without one, the webserver\'s own defaults apply.',
+            style: muted,
+          ),
+        ),
+        for (final template in templates)
+          ListTile(
+            title: Text(template.name),
+            subtitle: Text(_describe(template)),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (template.changed && template.builtin)
+                  Tooltip(
+                    message: 'Restore Wharf\'s rules for ${template.name}',
+                    child: TextButton(
+                      onPressed: () => _confirm(
+                        context,
+                        title: 'Restore ${template.name}?',
+                        body: 'Your changes are deleted and Wharf\'s own rules apply again.',
+                        action: 'Restore',
+                        then: () => daemon.deleteConfigTemplate(template.id),
+                      ),
+                      child: const Text('Restore'),
+                    ),
+                  ),
+                if (!template.builtin)
+                  Tooltip(
+                    message: 'Delete ${template.name}',
+                    child: TextButton(
+                      onPressed: () => _confirm(
+                        context,
+                        title: 'Delete ${template.name}?',
+                        body: 'Its nginx and Apache rules are deleted.',
+                        action: 'Delete',
+                        then: () => daemon.deleteConfigTemplate(template.id),
+                      ),
+                      child: const Text('Delete'),
+                    ),
+                  ),
+                Tooltip(
+                  message: 'Edit ${template.name}',
+                  child: TextButton(
+                    onPressed: () => showConfigTemplateEditor(context, daemon, template),
+                    child: const Text('Edit'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+          child: OutlinedButton.icon(
+            onPressed: () => showNewConfigTemplate(context, daemon),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('New template…'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Where it comes from and who uses it, in words: "changed" is never told
+  /// by colour alone.
+  String _describe(ConfigTemplate template) {
+    final origin = !template.builtin
+        ? 'Yours'
+        : template.changed
+        ? 'Built in · changed'
+        : 'Built in';
+    return template.projects.isEmpty ? origin : '$origin · used by ${template.projects.join(', ')}';
+  }
+
+  Future<void> _confirm(
+    BuildContext context, {
+    required String title,
+    required String body,
+    required String action,
+    required Future<void> Function() then,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () {
+              FocusManager.instance.primaryFocus?.unfocus();
+              Navigator.pop(context, false);
+            },
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              FocusManager.instance.primaryFocus?.unfocus();
+              Navigator.pop(context, true);
+            },
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await then();
   }
 }
 
@@ -775,7 +1025,9 @@ class _PhpTerminalSection extends StatelessWidget {
         SwitchListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 24),
           title: const Text('Use in terminal'),
-          subtitle: Text('Terminals and editors run PHP ${php.version} as php, from ${terminal.dir}.'),
+          subtitle: Text(
+            'Terminals and editors run PHP ${php.version} as php, from ${terminal.dir}.',
+          ),
           value: terminal.on,
           onChanged: daemon.state.busy ? null : daemon.setPhpTerminal,
         ),
@@ -925,8 +1177,8 @@ class _SectionHeader extends StatelessWidget {
   );
 }
 
-/// Starting over, behind a warning that names what goes and what stays
-/// (features/settings.feature, "Reset asks first").
+/// Starting over, behind a warning that says in plain words what goes and
+/// what stays (features/settings.feature, "Reset asks first").
 class _ResetSection extends StatelessWidget {
   const _ResetSection({required this.daemon});
   final Daemon daemon;
@@ -941,8 +1193,8 @@ class _ResetSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Deletes every project in www/ and all configuration. Downloaded PHP '
-            'versions and webservers are kept.',
+            'Deletes all settings and forgets every project. Project folders, '
+            'downloaded PHP versions and webservers are kept.',
             style: muted,
           ),
           const SizedBox(height: 12),
@@ -960,78 +1212,96 @@ class _ResetSection extends StatelessWidget {
   }
 }
 
-/// Resets only once the user has seen, by name, every folder that is deleted
-/// and every folder that is kept.
+/// Resets once the user has read what goes and what stays. The folders in
+/// www/ are the user's own work: they go only when the box is ticked, and
+/// then every one of them is named first.
 Future<void> _confirmReset(BuildContext context, Daemon daemon) async {
   final state = daemon.state;
-  final deleted = [
+  final inWww = [
     for (final p in state.projects)
       if (!p.linked) p.name,
     ...state.unregistered,
   ];
-  final kept = [
+  final elsewhere = [
     for (final p in state.projects)
       if (p.linked) p,
   ];
+  var deleteProjects = false;
   final confirmed = await showDialog<bool>(
     context: context,
-    builder: (context) {
-      final theme = Theme.of(context);
-      final muted = theme.textTheme.bodySmall;
-      return AlertDialog(
-        title: const Text('Reset Wharf?'),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Everything stops, and Wharf starts over as on its first start.'),
-                const SizedBox(height: 16),
-                if (deleted.isEmpty)
-                  const Text('There are no folders in www/ to delete.')
-                else ...[
-                  Text(
-                    'These folders in ${state.www} are deleted, with everything in them:',
-                    style: theme.textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 4),
-                  for (final name in deleted) Text('•  $name'),
-                ],
-                if (kept.isNotEmpty) ...[
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) {
+        final theme = Theme.of(context);
+        final muted = theme.textTheme.bodySmall;
+        final heading = theme.textTheme.titleSmall;
+        return AlertDialog(
+          title: const Text('Reset Wharf?'),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Everything stops, and Wharf starts over as on its first start.'),
                   const SizedBox(height: 16),
-                  Text(
-                    'Added from elsewhere — removed from Wharf, but left where they are:',
-                    style: theme.textTheme.titleSmall,
-                  ),
+                  Text('Deleted', style: heading),
                   const SizedBox(height: 4),
-                  for (final p in kept) Text('•  ${p.name}  (${p.dir})'),
+                  const Text('•  Your settings, custom webserver configs and php.ini'),
+                  const Text('•  Certificates, generated files and logs'),
+                  Text('In ${state.config}', style: muted),
+                  const SizedBox(height: 16),
+                  Text('Kept', style: heading),
+                  const SizedBox(height: 4),
+                  const Text('•  Downloaded PHP versions and webservers'),
+                  if (!deleteProjects && inWww.isNotEmpty)
+                    Text(
+                      '•  Your project folders in ${state.www} — Wharf forgets them, the files stay',
+                    ),
+                  for (final p in elsewhere)
+                    Text('•  ${p.name}  (${p.dir}) — Wharf forgets it, the files stay'),
+                  if (inWww.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      value: deleteProjects,
+                      onChanged: (v) => setState(() => deleteProjects = v ?? false),
+                      title: const Text('Also delete the projects in www/'),
+                    ),
+                    if (deleteProjects) ...[
+                      Text(
+                        'These folders in ${state.www} are deleted, with everything in them:',
+                        style: heading?.copyWith(color: theme.colorScheme.error),
+                      ),
+                      const SizedBox(height: 4),
+                      for (final name in inWww) Text('•  $name'),
+                    ],
+                  ],
+                  const SizedBox(height: 16),
+                  Text('No password is needed.', style: muted),
                 ],
-                const SizedBox(height: 16),
-                Text(
-                  'Everything in ${state.config} goes too — settings, custom webserver '
-                  'configs, php.ini — along with certificates, generated files and logs. '
-                  'Downloaded PHP versions and webservers are kept.',
-                  style: muted,
-                ),
-              ],
+              ),
             ),
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: theme.colorScheme.error,
-              foregroundColor: theme.colorScheme.onError,
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: theme.colorScheme.error,
+                foregroundColor: theme.colorScheme.onError,
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(
+                deleteProjects
+                    ? 'Delete ${inWww.length} ${inWww.length == 1 ? 'folder' : 'folders'} and reset'
+                    : 'Reset',
+              ),
             ),
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(deleted.isEmpty ? 'Reset' : 'Delete and reset'),
-          ),
-        ],
-      );
-    },
+          ],
+        );
+      },
+    ),
   );
-  if (confirmed == true) await daemon.reset();
+  if (confirmed == true) await daemon.reset(deleteProjects: deleteProjects);
 }

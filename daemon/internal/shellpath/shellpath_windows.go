@@ -90,6 +90,9 @@ func (userEnvironment) Where(dir string) []string {
 // a file name holding & or | without quoting it for cmd can have part of the
 // name run as a command; Ctrl+C also asks "Terminate batch job". Only a php.exe
 // of Wharf's own would avoid both (dev/architecture.md §4).
+//
+// TODO(php-shim): replace php.cmd with a php.exe that runs the default PHP
+// directly, once Windows packaging can build and ship a second binary.
 func link(dir, target string) error {
 	path := linkPath(dir)
 	if target == "" {

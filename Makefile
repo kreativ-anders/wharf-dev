@@ -64,11 +64,10 @@ cross:
 	done
 
 # INFO: Run the daemon against a throwaway root with elevation disabled, so no
-# password prompt is raised and the real /etc/hosts is never touched.
+# password prompt is raised.
 run: build
 	@mkdir -p $(BUILD)/dev/root
-	@printf '127.0.0.1\tlocalhost\n' > $(BUILD)/dev/hosts
-	./$(BUILD)/wharfd --root $(BUILD)/dev/root --hosts $(BUILD)/dev/hosts \
+	./$(BUILD)/wharfd --root $(BUILD)/dev/root \
 		--elevator direct --socket /tmp/wharf-dev.sock --log-level debug
 
 # ---------------------------------------------------------------------- GUI
@@ -87,17 +86,15 @@ gui-e2e: build
 	cd gui && $(FLUTTER) test --tags e2e
 
 # INFO: Launch the app against a throwaway root. The app starts its own daemon, as
-# it does for a user; WHARFD_ARGS only points that daemon at a scratch hosts
-# file with elevation disabled, so nothing real is touched.
+# it does for a user; WHARFD_ARGS only disables elevation, so no password
+# prompt is raised.
 DEV_ROOT := $(PWD)/$(BUILD)/dev/root
-DEV_HOSTS := $(PWD)/$(BUILD)/dev/hosts
 FLUTTER_DEVICE ?= $(shell uname | tr 'A-Z' 'a-z' | sed 's/darwin/macos/')
 
 gui: build
 	@mkdir -p $(DEV_ROOT)/www
-	@printf '127.0.0.1\tlocalhost\n' > $(DEV_HOSTS)
 	cd gui && WHARF_ROOT=$(DEV_ROOT) \
-		WHARFD_ARGS="--hosts $(DEV_HOSTS) --elevator direct" \
+		WHARFD_ARGS="--elevator direct" \
 		$(FLUTTER) run -d $(FLUTTER_DEVICE)
 
 # ------------------------------------------------------------------ release

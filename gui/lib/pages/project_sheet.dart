@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher_string.dart';
 import '../daemon.dart';
 import '../folders.dart';
 import '../models/state.dart';
+import 'config_editor.dart';
 
 /// Per-project settings live behind a tap on the project, never on the main
 /// list — progressive disclosure, not a wall of settings up front
@@ -44,6 +45,7 @@ class _ProjectSheet extends StatelessWidget {
     final php = daemon.state.services.php;
     final webserver = daemon.state.services.webserver;
     final ssl = daemon.state.ssl;
+    final templates = daemon.state.configTemplates;
     final muted = Theme.of(context).textTheme.bodySmall;
 
     return SafeArea(
@@ -139,6 +141,39 @@ class _ProjectSheet extends StatelessWidget {
                 ),
               ),
             ),
+            // INFO: The rules one kind of project needs; "None" leaves the
+            // webserver's own defaults (features/config-templates.feature).
+            _Row(
+              label: 'Config template',
+              child: DropdownButton<String>(
+                value: project.template.isEmpty || templates.any((t) => t.id == project.template)
+                    ? project.template
+                    : null,
+                hint: Text('${project.template} (missing)'),
+                underline: const SizedBox.shrink(),
+                items: [
+                  const DropdownMenuItem(value: '', child: Text('None')),
+                  for (final t in templates) DropdownMenuItem(value: t.id, child: Text(t.name)),
+                ],
+                onChanged: (v) => daemon.updateSettings(project.name, template: v ?? ''),
+              ),
+            ),
+            // INFO: Only the webserver serving the project has a custom config to
+            // offer: an Apache config on an nginx project would never be used
+            // (features/app-configuration.feature, "A custom config belongs to
+            // the webserver serving the project").
+            _Row(
+              label: 'Custom ${_serverLabel(project.webserver)} config',
+              child: TextButton(
+                onPressed: () => showCustomConfigEditor(context, daemon, project),
+                child: Text(project.customConfig.exists ? 'Edit…' : 'Customize…'),
+              ),
+            ),
+            if (project.customConfig.exists)
+              Text(
+                'Used instead of the config template while ${_serverLabel(project.webserver)} serves it.',
+                style: muted,
+              ),
             _Row(
               label: 'SSL',
               child: Switch(
@@ -170,30 +205,6 @@ class _ProjectSheet extends StatelessWidget {
               ),
 
             const SizedBox(height: 20),
-            Text('Custom webserver config', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 4),
-            Text(
-              'Your own directives, added to this project\'s server block. '
-              'Each webserver has its own file; saving it applies the change.',
-              style: muted,
-            ),
-            // INFO: The file in use comes first: a project just created on a chosen
-            // webserver opens here, one click from that webserver's config
-            // (features/quick-app-php.feature).
-            for (final custom in [
-              ...project.customConfigs.where((c) => c.active),
-              ...project.customConfigs.where((c) => !c.active),
-            ])
-              _Row(
-                label: custom.active ? '${custom.webserver} · in use' : custom.webserver,
-                child: TextButton(
-                  onPressed: () =>
-                      daemon.editCustomConfig(project.name, custom.webserver, editFile),
-                  child: Text(custom.exists ? 'Edit' : 'Create'),
-                ),
-              ),
-
-            const SizedBox(height: 20),
             Text('Logs', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 4),
             // INFO: This project's requests and errors alone, PHP's warnings
@@ -210,7 +221,9 @@ class _ProjectSheet extends StatelessWidget {
                   ),
                 ),
                 TextButton.icon(
-                  onPressed: project.logDir.isEmpty ? null : () => daemon.open(openFolder, project.logDir),
+                  onPressed: project.logDir.isEmpty
+                      ? null
+                      : () => daemon.open(openFolder, project.logDir),
                   icon: const Icon(Icons.article_outlined, size: 16),
                   label: const Text('Open logs'),
                 ),
@@ -251,18 +264,12 @@ class _ProjectSheet extends StatelessWidget {
       builder: (_) => AlertDialog(
         title: Text('Remove ${project.name}?'),
         content: Text(
-          'The project is unregistered and its hosts entry removed. '
+          'The project is unregistered. '
           'Its folder${project.linked ? ' (${project.dir})' : ' in www/'} is left untouched.',
         ),
         actions: [
-          TextButton(
-            onPressed: () => _closeDialog(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => _closeDialog(context, true),
-            child: const Text('Remove'),
-          ),
+          TextButton(onPressed: () => _closeDialog(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => _closeDialog(context, true), child: const Text('Remove')),
         ],
       ),
     );
@@ -277,6 +284,8 @@ void _closeDialog<T extends Object?>(BuildContext context, [T? result]) {
   FocusManager.instance.primaryFocus?.unfocus();
   Navigator.pop(context, result);
 }
+
+String _serverLabel(String server) => server == 'apache' ? 'Apache' : server;
 
 class _Row extends StatelessWidget {
   const _Row({required this.label, required this.child});

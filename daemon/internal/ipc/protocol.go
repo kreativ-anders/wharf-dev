@@ -57,11 +57,24 @@ const (
 	MethodProjectRestart  = "projects.restart"
 	MethodProjectSettings = "projects.settings"
 	MethodProjectScaffold = "projects.scaffold"
-	// MethodProjectCustomConfig creates a project's custom webserver config
-	// if needed and returns its path, for the GUI to open.
-	MethodProjectCustomConfig = "projects.customConfig"
+
+	// A project's custom config, for the webserver serving it
+	// (app-configuration.feature). Read answers with its rules — or, while it
+	// has none, its config template's to start from; Save and Delete with the
+	// snapshot.
+	MethodCustomConfigRead   = "projects.customConfig.read"
+	MethodCustomConfigSave   = "projects.customConfig.save"
+	MethodCustomConfigDelete = "projects.customConfig.delete"
 
 	MethodTemplates = "templates.list"
+
+	// Config templates (config-templates.feature). Read answers with the
+	// rules for one webserver, Create with the new template; Save and Delete
+	// — which restores a built-in one — with the snapshot.
+	MethodConfigTemplateRead   = "configTemplates.read"
+	MethodConfigTemplateSave   = "configTemplates.save"
+	MethodConfigTemplateCreate = "configTemplates.create"
+	MethodConfigTemplateDelete = "configTemplates.delete"
 )
 
 // Event names pushed from daemon to every connected client.

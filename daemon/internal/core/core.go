@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -15,7 +14,6 @@ import (
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/certs"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/config"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/elevate"
-	"github.com/kreativ-anders/wharf-dev/daemon/internal/hostsfile"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/layout"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/php"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/project"
@@ -34,7 +32,6 @@ type Daemon struct {
 	root  layout.Root
 	store *config.Store
 	sup   *supervisor.Supervisor
-	hosts *hostsfile.Manager
 	res   *wruntime.Resolver
 	certs certs.Issuer
 	scaf  *project.Scaffolder
@@ -96,6 +93,7 @@ type Daemon struct {
 	// shell puts bin/path on the user's PATH (php-terminal.feature), and
 	// terminalPlaces is where it last did.
 	shell          shellpath.Registrar
+	noTerminal     bool
 	terminalPlaces atomic.Pointer[[]string]
 	// linkTarget is the binary bin/path's php runs, as last linked; linkSynced
 	// is false until the link was first brought in line. Both guarded by linkMu.
@@ -113,7 +111,6 @@ type Options struct {
 	Store      *config.Store
 	Supervisor *supervisor.Supervisor
 	Elevator   elevate.Elevator
-	HostsPath  string
 	Certs      certs.Issuer
 	Fetcher    project.Fetcher
 	// Detector finds PHP installations. The default one probes the machine;
@@ -130,7 +127,12 @@ type Options struct {
 	// user's shell startup files, or the user environment on Windows; tests
 	// supply one that remembers instead.
 	ShellPath shellpath.Registrar
-	Log       *slog.Logger
+	// NoTerminal leaves "Use in terminal" off at a first start. A Wharf folder
+	// made only for a test run sets it: switched on, it would take the
+	// terminal PATH from the user's real Wharf folder (php-terminal.feature,
+	// "Use in terminal is on from the first start").
+	NoTerminal bool
+	Log        *slog.Logger
 	// Now fixes the clock used to judge PHP support status.
 	Now func() time.Time
 	// Version is what wharfd was built as, published in the snapshot so the
@@ -162,10 +164,6 @@ func New(opts Options) (*Daemon, error) {
 	el := opts.Elevator
 	if el == nil {
 		el = elevate.System()
-	}
-	hosts := &hostsfile.Manager{Path: opts.HostsPath, Elevator: el}
-	if hosts.Path == "" {
-		hosts.Path = hostsfile.SystemPath()
 	}
 	issuer := opts.Certs
 	if issuer == nil {
@@ -220,7 +218,6 @@ func New(opts Options) (*Daemon, error) {
 		root:         opts.Root,
 		store:        store,
 		sup:          sup,
-		hosts:        hosts,
 		res:          wruntime.New(opts.Root),
 		certs:        issuer,
 		scaf:         scaf,
@@ -236,6 +233,7 @@ func New(opts Options) (*Daemon, error) {
 		log:          opts.Log,
 		version:      opts.Version,
 		shell:        shell,
+		noTerminal:   opts.NoTerminal,
 	}
 	d.setTerminalPlaces(nil)
 	d.res.Installs = d.WebInstalls
@@ -306,6 +304,10 @@ func (d *Daemon) FirstRunSetup(ctx context.Context) error {
 		}
 		c.Services.PHP.Version = chosen
 		c.Services.PHP.Available = usable
+		// INFO: On from the first start, so "php" in a new terminal is the PHP
+		// projects are served with (php-terminal.feature). New and Reset put
+		// bin/path on PATH once this is written.
+		c.Services.PHP.Terminal = !d.noTerminal
 		if len(paths) > 0 {
 			c.Services.PHP.Paths = paths
 		}
@@ -412,13 +414,14 @@ func (d *Daemon) StopAll(ctx context.Context) error {
 }
 
 // Reset returns Wharf to a first start (settings.feature, "Resetting Wharf"):
-// everything stopped, every folder in www/ deleted, projects added from
-// elsewhere unregistered but left where they are, everything in config/
+// everything stopped, every project unregistered, everything in config/
 // deleted along with project certificates, generated files and service logs,
-// and wharf.json written again as a first start writes it. Downloaded PHP
-// versions and webservers stay: they are tools rather than projects, and
-// fetching them again takes minutes.
-func (d *Daemon) Reset(ctx context.Context) error {
+// and wharf.json written again as a first start writes it. The folders in
+// www/ are deleted only when deleteProjects is set; a folder added from
+// elsewhere never is. Downloaded PHP versions and webservers stay: they are
+// tools rather than projects, and fetching them again takes minutes. Nothing
+// here needs administrator rights, so a reset never prompts.
+func (d *Daemon) Reset(ctx context.Context, deleteProjects bool) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	defer d.track()()
@@ -429,25 +432,18 @@ func (d *Daemon) Reset(ctx context.Context) error {
 	d.clearStarted()
 	cfg := d.store.Get()
 
-	// INFO: wharf.json goes back to a first start, where "Use in terminal" is
-	// off, so the PATH goes back too (php-terminal.feature, "Resetting Wharf
-	// takes PHP off the terminal PATH"). bin/path stays, like bin/php.
-	if cfg.Services.PHP.Terminal {
+	// INFO: wharf.json goes back to a first start. Where that leaves "Use in
+	// terminal" off, the PATH goes back too; bin/path stays, like bin/php.
+	if cfg.Services.PHP.Terminal && d.noTerminal {
 		d.applyTerminal(false, true)
 	}
 
-	// INFO: Lines left from the <name>.wharf days go too: one prompt, and a
-	// declined one leaves lines that no longer do anything.
-	if err := d.hosts.RemoveAll(); err != nil && !errors.Is(err, elevate.ErrDeclined) {
-		d.log.Warn("remove old hosts entries", "err", err)
-	}
-	entries, err := os.ReadDir(d.root.WWW())
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	for _, e := range entries {
-		if err := os.RemoveAll(filepath.Join(d.root.WWW(), e.Name())); err != nil {
-			return fmt.Errorf("delete www/%s: %w", e.Name(), err)
+	// INFO: The folder is the project, and it holds the user's own work: it is
+	// deleted only when they ticked the box that says so (settings.feature,
+	// "Resetting Wharf and deleting the projects in www/").
+	if deleteProjects {
+		if err := d.deleteWWW(); err != nil {
+			return err
 		}
 	}
 	// WARNING: Only the projects' own certificates: the certificate authority is in
@@ -479,8 +475,29 @@ func (d *Daemon) Reset(ctx context.Context) error {
 	d.customSeen = map[string]time.Time{}
 	d.phpIniSeen = time.Time{}
 	d.log.Info("reset to a first start")
-	// INFO: A first start adopts what is installed and picks the defaults again.
-	return d.FirstRunSetup(ctx)
+	// INFO: A first start adopts what is installed and picks the defaults again,
+	// "Use in terminal" among them (php-terminal.feature, "Resetting Wharf
+	// leaves PHP in the terminal, as a first start does").
+	if err := d.FirstRunSetup(ctx); err != nil {
+		return err
+	}
+	d.applyTerminal(d.store.Get().Services.PHP.Terminal, false)
+	d.publish()
+	return nil
+}
+
+// deleteWWW deletes every folder in www/, with everything in it.
+func (d *Daemon) deleteWWW() error {
+	entries, err := os.ReadDir(d.root.WWW())
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	for _, e := range entries {
+		if err := os.RemoveAll(filepath.Join(d.root.WWW(), e.Name())); err != nil {
+			return fmt.Errorf("delete www/%s: %w", e.Name(), err)
+		}
+	}
+	return nil
 }
 
 // clearLogs deletes every service and project log but the daemon's own: it

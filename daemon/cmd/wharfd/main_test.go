@@ -42,11 +42,6 @@ func TestDaemonShutsDownCleanlyWhenTheAppDies(t *testing.T) {
 	bin := buildDaemon(t)
 
 	root := t.TempDir()
-	hosts := filepath.Join(root, "hosts")
-	if err := os.WriteFile(hosts, []byte("127.0.0.1\tlocalhost\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
 	// INFO: Stand-in for the app: alive while the daemon starts, then gone.
 	app := exec.Command("sleep", "1")
 	if err := app.Start(); err != nil {
@@ -55,7 +50,9 @@ func TestDaemonShutsDownCleanlyWhenTheAppDies(t *testing.T) {
 	go app.Wait()
 
 	daemon := exec.Command(bin,
-		"--root", root, "--hosts", hosts, "--elevator", "direct",
+		// WARNING: --terminal=false, or the first start puts this temporary folder
+		// on the PATH in the shell startup files of whoever runs the suite.
+		"--root", root, "--elevator", "direct", "--terminal=false",
 		"--parent-pid", strconv.Itoa(app.Process.Pid))
 	stdout, err := daemon.StdoutPipe()
 	if err != nil {
@@ -114,12 +111,7 @@ func TestDaemonShutsDownCleanlyWhenAsked(t *testing.T) {
 	bin := buildDaemon(t)
 
 	root := t.TempDir()
-	hosts := filepath.Join(root, "hosts")
-	if err := os.WriteFile(hosts, []byte("127.0.0.1\tlocalhost\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	daemon := exec.Command(bin, "--root", root, "--hosts", hosts, "--elevator", "direct")
+	daemon := exec.Command(bin, "--root", root, "--elevator", "direct", "--terminal=false")
 	if err := daemon.Start(); err != nil {
 		t.Fatal(err)
 	}

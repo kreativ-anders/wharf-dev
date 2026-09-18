@@ -23,6 +23,8 @@ Single tray-resident application; one-click service and project control.
   hosts file after Wharf wrote to it, so Safari could not find projects that
   curl reached. `.test` fails the same way; `.localhost` does not depend on
   the hosts file at all, and adding a project no longer asks for a password.
+  No released build ever wrote a `.wharf` line, so Wharf has no code that
+  cleans them up and never touches the hosts file at all.
 - Chained webservers only as a front door, never for load. *Changed from the
   first plan*, which ruled chaining out and gave a project on the other
   webserver its own port — so its URL carried one (`legacy-app.wharf:8081`),
@@ -36,7 +38,7 @@ Single tray-resident application; one-click service and project control.
 | Component | Responsibility | Technology |
 |---|---|---|
 | GUI | Tray icon, project list, settings, one-click actions | Flutter (desktop target) |
-| Core daemon | Process orchestration, config state, hosts/elevation adapter | Go, single cross-compiled binary |
+| Core daemon | Process orchestration, config state, elevation adapter | Go, single cross-compiled binary |
 | IPC | GUI ↔ daemon transport | Unix domain socket on macOS/Linux; loopback TCP + token on Windows (see §4a) |
 | Service registry | Which services exist, which is active, per-project overrides | Single config file (JSON/TOML) read by daemon, watched for changes |
 | Elevation adapter | One of the three platform-branching code paths; process trees and the terminal PATH are the others (§4) | 3 thin implementations behind one interface (see §4) |
@@ -48,19 +50,16 @@ Every design decision favours identical behaviour across OS over the most
 "elegant" per-platform solution:
 
 - **Pretty URLs** — `<name>.localhost` everywhere, resolved to loopback by
-  the OS or the browser itself; nothing is written anywhere. The hosts file is
-  only touched to remove a line left from the `.wharf` days (path constant
-  per OS, as before).
-- **Elevation** — one interface with two functions:
-  `RequestElevatedWrite(path, content)` for the hosts file, and
+  the OS or the browser itself; nothing is written anywhere, and the hosts
+  file is never read or written.
+- **Elevation** — one interface with one function:
   `RequestElevatedRun(program, args, env)` for trusting mkcert's local
   certificate authority, which writes to the system trust store. All call
-  sites use only these. Three small adapters behind them (UAC / `osascript
+  sites use only this; it is the only password prompt Wharf has. Three small adapters behind them (UAC / `osascript
   with administrator privileges` / `pkexec`) are one of the two
   platform-specific surfaces of the codebase; process trees are the other
-  (below). The second function was added with
-  `features/local-ssl.feature`: without it the authority is never trusted and
-  every browser warns.
+  (below). It came with `features/local-ssl.feature`: without it the
+  authority is never trusted and every browser warns.
 - **IPC** — see §4a. One protocol and one client API across all three OS; the
   socket type differs on Windows only because the GUI's language cannot open a
   unix socket there.
@@ -243,8 +242,10 @@ wharf/
 │   ├── wharf.json      # single flat config file — see §6
 │   ├── php.ini         # the user's own PHP settings, read by every PHP
 │   │                   #   version after its own php.ini
-│   └── vhosts/         # per-project custom webserver directives, e.g.
-│                       #   my-site.nginx.conf, my-site.apache.conf
+│   ├── vhosts/         # per-project custom configs, used instead of the
+│   │                   #   config template, e.g. my-site.nginx.conf
+│   └── templates/      # config templates: the user's own, and changed
+│                       #   built-in ones, e.g. laravel.nginx.conf
 └── data/
     ├── wharf.endpoint  # where the daemon is listening — see §4a
     ├── log/wharfd.log  # the daemon's own log (per-service logs sit beside it)
@@ -289,9 +290,7 @@ them surviving a restart:
   listens on; if another program has taken it by the time the instance
   starts, the project moves to the next free port and the file records it.
 - `projects[].hosts_entry` — *removed.* It recorded a hosts line from the
-  `<name>.wharf` days; removing a project now cleans up whatever line the
-  hosts file actually holds for it (`features/pretty-urls.feature`), and an
-  old file loses the key on its next write.
+  `<name>.wharf` days; an old file loses the key on its next write.
 - `appearance` — `"light"` or `"dark"`; absent means follow the system.
 - `projects[].path` — appears only for a project whose folder is not in
   `www/`: the folder is added where it is (`features/project-folders.feature`).
@@ -303,8 +302,15 @@ them surviving a restart:
   a PHP it did not download; removing one it did deletes `bin/php/<version>`
   instead, so neither needs elevation on any OS
   (`features/php-runtime.feature`).
-- `services.php.terminal` — `true` only while "Use in terminal" puts
-  `bin/path` on the user's PATH (`features/php-terminal.feature`).
+- `services.php.terminal` — `true` while "Use in terminal" puts `bin/path`
+  on the user's PATH. A first start writes it, so it is on unless the user
+  turns it off; `wharfd --terminal=false` leaves it off for a Wharf folder
+  made only for tests, which must not take the PATH from the real one
+  (`features/php-terminal.feature`).
+- `projects[].template` — the config template whose rules the project's
+  server block carries; absent means none, and nginx serves the folder as it
+  serves any folder while Apache reads the project's `.htaccess`
+  (`features/config-templates.feature`).
 
 A project's `name` becomes a folder in `www/`, files in `config/vhosts/` and
 `data/certs/`, and a `server_name` line, so a hand-edited one must be usable
@@ -314,11 +320,41 @@ no webserver config can name. A file that breaks either rule is refused on
 load the way a file that does not parse is — a reload keeps the config in
 use — and the message names the project and the fix.
 
-Custom webserver directives are deliberately *not* keys in this file: they
-are nginx or Apache syntax, which belongs in a file of its own that an editor
-highlights, not in a JSON string. They live in `config/vhosts/`, are included
-into the project's server block only while that webserver serves it, and are
-picked up on save (`features/app-configuration.feature`).
+A project's custom config is deliberately *not* a key in this file: it is
+nginx or Apache syntax, which belongs in a file of its own that an editor
+highlights, not in a JSON string. It lives in `config/vhosts/`, one file per
+webserver, and is picked up on save (`features/app-configuration.feature`).
+
+Config templates follow the same rule. Wharf's own are compiled into the
+daemon; saving one writes `config/templates/<id>.<webserver>.conf`, which
+replaces it until deleted ("Restore"), and a file there with a new id is a
+template of the user's. A template is a whole nginx `server { }` block or
+Apache `<VirtualHost>`, PHP handler included, so a recipe from a CMS's docs
+reads the same in Wharf. Wharf fills in placeholders for what only it knows:
+`{{listen}}`, `{{ssl}}`, `{{server_name}}`, `{{root}}`, `{{log_dir}}`,
+`{{php}}` and `{{fastcgi}}`. A template without `{{listen}}`,
+`{{ssl}}` or `{{server_name}}` is refused on save: those decide where a
+project is reachable. A project's generated file holds its template once
+per place it is reachable — ports 80 and 443 on the front door, its loopback
+port behind it. What differs between those places and is not a placeholder
+lives outside the template: nginx's `$wharf_port` and `$wharf_https`, which
+Wharf's `fastcgi.conf` hands to PHP, and Apache's `ProxyFCGISetEnvIf` lines,
+set once for the whole instance. A project without a template gets a plain
+block: its folder, its logs and PHP. An earlier version inserted only a
+template's rules into a block Wharf wrote itself; a recipe from the docs
+could not be pasted as it was, and its PHP location could not be changed.
+
+A custom config is a config template for one project: it starts as a copy of
+the project's template for the webserver serving it, placeholders included,
+and is used *instead of* the template while that webserver serves the
+project. It is checked like a template — on save, and again on start, since
+it can be edited anywhere — and a project whose file fails the check fails
+alone rather than taking the front door down. Settings only ever offer the
+serving webserver's file: an Apache file for a project nginx serves would do
+nothing. An earlier version included a file of directives into the
+template's block through a `{{custom}}` placeholder, with both webservers'
+files offered side by side; users could not tell which one applied, and the
+file could not change the template's own rules — only add to them.
 
 PHP's own settings follow the same rule: `config/php.ini` is a php.ini, not a
 JSON object. Every PHP process is started with `PHP_INI_SCAN_DIR` naming
@@ -328,7 +364,10 @@ while an adopted Homebrew PHP still loads the extensions its own `conf.d`
 enables (`features/php-settings.feature`).
 
 Reset deletes `config/` whole, not file by file: whatever the user put
-there, the next start begins from nothing.
+there, the next start begins from nothing. The folders in `www/` are the
+user's own work, so Reset keeps them unless the user ticks "Also delete the
+projects in www/"; a folder added from elsewhere is never deleted. Nothing a
+reset does needs administrator rights (`features/settings.feature`).
 
 Roadmap keys (`database`, `mail`, `runtimes.node/go/python`) are specified
 in `features/roadmap-services.feature` but intentionally absent from this

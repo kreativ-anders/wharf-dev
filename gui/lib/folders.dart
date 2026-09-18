@@ -13,7 +13,7 @@ typedef PathOpener = Future<void> Function(String path);
 /// (features/project-folders.feature, "Opening a project's folder").
 PathOpener openFolder = _openNearestFolder;
 
-/// How custom config files are opened for editing.
+/// How php.ini is opened for editing.
 PathOpener editFile = _openInEditor;
 
 /// Opens [path], or the nearest folder above it that exists — a webserver

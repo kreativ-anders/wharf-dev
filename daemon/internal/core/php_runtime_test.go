@@ -71,18 +71,12 @@ func newFirstRun(t *testing.T, now time.Time, systemVersions ...string) *firstRu
 	sup.StartTimeout, sup.StopTimeout, sup.Poll = 2*time.Second, 2*time.Second, time.Millisecond
 
 	el := elevate.NewFake()
-	el.Apply = true
-	hostsPath := filepath.Join(dir, "hosts")
-	if err := os.WriteFile(hostsPath, []byte("127.0.0.1\tlocalhost\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 
 	d, err := New(Options{
 		Root:         root,
 		Store:        store,
 		Supervisor:   sup,
 		Elevator:     el,
-		HostsPath:    hostsPath,
 		Certs:        certs.NewFake(),
 		Now:          func() time.Time { return now },
 		WebDetector:  testWebDetector(),
@@ -498,7 +492,7 @@ func TestRemovingADownloadedPHPVersion(t *testing.T) {
 	if !h.sup.Running(runtime.PHPServiceID("8.2")) {
 		t.Fatal("the 8.2 backend did not start")
 	}
-	runs, writes := len(h.el.Runs), len(h.el.Writes)
+	runs := len(h.el.Runs)
 
 	if err := h.d.RemovePHP(h.ctx(), "8.2"); err != nil {
 		t.Fatalf("remove 8.2: %v", err)
@@ -523,7 +517,7 @@ func TestRemovingADownloadedPHPVersion(t *testing.T) {
 		t.Fatalf("downloadable = %v, want 8.2 among them", downloadableVersions(h))
 	}
 	// INFO: And no password is asked for
-	if len(h.el.Runs) != runs || len(h.el.Writes) != writes {
+	if len(h.el.Runs) != runs {
 		t.Fatal("removing a downloaded PHP asked for elevation")
 	}
 	// INFO: The other builds are untouched.

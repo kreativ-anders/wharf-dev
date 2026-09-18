@@ -13,7 +13,7 @@ import (
 //	wharf/
 //	├── bin/     php/<version>, path/, nginx/, apache/, mkcert/
 //	├── www/     one folder per project
-//	├── config/  wharf.json, php.ini, vhosts/ (custom webserver directives)
+//	├── config/  wharf.json, php.ini, vhosts/ (custom configs), templates/ (config templates)
 //	└── data/    runtime state, sockets, logs
 type Root struct{ Dir string }
 
@@ -70,15 +70,20 @@ func (r Root) Socket() string { return filepath.Join(r.Data(), "wharf.sock") }
 // (project-folders.feature).
 func (r Root) ProjectDir(name string) string { return filepath.Join(r.WWW(), name) }
 
-// VhostDir holds per-project custom webserver directives. It sits in config/
+// VhostDir holds the projects' custom configs. It sits in config/
 // rather than data/ because the files are user-authored and worth backing up.
 func (r Root) VhostDir() string { return filepath.Join(r.Config(), "vhosts") }
 
-// CustomConfig is one project's custom directives for one webserver
-// (app-configuration.feature, "Each webserver keeps its own custom config").
+// CustomConfig is one project's own rules for one webserver, used instead of
+// its config template (app-configuration.feature, "A custom config belongs to
+// the webserver serving the project").
 func (r Root) CustomConfig(project, server string) string {
 	return filepath.Join(r.VhostDir(), project+"."+server+".conf")
 }
+
+// TemplateDir holds the user's config templates, and their changes to the
+// built-in ones (config-templates.feature).
+func (r Root) TemplateDir() string { return filepath.Join(r.Config(), "templates") }
 
 // MkcertBin is where a downloaded mkcert lives.
 func (r Root) MkcertBin() string { return filepath.Join(r.Bin(), "mkcert") }

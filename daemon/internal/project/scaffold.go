@@ -26,21 +26,20 @@ type Template struct {
 	// ZipURL is a zip archive whose single top-level folder becomes the
 	// project folder. Empty for a template that downloads nothing.
 	ZipURL string `json:"-"`
+	// ConfigTemplate is the config template a project made from it uses; ""
+	// for none (config-templates.feature).
+	ConfigTemplate string `json:"-"`
 }
 
-// Templates is the v1 registry.
-//
-// TODO(generic-templates): Kirby was the inspiration, not the target. The
-// Kirby starter kit here and the Kirby rules hard-wired into the generated
-// nginx and Apache configs (runtime.kirbyRules, runtime.apacheSite) go once
-// templates are generic: each template brings its own document root and
-// rewrite recipe, and a folder added by hand gets a neutral default.
+// Templates is the v1 registry. The webserver rules a Kirby project needs
+// come from its config template, not from here.
 var Templates = []Template{
 	{
-		ID:      "kirby",
-		Name:    "Kirby",
-		Runtime: "php",
-		ZipURL:  "https://github.com/getkirby/starterkit/archive/refs/heads/main.zip",
+		ID:             "kirby",
+		Name:           "Kirby",
+		Runtime:        "php",
+		ZipURL:         "https://github.com/getkirby/starterkit/archive/refs/heads/main.zip",
+		ConfigTemplate: "kirby",
 	},
 	{
 		ID:      "empty",

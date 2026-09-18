@@ -37,11 +37,11 @@ func run() error {
 	var (
 		rootFlag    = flag.String("root", "", "wharf root folder (default $WHARF_ROOT or ~/Wharf)")
 		socketFlag  = flag.String("socket", "", "IPC socket path (default <root>/data/wharf.sock)")
-		hostsFlag   = flag.String("hosts", "", "hosts file path (default the OS hosts file)")
-		elevateFlag = flag.String("elevator", "system", "system, or direct to write the hosts file without prompting (development only)")
+		elevateFlag = flag.String("elevator", "system", "system, or direct to never raise a password prompt (development only)")
 		transFlag   = flag.String("transport", "", "unix or tcp (default: unix, tcp on Windows where dart:io has no unix sockets)")
 		parentFlag  = flag.Int("parent-pid", 0, "exit when this process is gone; the GUI passes its own pid so a crash never leaves the daemon behind")
 		levelFlag   = flag.String("log-level", "info", "debug, info, warn or error")
+		termFlag    = flag.Bool("terminal", true, "turn \"Use in terminal\" on at a first start; false for a Wharf folder used only for tests, which must not change the user's PATH")
 		versionFlag = flag.Bool("version", false, "print version and exit")
 	)
 	flag.Parse()
@@ -70,11 +70,11 @@ func run() error {
 	defer closeLog()
 	slog.SetDefault(log)
 
-	opts := core.Options{Root: root, HostsPath: *hostsFlag, Log: log, Version: version}
+	opts := core.Options{Root: root, Log: log, Version: version, NoTerminal: !*termFlag}
 	switch *elevateFlag {
 	case "system", "":
 	case "direct":
-		log.Warn("elevation disabled: hosts file will be written directly")
+		log.Warn("elevation disabled: privileged actions behave as if declined")
 		opts.Elevator = elevate.Direct{}
 	default:
 		return fmt.Errorf("unknown -elevator %q, want system or direct", *elevateFlag)

@@ -8,36 +8,6 @@ import (
 
 type systemElevator struct{}
 
-// RequestElevatedWrite prompts via the macOS authorisation dialog. AppleScript
-// reports a dismissed dialog as error -128, which maps to ErrDeclined.
-func (systemElevator) RequestElevatedWrite(path string, content string) error {
-	tmp, cleanup, err := stage(content)
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-
-	if err := runScriptAsAdmin(writeScript(tmp, path)); err != nil {
-		return fmt.Errorf("elevated write to %s: %w", path, err)
-	}
-	return nil
-}
-
-// writeScript copies the staged file over path, then tells the resolver to
-// re-read it. The hosts file is the only file Wharf writes this way, and
-// macOS resolves names two ways: getaddrinfo reads /etc/hosts itself, so curl
-// sees a new entry at once, but Safari and every other app on Apple's
-// networking stack ask mDNSResponder, which can lose track of the file and
-// then answer "No Such Record" for every entry in it — "Safari can't find the
-// server" for a project curl reaches (pretty-urls.feature, "Creating a project
-// registers a hosts entry"). A SIGHUP does not bring it back; a restart does,
-// and launchd starts it again at once. Doing it in the same script keeps it
-// to one prompt; a failed refresh does not undo a write that succeeded.
-func writeScript(tmp, path string) string {
-	return shellJoin([]string{"/bin/cp", tmp, path}) +
-		" && { /usr/bin/dscacheutil -flushcache; /usr/bin/killall mDNSResponder; true; }"
-}
-
 // RequestElevatedRun runs the program through /usr/bin/env, which is how the
 // environment reaches a shell that AppleScript starts afresh.
 func (systemElevator) RequestElevatedRun(program string, args []string, env []string) error {

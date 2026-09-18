@@ -6,9 +6,16 @@ Feature: PHP in the terminal
 
   Wharf keeps one folder, "bin/path", whose "php" runs the global default
   version: a link on macOS and Linux, a "php.cmd" on Windows. Putting that
-  folder on PATH is the user's choice, because it changes files outside the
-  Wharf folder. It asks for no password on any OS: the shell startup files
-  and the Windows user environment belong to the user.
+  folder on PATH is on from the first start, so "php" in a new terminal is the
+  PHP Wharf serves with; the user can turn it off. It asks for no password on
+  any OS: the shell startup files and the Windows user environment belong to
+  the user.
+
+  Scenario: Use in terminal is on from the first start
+    When Wharf starts for the first time
+    Then "terminal": true is written to config/wharf.json
+    And "bin/path" is put on the terminal PATH, as turning "Use in terminal" on does
+    And a Wharf folder started only for tests leaves it off
 
   Scenario: The global default PHP is kept in one folder
     Given PHP "8.3" and "8.4" are installed and "8.4" is the global default
@@ -68,8 +75,8 @@ Feature: PHP in the terminal
     Then the startup files keep Wharf's block
     And a new terminal still runs PHP from "bin/path"
 
-  Scenario: Resetting Wharf takes PHP off the terminal PATH
-    Given "Use in terminal" is on
+  Scenario: Resetting Wharf leaves PHP in the terminal, as a first start does
+    Given "Use in terminal" is off
     When the user resets Wharf
-    Then Wharf's block is removed from every startup file, as turning it off does
-    And "bin/path" still holds the "php" of the global default a first start selects
+    Then "Use in terminal" is on again, as after a first start
+    And "bin/path" holds the "php" of the global default a first start selects

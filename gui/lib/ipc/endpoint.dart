@@ -63,10 +63,17 @@ class DaemonNotRunning implements Exception {
 String defaultRoot() {
   final env = Platform.environment['WHARF_ROOT'];
   if (env != null && env.isNotEmpty) return env;
+  return usualRoot();
+}
+
+/// ~/Wharf: the root when WHARF_ROOT names none.
+String usualRoot() {
   // WARNING: The same order as Go's os.UserHomeDir. On Windows a HOME set by
   // Git Bash or MSYS would otherwise point the window at another folder than
   // the daemon it attaches to.
-  final home = Platform.isWindows ? Platform.environment['USERPROFILE'] : Platform.environment['HOME'];
+  final home = Platform.isWindows
+      ? Platform.environment['USERPROFILE']
+      : Platform.environment['HOME'];
   return '${home ?? '.'}${Platform.pathSeparator}Wharf';
 }
 

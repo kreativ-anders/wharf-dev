@@ -1,18 +1,11 @@
 package elevate
 
-import (
-	"log/slog"
-	"os"
-)
+import "log/slog"
 
-// Direct writes without prompting. It is for development and CI, where the
-// hosts file under test is an ordinary writable file — never the default, so
-// that the production path always goes through a real elevation prompt.
+// Direct never prompts. It is for development and CI, where a password prompt
+// would stall an unattended run — never the default, so that the production
+// path always goes through a real elevation prompt.
 type Direct struct{}
-
-func (Direct) RequestElevatedWrite(path string, content string) error {
-	return os.WriteFile(path, []byte(content), 0o644)
-}
 
 // RequestElevatedRun behaves as if the prompt were declined. Running the
 // program unprivileged would let it ask for a sudo password on whatever

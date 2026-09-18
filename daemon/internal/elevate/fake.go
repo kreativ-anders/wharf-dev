@@ -1,20 +1,13 @@
 package elevate
 
-import (
-	"os"
-	"sync"
-)
+import "sync"
 
-// Fake is an in-memory Elevator for tests and for the daemon's --dry-run mode.
-// It records every write instead of touching the real filesystem.
+// Fake is an in-memory Elevator for tests. It records every privileged run
+// instead of running it.
 type Fake struct {
 	mu      sync.Mutex
 	Decline bool
 	Err     error
-	Writes  map[string]string
-	// Apply also performs the write, so a test pointing at a temp file sees
-	// the same read-modify-write behaviour the real adapters produce.
-	Apply bool
 	// Runs records every privileged program run, as program then args.
 	Runs [][]string
 	// OnRun is called for an approved run, so a test can play the part of
@@ -23,34 +16,7 @@ type Fake struct {
 }
 
 // NewFake returns a Fake that approves every request.
-func NewFake() *Fake { return &Fake{Writes: map[string]string{}} }
-
-func (f *Fake) RequestElevatedWrite(path string, content string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.Decline {
-		return ErrDeclined
-	}
-	if f.Err != nil {
-		return f.Err
-	}
-	if f.Writes == nil {
-		f.Writes = map[string]string{}
-	}
-	f.Writes[path] = content
-	if f.Apply {
-		return os.WriteFile(path, []byte(content), 0o644)
-	}
-	return nil
-}
-
-// Content returns what was last written to path.
-func (f *Fake) Content(path string) (string, bool) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	c, ok := f.Writes[path]
-	return c, ok
-}
+func NewFake() *Fake { return &Fake{} }
 
 func (f *Fake) RequestElevatedRun(program string, args []string, env []string) error {
 	f.mu.Lock()

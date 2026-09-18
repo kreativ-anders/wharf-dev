@@ -112,12 +112,13 @@ wharf/
 │   └── .nojekyll              serve the files as-is, no Jekyll build
 │
 ├── features/                  THE SPECIFICATION — Gherkin, one file per capability
-│   ├── app-configuration.feature    per-project overrides, custom webserver config
+│   ├── app-configuration.feature    per-project overrides, custom config
+│   ├── config-templates.feature     nginx/Apache rules per kind of project: built in, edited, your own
 │   ├── local-ssl.feature            mkcert installed and trusted by the SSL switch
 │   ├── php-runtime.feature          PHP detection, first-run default, picker, download, remove/hide
 │   ├── php-settings.feature         config/php.ini, read by every PHP version after its own
 │   ├── php-terminal.feature         bin/path runs the default PHP; "Use in terminal" puts it on PATH
-│   ├── pretty-urls.feature          <name>.localhost; old .wharf hosts lines removed
+│   ├── pretty-urls.feature          <name>.localhost; the hosts file is never touched
 │   ├── project-logs.feature         one log folder per project, opened from its settings
 │   ├── project-folders.feature      folders from anywhere, opening them
 │   ├── quick-app-php.feature        Kirby scaffolding
@@ -136,13 +137,15 @@ wharf/
 │   └── internal/
 │       ├── certs/             mkcert: pinned download, local CA trust, per-project certs
 │       ├── config/            wharf.json: load, atomic write, hand-edit repair
+│       ├── configtemplate/    config templates: the built-in rules (builtin/*.conf) and config/templates/
 │       ├── core/              THE BEHAVIOUR — one method per user action
 │       │   ├── core.go        the daemon: construction, first run, settings, reset, shutdown
 │       │   ├── projects.go    add, remove, start, stop, restart, overrides, scaffolding
 │       │   ├── php.go         PHP versions: detect, adopt, download, remove or hide, backends
 │       │   ├── webserver.go   webservers: detect, install, switch the active one
 │       │   ├── frontdoor.go   what the front door serves; own instances' ports
-│       │   ├── userfiles.go   custom webserver configs and php.ini: created, applied on save
+│       │   ├── userfiles.go   custom configs and php.ini: read, saved, applied on save
+│       │   ├── configtemplates.go  config templates: listed, read, saved, created, deleted
 │       │   ├── terminal.go    bin/path follows the default PHP; "Use in terminal" on and off
 │       │   ├── errors.go      what the user got wrong, told apart from what the daemon did
 │       │   ├── state.go       the snapshot the GUI renders
@@ -152,7 +155,6 @@ wharf/
 │       ├── docsync/           THE PROSE GUARD (§1): the map, the FAQ mirror, version stamping
 │       ├── download/          HTTPS fetch, checksum, untar/unzip for PHP and mkcert
 │       ├── elevate/           PLATFORM-SPECIFIC: elevation prompts (3 adapters)
-│       ├── hostsfile/         removes hosts lines left from the old <name>.wharf scheme
 │       ├── ipc/               newline-delimited JSON over a unix socket; loopback TCP + token on Windows
 │       ├── layout/            the portable root: bin/ www/ config/ data/
 │       ├── php/               release timeline, support status, detection, downloads
@@ -184,12 +186,14 @@ wharf/
     │   ├── models/state.dart  the snapshot shape — a contract with core/state.go
     │   └── pages/
     │       ├── projects_page.dart  THE ONE PRIMARY VIEW
-    │       ├── project_sheet.dart  per-project overrides and logs, behind a tap
-    │       └── settings_page.dart  side navigation: General, Webserver, PHP (picker, php.ini), SSL
+    │       ├── project_sheet.dart  per-project overrides, config template, custom config and logs, behind a tap
+    │       ├── config_editor.dart  the line-numbered editor for config templates and custom configs, and "New template…"
+    │       └── settings_page.dart  side navigation: General, Webserver (config templates), PHP (picker, php.ini), SSL
     ├── test/
     │   ├── state_test.dart      snapshot parsing
     │   ├── theme_test.dart      WCAG contrast of the palette, both themes
     │   ├── widgets_test.dart    what each view renders
+    │   ├── config_templates_test.dart  the config template list, editor and project picker; the custom config editor
     │   ├── accessibility_tree_test.dart  semantics updates replayed through the Windows engine's AXTree commit
     │   ├── project_name_test.dart  the name rewrite, against the daemon's own table
     │   ├── launcher_test.dart   binary search order, missing-binary message
@@ -214,7 +218,7 @@ means changing the document that records it.
   [`internal/elevate`](daemon/internal/elevate/) (elevation prompts),
   [`internal/proctree`](daemon/internal/proctree/) (process group / job object) and
   [`internal/shellpath`](daemon/internal/shellpath/) (shell startup files / user environment, link / `php.cmd`),
-  plus two constants: the hosts file path and the Windows `.exe` suffix. `make cross` proves it still builds
+  plus one constant: the Windows `.exe` suffix. `make cross` proves it still builds
   everywhere.
 - **PHP only in v1.** Node, Go, Python, MySQL, PostgreSQL and Mailpit are
   `@roadmap` — specified, deliberately unimplemented.
@@ -287,11 +291,11 @@ change. That does not prove the code is right.
   not "exec: no such file".
 - **A declined elevation prompt is a normal outcome**, never an error dialog:
   the action finishes without what the prompt would have added — SSL works
-  with a browser warning, an old hosts line stays behind.
+  with a browser warning.
 - **Use the glossary's words** ([`dev/glossary.md`](dev/glossary.md)) in UI
   text, specs, docs and identifiers. A new concept gets a row in the same
   commit that introduces it.
-- **Tests fake the outside world** — processes, ports, hosts file, mkcert, the
+- **Tests fake the outside world** — processes, ports, mkcert, the
   network — so the suite never prompts for a password, binds a real port, or
   needs a vendored binary.
 - Run `make fmt vet test` before considering anything done; `make race` before

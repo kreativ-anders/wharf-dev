@@ -314,9 +314,7 @@ func TestResettingWharf(t *testing.T) {
 	if _, err := h.d.AddFolder(h.ctx(), elsewhere); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.d.CustomConfig(h.ctx(), "my-kirby-site", "nginx"); err != nil {
-		t.Fatal(err)
-	}
+	h.saveCustomConfig("my-kirby-site", "client_max_body_size 64m;")
 	cert := runtime.CertPath(h.root, "my-kirby-site")
 	if err := os.WriteFile(cert, []byte("cert"), 0o644); err != nil {
 		t.Fatal(err)
@@ -343,9 +341,7 @@ func TestResettingWharf(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	addedUnderTheOldDomain(h, "my-kirby-site")
-
-	if err := h.d.Reset(h.ctx()); err != nil {
+	if err := h.d.Reset(h.ctx(), false); err != nil {
 		t.Fatalf("reset: %v", err)
 	}
 
@@ -353,13 +349,11 @@ func TestResettingWharf(t *testing.T) {
 	if h.sup.AnyRunning() {
 		t.Fatal("something still runs after the reset")
 	}
-	// INFO: And every folder in "www/" is deleted
-	if entries, _ := os.ReadDir(h.root.WWW()); len(entries) != 0 {
-		t.Fatalf("www/ still holds %v", entries)
-	}
-	// INFO: And a folder added from elsewhere is unregistered but left where it is
-	if _, err := os.Stat(elsewhere); err != nil {
-		t.Fatalf("a folder outside www/ was deleted: %v", err)
+	// INFO: And every project is unregistered, and its folder is left where it is
+	for _, keep := range []string{h.root.ProjectDir("my-kirby-site"), h.root.ProjectDir("dropped-in"), elsewhere} {
+		if _, err := os.Stat(keep); err != nil {
+			t.Fatalf("%s was deleted: %v", keep, err)
+		}
 	}
 	if n := len(h.d.Config().Projects); n != 0 {
 		t.Fatalf("%d projects still registered", n)
@@ -403,8 +397,36 @@ func TestResettingWharf(t *testing.T) {
 			t.Fatalf("%s was deleted: %v", keep, err)
 		}
 	}
-	// INFO: Nothing of Wharf's is left in the hosts file.
-	if strings.Contains(h.hostsContent(), "# wharf:") {
-		t.Fatalf("old hosts entries survived:\n%s", h.hostsContent())
+	// INFO: And no elevation prompt is shown
+	if n := h.el.RunCount(); n != 0 {
+		t.Fatalf("%d elevation prompts were raised", n)
+	}
+}
+
+// features/settings.feature — "Resetting Wharf and deleting the projects in
+// www/"
+func TestResettingWharfAndDeletingTheProjectsInWWW(t *testing.T) {
+	h := newHarness(t)
+	h.mustAdd("my-kirby-site")
+	h.mkProject("dropped-in")
+	elsewhere := filepath.Join(t.TempDir(), "client-site")
+	if err := os.MkdirAll(elsewhere, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.d.AddFolder(h.ctx(), elsewhere); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := h.d.Reset(h.ctx(), true); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+
+	// INFO: Then every folder in "www/" is deleted
+	if entries, _ := os.ReadDir(h.root.WWW()); len(entries) != 0 {
+		t.Fatalf("www/ still holds %v", entries)
+	}
+	// INFO: And a folder added from elsewhere is still left where it is
+	if _, err := os.Stat(elsewhere); err != nil {
+		t.Fatalf("a folder outside www/ was deleted: %v", err)
 	}
 }

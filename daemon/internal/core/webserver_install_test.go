@@ -198,25 +198,32 @@ func TestOneWebserverOneConfigFilePerProject(t *testing.T) {
 	}
 }
 
-// features/webserver-install.feature — "A Kirby project needs no webserver
-// configuration". What nginx and Apache then do with a real Starterkit is
+// features/webserver-install.feature — "A Kirby project needs no custom
+// webserver config". What nginx and Apache then do with a real Starterkit is
 // checked by hand against real binaries; this pins the rules that make it so.
 func TestAKirbyProjectNeedsNoWebserverConfiguration(t *testing.T) {
 	h := newHarness(t)
 	h.mustAdd("my-kirby-site")
+	kirby := "kirby"
+	if _, err := h.d.UpdateSettings(h.ctx(), "my-kirby-site", Settings{Template: &kirby}); err != nil {
+		t.Fatal(err)
+	}
 	if err := h.d.StartProject(h.ctx(), "my-kirby-site"); err != nil {
 		t.Fatal(err)
 	}
 
-	// INFO: nginx has no .htaccess, so the generated block carries Kirby's rules.
+	// INFO: nginx has no .htaccess, so the generated block carries the Kirby
+	// config template's rules.
 	block := vhostBlock(t, h.readGenerated("nginx.conf"), "my-kirby-site.localhost")
 	for _, rule := range []string{
 		// INFO: Then its pages, the Panel and its media are served
 		`try_files $uri $uri/ /index.php$is_args$args;`,
 		// INFO: And "content/", "site/", "kirby/" and dot-files are never served
 		// as files
-		`rewrite (^|/)\.(?!well-known/) /index.php last;`,
-		`rewrite ^/(content|site|kirby)/ /index.php last;`,
+		"rewrite ^/(content|site|kirby)/(.*)$ /error last;",
+		"rewrite /\\.(?!well-known/) /error last;",
+		// INFO: Files at the top level — composer.json, README.md — go to Kirby too.
+		"rewrite ^/(?!app\\.webmanifest)[^/]+$ /index.php last;",
 	} {
 		if !strings.Contains(block, rule) {
 			t.Fatalf("nginx block lacks %q:\n%s", rule, block)

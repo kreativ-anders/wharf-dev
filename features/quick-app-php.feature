@@ -12,6 +12,7 @@ Feature: Quick-app scaffolding (PHP / Kirby)
     When the user chooses "New project", enters the name "my-kirby-site" and picks the "Kirby" template
     Then a folder "www/my-kirby-site" is created
     And the Kirby starter kit is fetched into that folder
+    And its config template is "Kirby"
     And the project appears in the GUI's project list with status "starting"
     And it is reachable at "http://my-kirby-site.localhost" (see pretty-urls.feature)
 
@@ -40,6 +41,7 @@ Feature: Quick-app scaffolding (PHP / Kirby)
     When the user creates "blank" with the "Empty folder" template
     Then a folder "www/blank" is created with an "index.php" in it
     And nothing is downloaded
+    And it has no config template
 
   Scenario: Scaffolding fails without network access
     Given the machine has no internet connection

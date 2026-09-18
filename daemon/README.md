@@ -27,10 +27,9 @@ and a daemon killed by a broken pipe never gets to stop its webservers.
 The daemon logs to `<root>/data/log/wharfd.log` as well as stderr — when the
 app runs it, the file is the only place the log survives.
 
-Projects are `<name>.localhost`, so nothing writes the hosts file any more; it
-is only touched to remove a line left from the old `<name>.wharf` scheme.
-`make run` uses `--elevator direct` and a throwaway hosts file even for that,
-so it raises no password prompt and never touches the real `/etc/hosts`.
+Projects are `<name>.localhost`, so the hosts file is never read or written.
+The one password prompt left is trusting mkcert's certificate authority;
+`make run` uses `--elevator direct`, which treats that prompt as declined.
 
 ## Layout
 
@@ -41,7 +40,6 @@ so it raises no password prompt and never touches the real `/etc/hosts`.
 | `internal/elevate` | **Platform-specific**: UAC / osascript / pkexec |
 | `internal/proctree` | **Platform-specific**: a service and its workers, stopped as one (process group / job object) |
 | `internal/shellpath` | **Platform-specific**: `bin/path`'s php, and `bin/path` on the user's PATH (shell startup files / user environment) |
-| `internal/hostsfile` | Removes hosts lines left from the old `<name>.wharf` scheme |
 | `internal/supervisor` | Process lifecycle, port waiting, state transitions |
 | `internal/runtime` | Config → process specs; generates nginx/apache/php-fpm config |
 | `internal/project` | Folder-as-project discovery, quick-app scaffolding |
@@ -101,7 +99,7 @@ wharfctl add ~/Code/client-site   # or any folder, left where it is
 wharfctl php install 8.4          # download a PHP build into bin/php/8.4
 wharfctl php terminal on          # put the default PHP (bin/path) on the terminal PATH
 wharfctl ssl                      # install mkcert, trust its authority
-wharfctl config my-kirby-site nginx   # path of the custom nginx directives
+wharfctl config my-kirby-site         # its custom config, or the rules it would start from
 wharfctl webserver install nginx  # install a webserver
 wharfctl appearance dark          # system, light or dark
 wharfctl new kirby my-kirby-site  # scaffold from the Kirby starter kit
@@ -130,7 +128,7 @@ Each `@v1` scenario in `features/` has a test named after it:
 | `settings.feature` | `internal/core/settings_test.go` |
 | `tray-actions.feature` | `internal/core/tray_actions_test.go` |
 
-They run against a daemon whose collaborators — processes, ports, hosts file,
+They run against a daemon whose collaborators — processes, ports,
 mkcert, the network — are all faked, so they exercise real behaviour without
 shipped binaries or a password prompt.
 

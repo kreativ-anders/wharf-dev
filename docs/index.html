@@ -87,7 +87,7 @@
           {
             "@type": "Question",
             "name": "Is Wharf only for Kirby?",
-            "acceptedAnswer": { "@type": "Answer", "text": "No — any folder of PHP is a project. Kirby is the reference: its starter kit is one click away, and a Kirby site needs no webserver setup on nginx or Apache." }
+            "acceptedAnswer": { "@type": "Answer", "text": "No — any folder of PHP is a project. Kirby is the reference: its starter kit is one click away. Ready-made nginx and Apache rules for Kirby, Laravel, WordPress, Statamic, Symfony, Craft CMS and Drupal are built in, one pick per project." }
           },
           {
             "@type": "Question",
@@ -265,6 +265,12 @@
           <p>A per-project <code>.nginx.conf</code> or <code>.apache.conf</code>,
           applied when you save. If the webserver refuses it, you see its own
           error with the file and line — right away.</p>
+        </li>
+        <li>
+          <h3>Rules for your CMS</h3>
+          <p>Config templates for Kirby, Laravel, WordPress and more: pick one
+          per project, edit it in Wharf, or save your own. Plain nginx and
+          Apache syntax, nothing hidden.</p>
         </li>
         <li>
           <h3>Logs, one folder per project</h3>
@@ -501,8 +507,9 @@ nginx  :80  :443      <span class="dim">the front door</span>
           <details>
             <summary>Is Wharf only for Kirby?</summary>
             <p>No — any folder of PHP is a project. Kirby is the reference: its
-            starter kit is one click away, and a Kirby site needs no webserver
-            setup on nginx or Apache.</p>
+            starter kit is one click away. Ready-made nginx and Apache rules for
+            Kirby, Laravel, WordPress, Statamic, Symfony, Craft CMS and Drupal
+            are built in, one pick per project.</p>
           </details>
           <details>
             <summary>What about MySQL, PostgreSQL, Node.js or Mailpit?</summary>

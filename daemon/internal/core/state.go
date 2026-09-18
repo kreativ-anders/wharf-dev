@@ -42,6 +42,9 @@ type State struct {
 	// sets up whatever is missing.
 	SSL  certs.Status `json:"ssl"`
 	Busy bool         `json:"busy"`
+	// ConfigTemplates lists every config template, Wharf's first
+	// (config-templates.feature).
+	ConfigTemplates []ConfigTemplate `json:"config_templates"`
 }
 
 // Services is the global service state shown in Settings. Only Webserver and
@@ -159,21 +162,23 @@ type Project struct {
 	// LogDir is the project's own log folder, which the GUI offers to open
 	// (project-logs.feature).
 	LogDir string `json:"log_dir"`
-	// CustomConfigs has one entry per available webserver
-	// (app-configuration.feature, "Each webserver keeps its own custom
-	// config").
-	CustomConfigs []CustomConfig `json:"custom_configs"`
+	// CustomConfig is the project's custom config for the webserver serving
+	// it; the other webserver's file is kept but not offered
+	// (app-configuration.feature, "A custom config belongs to the webserver
+	// serving the project").
+	CustomConfig CustomConfig `json:"custom_config"`
+	// Template is the project's config template, "" for none.
+	Template string `json:"template"`
 
 	Error string `json:"error,omitempty"`
 }
 
-// CustomConfig is one project's custom directives for one webserver.
+// CustomConfig is one project's own rules for one webserver, used instead of
+// its config template.
 type CustomConfig struct {
 	Webserver string `json:"webserver"`
 	Path      string `json:"path"`
 	Exists    bool   `json:"exists"`
-	// Active is true for the file of the webserver serving the project now.
-	Active bool `json:"active"`
 }
 
 // snapshot builds the State from config plus live process state.
@@ -188,6 +193,8 @@ func (d *Daemon) snapshot(cfg *config.Config) State {
 		Unregistered: d.unregistered(cfg),
 		SSL:          d.certs.Status(),
 		Busy:         d.busy.Load() > 0,
+
+		ConfigTemplates: d.configTemplates(cfg),
 	}
 
 	wsState := supervisor.StateStopped
@@ -257,19 +264,13 @@ func (d *Daemon) projectState(cfg *config.Config, p config.Project) Project {
 		Dir:               wruntime.ProjectDir(d.root, p),
 		Linked:            p.Path != "",
 		LogDir:            d.root.ProjectLogDir(p.Name),
+		Template:          p.Template,
 	}
 	out.WebserverVersion = d.WebInstalls()[out.Webserver].Version
 	out.PHPFullVersion = d.phpFullVersion(out.PHPVersion)
-	for _, server := range cfg.Services.Webserver.Available {
-		path := d.root.CustomConfig(p.Name, server)
-		_, err := os.Stat(path)
-		out.CustomConfigs = append(out.CustomConfigs, CustomConfig{
-			Webserver: server,
-			Path:      path,
-			Exists:    err == nil,
-			Active:    server == out.Webserver,
-		})
-	}
+	custom := d.root.CustomConfig(p.Name, out.Webserver)
+	_, statErr := os.Stat(custom)
+	out.CustomConfig = CustomConfig{Webserver: out.Webserver, Path: custom, Exists: statErr == nil}
 
 	// INFO: The front door serves every project on ports 80 and 443, forwarding
 	// those on the other webserver, so no URL carries a port.

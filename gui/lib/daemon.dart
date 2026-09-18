@@ -35,7 +35,13 @@ class Method {
   static const projectRestart = 'projects.restart';
   static const projectSettings = 'projects.settings';
   static const projectScaffold = 'projects.scaffold';
-  static const projectCustomConfig = 'projects.customConfig';
+  static const customConfigRead = 'projects.customConfig.read';
+  static const customConfigSave = 'projects.customConfig.save';
+  static const customConfigDelete = 'projects.customConfig.delete';
+  static const configTemplateRead = 'configTemplates.read';
+  static const configTemplateSave = 'configTemplates.save';
+  static const configTemplateCreate = 'configTemplates.create';
+  static const configTemplateDelete = 'configTemplates.delete';
 }
 
 /// Connection status, for the one line of chrome the window spends on it.
@@ -164,9 +170,11 @@ class Daemon extends ChangeNotifier {
   Future<void> removeProject(String name) => _act(Method.projectRemove, {'name': name});
   Future<void> stopAll() => _act(Method.stopAll);
 
-  /// Back to a first start: every folder in www/ and every setting deleted
+  /// Back to a first start: every setting deleted, every project forgotten,
+  /// and the folders in www/ deleted only with [deleteProjects]
   /// (features/settings.feature, "Resetting Wharf").
-  Future<void> reset() => _act(Method.reset);
+  Future<void> reset({bool deleteProjects = false}) =>
+      _act(Method.reset, {'delete_projects': deleteProjects});
   Future<void> setWebserver(String name) => _act(Method.setWebserver, {'name': name});
   Future<void> setPhpVersion(String version) => _act(Method.setPhpVersion, {'version': version});
 
@@ -206,29 +214,6 @@ class Daemon extends ChangeNotifier {
       }
       await refresh();
     });
-  }
-
-  /// Opens a project's custom config for one webserver, creating it first if
-  /// needed (features/app-configuration.feature).
-  Future<void> editCustomConfig(
-    String project,
-    String webserver,
-    Future<void> Function(String) open,
-  ) async {
-    final known = state.projects
-        .where((p) => p.name == project)
-        .expand((p) => p.customConfigs)
-        .where((c) => c.webserver == webserver && c.exists)
-        .map((c) => c.path)
-        .firstOrNull;
-    await _openOrCreate(
-      known,
-      open,
-      () => _require().call(Method.projectCustomConfig, {
-        'name': project,
-        'webserver': webserver,
-      }),
-    );
   }
 
   /// Opens config/php.ini, creating it first if needed
@@ -329,6 +314,7 @@ class Daemon extends ChangeNotifier {
     String? webserverOverride,
     String? phpOverride,
     bool? ssl,
+    String? template,
   }) async {
     await _guard(() async {
       await _require().call(Method.projectSettings, {
@@ -339,6 +325,7 @@ class Daemon extends ChangeNotifier {
           'webserver_override': ?webserverOverride,
           'php_version': ?phpOverride,
           'ssl': ?ssl,
+          'template': ?template,
         },
       });
       await refresh();
@@ -351,6 +338,64 @@ class Daemon extends ChangeNotifier {
   }
 
   void dismissNotice() => _set(() => notice = null);
+
+  /// A config template's rules for one webserver, for the editor. Throws, so
+  /// the editor can say why it has nothing to show.
+  Future<String> readConfigTemplate(String id, String webserver) async {
+    final result = await _require().call(Method.configTemplateRead, {
+      'id': id,
+      'webserver': webserver,
+    });
+    return result['content'] as String? ?? '';
+  }
+
+  /// Saves a config template's rules for one webserver; the daemon restarts
+  /// what serves the projects using it. Throws, so the editor stays open on a
+  /// failed save (features/config-templates.feature).
+  Future<void> saveConfigTemplate(String id, String webserver, String content) =>
+      _attempt(Method.configTemplateSave, {'id': id, 'webserver': webserver, 'content': content});
+
+  /// Creates a config template from a typed name and returns its id. Throws,
+  /// so the name window can say a name is taken.
+  Future<String> createConfigTemplate(String name) async {
+    final result = await _require().call(Method.configTemplateCreate, {'name': name});
+    await refresh();
+    return result['id'] as String? ?? '';
+  }
+
+  /// A project's custom config for the webserver serving it, or its config
+  /// template's rules to start from. Throws, so the editor can say why it has
+  /// nothing to show (features/app-configuration.feature).
+  Future<CustomConfigRules> readCustomConfig(String project) async {
+    final result = await _require().call(Method.customConfigRead, {'name': project});
+    return CustomConfigRules.fromJson(result);
+  }
+
+  /// Saves a project's custom config; the daemon refuses rules without
+  /// Wharf's placeholders, or for a webserver no longer serving the project.
+  /// Throws, so the editor stays open on a failed save.
+  Future<void> saveCustomConfig(String project, String webserver, String content) => _attempt(
+    Method.customConfigSave,
+    {'name': project, 'webserver': webserver, 'content': content},
+  );
+
+  /// Deletes a project's custom config: its config template applies again.
+  Future<void> deleteCustomConfig(String project, String webserver) =>
+      _attempt(Method.customConfigDelete, {'name': project, 'webserver': webserver});
+
+  /// Deletes the user's own config template, or restores a built-in one.
+  Future<void> deleteConfigTemplate(String id) => _act(Method.configTemplateDelete, {'id': id});
+
+  /// Like [_act], but a failure reaches the caller instead of the notice line.
+  Future<void> _attempt(String method, Map<String, dynamic> params) async {
+    _set(() => _pending++);
+    try {
+      final result = await _require().call(method, params);
+      _set(() => state = WharfState.fromJson(result));
+    } finally {
+      _set(() => _pending--);
+    }
+  }
 
   Future<void> _act(String method, [Map<String, dynamic>? params]) async {
     await _guard(() async {

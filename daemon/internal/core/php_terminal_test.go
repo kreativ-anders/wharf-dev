@@ -33,6 +33,34 @@ func (h *harness) configFile() string {
 	return string(raw)
 }
 
+// terminalOff is a daemon whose first start leaves "Use in terminal" off, as
+// a Wharf folder made for a test run does.
+func terminalOff(o *Options) { o.NoTerminal = true }
+
+// features/php-terminal.feature — "Use in terminal is on from the first start"
+func TestUseInTerminalIsOnFromTheFirstStart(t *testing.T) {
+	h := newHarness(t)
+
+	if !strings.Contains(h.configFile(), `"terminal": true`) {
+		t.Errorf("config/wharf.json does not record it:\n%s", h.configFile())
+	}
+	if !h.shell.OnPath(h.root.PathBin()) {
+		t.Fatalf("bin/path is not on PATH after a first start; calls %v", h.shell.Calls())
+	}
+	if term := h.d.State().Services.PHP.Terminal; !term.On || len(term.Places) == 0 {
+		t.Errorf("snapshot = %+v, want it on, naming the place changed", term)
+	}
+
+	// INFO: And a Wharf folder started only for tests leaves it off
+	off := newHarness(t, terminalOff)
+	if calls := off.shell.Calls(); len(calls) != 0 {
+		t.Fatalf("a test folder changed the PATH: %v", calls)
+	}
+	if off.d.Config().Services.PHP.Terminal {
+		t.Fatal("a test folder recorded the switch as on")
+	}
+}
+
 // features/php-terminal.feature — "The global default PHP is kept in one folder"
 func TestTheDefaultPHPIsLinkedIntoBinPath(t *testing.T) {
 	h := newHarness(t)
@@ -86,7 +114,7 @@ func TestBinPathHoldsNoPHPWhileTheDefaultIsMissing(t *testing.T) {
 
 // features/php-terminal.feature — "Putting Wharf's PHP on the terminal PATH"
 func TestUseInTerminalPutsBinPathOnPath(t *testing.T) {
-	h := newHarness(t)
+	h := newHarness(t, terminalOff)
 
 	if err := h.d.SetPHPTerminal(h.ctx(), true); err != nil {
 		t.Fatal(err)
@@ -102,13 +130,13 @@ func TestUseInTerminalPutsBinPathOnPath(t *testing.T) {
 	if !term.On || term.Dir != h.root.PathBin() || !slices.Equal(term.Places, []string{"~/.zshrc"}) {
 		t.Errorf("snapshot = %+v, want it on, naming bin/path and the place changed", term)
 	}
-	if h.el.RunCount() != 0 || len(h.el.Writes) != 0 {
-		t.Errorf("a password was asked for: %d runs, %d writes", h.el.RunCount(), len(h.el.Writes))
+	if n := h.el.RunCount(); n != 0 {
+		t.Errorf("a password was asked for %d times", n)
 	}
 }
 
 func TestAFailedChangeLeavesTheSwitchOff(t *testing.T) {
-	h := newHarness(t)
+	h := newHarness(t, terminalOff)
 	h.shell.Err = os.ErrPermission
 
 	if err := h.d.SetPHPTerminal(h.ctx(), true); err == nil {
@@ -121,7 +149,7 @@ func TestAFailedChangeLeavesTheSwitchOff(t *testing.T) {
 
 // features/php-terminal.feature — "Turning it on again adds nothing twice"
 func TestStartingAgainPutsBinPathOnPathOnce(t *testing.T) {
-	h := newHarness(t)
+	h := newHarness(t, terminalOff)
 	if err := h.d.SetPHPTerminal(h.ctx(), true); err != nil {
 		t.Fatal(err)
 	}
@@ -160,8 +188,23 @@ func TestStartingAgainPutsBinPathOnPathOnce(t *testing.T) {
 }
 
 func TestStartingWithTheSwitchOffTouchesNothing(t *testing.T) {
-	h := newHarness(t)
-	if calls := h.shell.Calls(); len(calls) != 0 {
+	h := newHarness(t, terminalOff)
+	if err := h.d.SetPHPTerminal(h.ctx(), false); err != nil {
+		t.Fatal(err)
+	}
+	before := len(h.shell.Calls())
+
+	// INFO: Wharf starts again on the same folder, its config saying "off".
+	opts := h.opts
+	store, err := config.Load(h.root.ConfigFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts.Store, opts.NoTerminal = store, false
+	if _, err := New(opts); err != nil {
+		t.Fatal(err)
+	}
+	if calls := h.shell.Calls()[before:]; len(calls) != 0 {
 		t.Fatalf("a start with the switch off changed the PATH: %v", calls)
 	}
 }
@@ -214,23 +257,23 @@ func TestCastingOffLeavesBinPathOnPath(t *testing.T) {
 	}
 }
 
-// features/php-terminal.feature — "Resetting Wharf takes PHP off the terminal PATH"
-func TestResetTakesBinPathOffPath(t *testing.T) {
+// features/php-terminal.feature — "Resetting Wharf leaves PHP in the terminal, as a first start does"
+func TestResetLeavesBinPathOnPath(t *testing.T) {
 	h := newHarness(t)
 	h.withCLI("8.1", "8.2", "8.3")
-	if err := h.d.SetPHPTerminal(h.ctx(), true); err != nil {
+	if err := h.d.SetPHPTerminal(h.ctx(), false); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := h.d.Reset(h.ctx()); err != nil {
+	if err := h.d.Reset(h.ctx(), false); err != nil {
 		t.Fatal(err)
 	}
 
-	if h.shell.OnPath(h.root.PathBin()) {
-		t.Fatal("bin/path is still on PATH after a reset")
+	if !h.shell.OnPath(h.root.PathBin()) {
+		t.Fatal("bin/path is not on PATH after a reset")
 	}
-	if h.d.Config().Services.PHP.Terminal {
-		t.Fatal("the switch is still on after a reset")
+	if !h.d.Config().Services.PHP.Terminal {
+		t.Fatal("the switch is off after a reset")
 	}
 	cfg := h.d.Config()
 	want := filepath.Join(h.root.PHPBin(cfg.Services.PHP.Version), php.CLIName())
@@ -241,7 +284,7 @@ func TestResetTakesBinPathOffPath(t *testing.T) {
 
 // features/php-terminal.feature — "A Wharf block broken by hand is not guessed at"
 func TestABrokenBlockIsAConflictNotAFailure(t *testing.T) {
-	h := newHarness(t)
+	h := newHarness(t, terminalOff)
 	h.shell.Err = &shellpath.BrokenBlockError{Path: "/Users/x/.zshrc"}
 
 	err := h.d.SetPHPTerminal(h.ctx(), true)

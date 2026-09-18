@@ -18,8 +18,11 @@ A new concept gets a row here in the same commit that introduces it.
 | **Hide** / **Remove** (a PHP) | *Hide*: detection passes over a PHP found on the machine (`services.php.hidden`). *Remove*: delete a PHP Wharf downloaded. Wharf never deletes what it did not install | `features/php-runtime.feature` |
 | **Use in terminal** | Put `bin/path`, whose `php` runs the global default version, first on the user's PATH — `services.php.terminal` | `features/php-terminal.feature` |
 | **Recommended** (PHP) | The newest version in active support — what a first run selects | `gui/lib/models/state.dart` |
+| **Config template** | A whole nginx server block and Apache virtual host for one kind of project, with placeholders — `{{listen}}`, `{{root}}`, `{{php}}` … — that Wharf fills in. Wharf's own for Kirby, Laravel, WordPress and others are built in; a changed or new one is a file in `config/templates/`. A project picks one (`projects[].template`); without one, it gets a plain block. Not a *quick-app template*, which is what a new project's folder starts from | `features/config-templates.feature` |
+| **Custom config** | One project's own rules for the webserver serving it: a copy of its config template, placeholders intact, used instead of the template. A file in `config/vhosts/<project>.<webserver>.conf`; the other webserver's file is kept but unused | `features/app-configuration.feature` |
 | **Stop all** | Stop every running project; Wharf stays open | `features/tray-actions.feature` |
 | **Cast off** / **Quit** | Stop everything and quit — *Cast off* in the window, *Quit* in the tray. The only action about Wharf itself rather than a project | `features/single-application.feature` |
 | **`@v1`** / **`@roadmap`** | Scenario tags: in this version / specified and deliberately not built | `CLAUDE.md` §1 |
 | **Claim** | The comment above a test naming the scenario it proves | `CLAUDE.md` §1 |
+| **Debug information** | Plain text for a bug report — version, system, Wharf folder, webserver, PHP, SSL — copied from Settings → General → Help; Wharf sends it nowhere | `features/settings.feature` |
 | **Snapshot** | The full state the daemon sends after every change; the window and the tray render the same one | `daemon/internal/core/state.go` |

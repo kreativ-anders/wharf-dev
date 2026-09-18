@@ -2,72 +2,114 @@ package core
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
-	"slices"
 	"time"
 
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/config"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/configtemplate"
 	wruntime "github.com/kreativ-anders/wharf-dev/daemon/internal/runtime"
 )
 
-// CustomConfig returns the path of a project's custom directives for one
-// webserver, creating the file with a commented starting point if it does not
-// exist yet (app-configuration.feature, "Custom webserver directives for one
-// project"). The file is the user's from then on: Wharf only ever includes it.
-func (d *Daemon) CustomConfig(ctx context.Context, name, server string) (string, error) {
-	cfg := d.store.Get()
-	if _, ok := cfg.Project(name); !ok {
-		return "", notFound("no project named %q", name)
-	}
-	if !slices.Contains(cfg.Services.Webserver.Available, server) {
-		return "", invalid("%q is not an available webserver", server)
-	}
-	path := d.root.CustomConfig(name, server)
-	if _, err := os.Stat(path); err == nil {
-		return path, nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(path, []byte(customConfigStub(name, server)), 0o644); err != nil {
-		return "", err
-	}
-	// INFO: Apply at once rather than on the watcher's next tick, so the project
-	// is already using the file by the time the editor opens it.
-	d.ApplyCustomConfigs(ctx)
-	return path, nil
+// CustomConfigRules is a project's custom config as the editor opens it.
+type CustomConfigRules struct {
+	// Webserver is the one serving the project, the only one whose custom
+	// config can be edited (app-configuration.feature, "A custom config
+	// belongs to the webserver serving the project").
+	Webserver string `json:"webserver"`
+	Content   string `json:"content"`
+	// Exists is false while Content is only the starting point.
+	Exists bool `json:"exists"`
 }
 
-func customConfigStub(name, server string) string {
-	other, block, example := "apache", "server { } block", `#   client_max_body_size 64m;
-#   location /api/ { proxy_pass http://127.0.0.1:3000; }
-#
-# Wharf already sets listen, server_name, root, index, "location /", the PHP
-# location and Kirby's own rules — the whole recipe from Kirby's docs. A
-# server { } block or any of those directives here makes nginx refuse to
-# start.`
-	if server == "apache" {
-		other, block, example = "nginx", "<VirtualHost> section", `#   php_value upload_max_filesize 64M
-#   Header set X-Robots-Tag "noindex"
-#
-# .htaccess files in the project work as well: AllowOverride is All, so
-# Kirby's own .htaccess applies without anything here.`
+// ReadCustomConfig returns a project's custom config for the webserver
+// serving it, or — while it has none — its config template's rules for that
+// webserver, placeholders intact, to start from (app-configuration.feature,
+// "A project's custom config starts from its config template").
+func (d *Daemon) ReadCustomConfig(name string) (CustomConfigRules, error) {
+	cfg := d.store.Get()
+	p, ok := cfg.Project(name)
+	if !ok {
+		return CustomConfigRules{}, notFound("no project named %q", name)
 	}
-	return fmt.Sprintf(`# Custom %[1]s directives for %[2]s.
-#
-# Wharf includes this file inside the project's %[3]s, after its own
-# directives: write single directives, not a block of your own. It is used
-# only while %[2]s is served by %[1]s; the %[4]s file beside it is used when
-# the project is served by %[4]s.
-#
-# Saving the file restarts the webserver serving %[2]s. A mistake here keeps
-# that webserver from starting — its error appears in Wharf.
-#
-# Examples:
-%[5]s
-`, server, name, block, other, example)
+	server := cfg.WebserverFor(p)
+	out := CustomConfigRules{Webserver: server}
+	body, err := os.ReadFile(d.root.CustomConfig(name, server))
+	if err == nil {
+		out.Content, out.Exists = string(body), true
+		return out, nil
+	}
+	if !os.IsNotExist(err) {
+		return out, err
+	}
+	lib := d.res.Templates()
+	rules, templateName := configtemplate.Plain(server), ""
+	if p.Template != "" {
+		if rules, err = lib.Read(p.Template, server); err != nil {
+			return out, notFound("the config template %q does not exist — pick another in %s's settings first", p.Template, name)
+		}
+		templateName = p.Template
+		for _, t := range lib.List() {
+			if t.ID == p.Template {
+				templateName = t.Name
+			}
+		}
+	}
+	out.Content = configtemplate.CustomStarter(name, templateName, server, rules)
+	return out, nil
+}
+
+// SaveCustomConfig writes a project's custom config for the webserver serving
+// it and restarts that webserver with it. Rules without {{listen}}, {{ssl}}
+// or {{server_name}} are refused, and so is a save for a webserver that no
+// longer serves the project — the editor was opened before a switch, and its
+// rules would land in the other webserver's file.
+func (d *Daemon) SaveCustomConfig(ctx context.Context, name, server, content string) error {
+	path, err := d.customConfigPath(name, server)
+	if err != nil {
+		return err
+	}
+	if err := configtemplate.SaveFile(path, server, content); err != nil {
+		if errors.Is(err, configtemplate.ErrIncomplete) {
+			return invalid("%s", err)
+		}
+		return err
+	}
+	// INFO: Applied at once rather than on the watcher's next tick, so the
+	// project already runs with the change when the editor closes.
+	d.ApplyCustomConfigs(ctx)
+	d.publish()
+	return nil
+}
+
+// DeleteCustomConfig deletes a project's custom config for the webserver
+// serving it, which serves the project with its config template again
+// (app-configuration.feature, "Removing a custom config returns to the
+// config template").
+func (d *Daemon) DeleteCustomConfig(ctx context.Context, name, server string) error {
+	path, err := d.customConfigPath(name, server)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	d.ApplyCustomConfigs(ctx)
+	d.publish()
+	return nil
+}
+
+func (d *Daemon) customConfigPath(name, server string) (string, error) {
+	cfg := d.store.Get()
+	p, ok := cfg.Project(name)
+	if !ok {
+		return "", notFound("no project named %q", name)
+	}
+	if serving := cfg.WebserverFor(p); server != serving {
+		return "", conflict("%s is served by %s, not %s — open its custom config again", name, serving, server)
+	}
+	return d.root.CustomConfig(name, server), nil
 }
 
 // PHPSettings returns config/php.ini, creating it with a commented starting
@@ -147,9 +189,11 @@ func modTime(path string) time.Time {
 }
 
 // customConfigTimes records the modification time of every custom config
-// file that belongs to a registered project.
+// file that belongs to a registered project, and of every file in
+// config/templates/ (config-templates.feature, "A config template edited in
+// another editor applies too").
 func (d *Daemon) customConfigTimes(cfg *config.Config) map[string]time.Time {
-	out := map[string]time.Time{}
+	out := d.res.Templates().ModTimes()
 	for _, p := range cfg.Projects {
 		for _, server := range cfg.Services.Webserver.Available {
 			path := d.root.CustomConfig(p.Name, server)
@@ -190,7 +234,21 @@ func (d *Daemon) ApplyCustomConfigs(ctx context.Context) {
 	reloadGlobal := false
 	for _, p := range cfg.Projects {
 		server := cfg.WebserverFor(p)
-		if !changed[d.root.CustomConfig(p.Name, server)] || !d.isStarted(p.Name) {
+		touched := changed[d.root.CustomConfig(p.Name, server)] ||
+			(p.Template != "" && changed[d.res.Templates().Path(p.Template, server)])
+		if !touched || !d.isStarted(p.Name) {
+			continue
+		}
+		// WARNING: Rules Wharf cannot use fail this project alone. Rendered
+		// into the front door, they would fail every project it serves.
+		if err := d.checkRules(cfg, p); err != nil {
+			d.startFailed(p.Name, err)
+			if cfg.OwnInstance(p) {
+				if err := d.sup.Stop(ctx, projectServiceID(p.Name)); err != nil {
+					d.log.Error("apply custom config", "project", p.Name, "err", err)
+				}
+			}
+			reloadGlobal = true
 			continue
 		}
 		if !cfg.OwnInstance(p) {
@@ -209,7 +267,7 @@ func (d *Daemon) ApplyCustomConfigs(ctx context.Context) {
 		}
 	}
 	if reloadGlobal {
-		if err := d.reloadGlobalWebserver(ctx, cfg); err != nil {
+		if err := d.settleFrontDoor(ctx, cfg); err != nil {
 			d.log.Error("apply custom config", "err", err)
 		}
 	}

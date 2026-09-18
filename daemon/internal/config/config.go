@@ -81,6 +81,10 @@ type Project struct {
 	// Path is the project's folder when it lives outside www/. Absent for a
 	// folder in www/, which is found by name (project-folders.feature).
 	Path string `json:"path,omitempty"`
+	// Template is the config template whose rules the project's server block
+	// carries; absent means none, and the webserver's own defaults apply
+	// (config-templates.feature).
+	Template string `json:"template,omitempty"`
 }
 
 // Default returns the config written on first run.
@@ -343,6 +347,7 @@ func (c *Config) normalise() {
 		p := &c.Projects[i]
 		p.Name = strings.TrimSpace(p.Name)
 		p.Path = strings.TrimSpace(p.Path)
+		p.Template = strings.TrimSpace(p.Template)
 		if p.WebserverOverride != nil && strings.TrimSpace(*p.WebserverOverride) == "" {
 			p.WebserverOverride = nil
 		}
@@ -420,8 +425,16 @@ func CheckProject(p Project) error {
 		return fmt.Errorf("the folder of %q, %q, holds a quote or a line break, which no webserver config "+
 			"can name — rename the folder", p.Name, p.Path)
 	}
+	if p.Template != "" && !TemplateIDRe.MatchString(p.Template) {
+		return fmt.Errorf("the config template of %q, %q, cannot be used: it names files in config/templates/ — "+
+			"use lowercase letters, digits and hyphens, or remove the key", p.Name, p.Template)
+	}
 	return nil
 }
+
+// TemplateIDRe is what a config template's id may look like: it becomes the
+// start of a file name in config/templates/.
+var TemplateIDRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // validate refuses a config the daemon could not serve safely.
 func (c *Config) validate() error {

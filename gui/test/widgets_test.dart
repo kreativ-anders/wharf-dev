@@ -33,6 +33,18 @@ class _PhpSettingsDaemon extends Daemon {
       open(state.services.php.settings);
 }
 
+/// A fixture daemon that records every reset it is asked for.
+class _ResetDaemon extends Daemon {
+  _ResetDaemon(String json) : super(root: '/tmp/wharf-test') {
+    state = WharfState.fromJson(jsonDecode(json) as Map<String, dynamic>);
+  }
+
+  final resets = <bool>[];
+
+  @override
+  Future<void> reset({bool deleteProjects = false}) async => resets.add(deleteProjects);
+}
+
 /// A fixture daemon that records what casting off asks of it.
 class _CastOffDaemon extends Daemon {
   _CastOffDaemon(String json) : super(root: '/tmp/wharf-test') {
@@ -145,7 +157,12 @@ void main() {
 
     final daemon = fixture(_twoProjects);
     await tester.pumpWidget(
-      wrap(ListenableBuilder(listenable: daemon, builder: (_, _) => ProjectsPage(daemon: daemon))),
+      wrap(
+        ListenableBuilder(
+          listenable: daemon,
+          builder: (_, _) => ProjectsPage(daemon: daemon),
+        ),
+      ),
     );
     expect(find.byType(LinearProgressIndicator), findsNothing);
 
@@ -281,9 +298,7 @@ void main() {
   });
 
   // features/single-application.feature — "Casting off from the main window"
-  testWidgets('cast off stands opposite New project, stops everything, then quits', (
-    tester,
-  ) async {
+  testWidgets('cast off stands opposite New project, stops everything, then quits', (tester) async {
     final daemon = _CastOffDaemon(_twoProjects);
     var quit = 0;
     await tester.pumpWidget(
@@ -335,17 +350,13 @@ void main() {
     for (final label in [
       'PHP version',
       'Webserver',
+      'Config template',
       'SSL',
-      'Custom webserver config',
+      'Custom nginx config',
       'Open folder',
     ]) {
       expect(find.text(label), findsOneWidget, reason: label);
     }
-    // INFO: One custom config per webserver, the one in use marked as such.
-    expect(find.text('nginx · in use'), findsOneWidget);
-    expect(find.text('apache'), findsOneWidget);
-    expect(find.widgetWithText(TextButton, 'Edit'), findsOneWidget);
-    expect(find.widgetWithText(TextButton, 'Create'), findsOneWidget);
   });
 
   // features/project-logs.feature — "Opening a project's logs"
@@ -474,33 +485,57 @@ void main() {
     await tester.enterText(field, '!!!');
     await tester.pump();
     expect(find.text('Use at least one letter or digit'), findsOneWidget);
-    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Create')).onPressed, isNull);
+    expect(
+      tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Create')).onPressed,
+      isNull,
+    );
   });
 
   // features/settings.feature — "Reset asks first"
-  testWidgets('reset warns first, naming what is deleted and what is kept', (tester) async {
-    final daemon = fixture(_twoProjects);
+  testWidgets('reset warns first, keeping www/ unless the box is ticked', (tester) async {
+    final daemon = _ResetDaemon(_twoProjects);
     await showSettings(tester, daemon);
 
-    await tester.ensureVisible(find.text('Reset Wharf…'));
-    await tester.tap(find.text('Reset Wharf…'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
+    Future<void> openDialog() async {
+      await tester.ensureVisible(find.text('Reset Wharf…'));
+      await tester.tap(find.text('Reset Wharf…'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+    }
 
+    await openDialog();
     expect(find.text('Reset Wharf?'), findsOneWidget);
-    // INFO: legacy-app lives in www/, and so does the unregistered folder: both go.
-    expect(find.text('•  legacy-app'), findsOneWidget);
-    expect(find.text('•  dropped-in'), findsOneWidget);
-    // INFO: my-kirby-site was added from elsewhere: it stays where it is.
+    // INFO: Then a warning says in plain words what is deleted and what is kept
+    expect(find.text('•  Your settings, custom webserver configs and php.ini'), findsOneWidget);
+    expect(find.text('•  Downloaded PHP versions and webservers'), findsOneWidget);
+    expect(find.textContaining('Your project folders in /Users/x/Wharf/www'), findsOneWidget);
     expect(find.textContaining('/Users/x/Code/my-kirby-site'), findsOneWidget);
-    // INFO: The whole config folder goes.
-    expect(find.textContaining('Everything in /Users/x/Wharf/config goes too'), findsOneWidget);
+    expect(find.text('No password is needed.'), findsOneWidget);
+    // INFO: And the folders in "www/" are kept unless the user ticks the box
+    expect(find.text('•  legacy-app'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Reset'), findsOneWidget);
 
     // INFO: And nothing is deleted unless the user confirms
     await tester.tap(find.text('Cancel'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Reset Wharf?'), findsNothing);
+    expect(daemon.resets, isEmpty);
+
+    // INFO: And once ticked, the warning names every folder that will be deleted
+    await openDialog();
+    await tester.tap(find.text('Also delete the projects in www/'));
+    await tester.pump();
+    expect(find.text('•  legacy-app'), findsOneWidget);
+    expect(find.text('•  dropped-in'), findsOneWidget);
+    expect(find.textContaining('Your project folders in'), findsNothing);
+    // INFO: The folder added from elsewhere is never among them.
+    expect(find.textContaining('/Users/x/Code/my-kirby-site'), findsOneWidget);
+
+    await tester.tap(find.text('Delete 2 folders and reset'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(daemon.resets, [true]);
   });
 
   // features/tray-actions.feature — "Adding a project via the tray"
@@ -539,11 +574,14 @@ void main() {
     await showSettings(tester, fixture(_twoProjects));
 
     final pages = [
-      for (final e in find
-          .byWidgetPredicate(
-            (w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('nav:'),
-          )
-          .evaluate())
+      for (final e
+          in find
+              .byWidgetPredicate(
+                (w) =>
+                    w.key is ValueKey<String> &&
+                    (w.key! as ValueKey<String>).value.startsWith('nav:'),
+              )
+              .evaluate())
         (e.widget.key! as ValueKey<String>).value,
     ];
     expect(pages, ['nav:general', 'nav:webserver', 'nav:php', 'nav:ssl']);
@@ -560,10 +598,10 @@ void main() {
   testWidgets('settings pages are chosen from a navigation on the left', (tester) async {
     await showSettings(tester, fixture(_twoProjects));
 
-    // INFO: General holds the appearance, the config folder, the version and the reset.
+    // INFO: General holds the appearance, the config folder, About and the reset.
     expect(find.text('Appearance'), findsOneWidget);
     expect(find.text('Open config folder'), findsOneWidget);
-    expect(find.text('Version'), findsOneWidget);
+    expect(find.text('About'), findsOneWidget);
     expect(find.text('Reset Wharf…'), findsOneWidget);
     final php = find.byKey(const ValueKey('nav:php'));
     expect(tester.getCenter(php).dx, lessThan(tester.getCenter(find.text('Appearance')).dx));
@@ -597,6 +635,78 @@ void main() {
     // INFO: A GUI no daemon has answered yet says so, rather than showing "Wharf ".
     await showSettings(tester, fixture('{}'));
     expect(find.text('Version unknown'), findsOneWidget);
+  });
+
+  // features/settings.feature — "General names the Wharf folder in use"
+  testWidgets('General shows the Wharf folder in use', (tester) async {
+    final previous = usualWharfFolder;
+    addTearDown(() => usualWharfFolder = previous);
+    usualWharfFolder = () => '/Users/x/Wharf';
+    final opened = captureOpened();
+    await showSettings(tester, fixture(_twoProjects));
+
+    expect(find.text('/Users/x/Wharf'), findsOneWidget);
+    expect(find.textContaining('WHARF_ROOT'), findsNothing, reason: '~/Wharf needs no note');
+    await tester.tap(find.text('Open Wharf folder'));
+    expect(opened, ['/Users/x/Wharf']);
+
+    // INFO: What `make gui` does: the daemon runs against a throwaway folder.
+    usualWharfFolder = () => '/Users/other/Wharf';
+    await showSettings(tester, fixture(_twoProjects));
+    expect(find.text('Not the usual /Users/other/Wharf: WHARF_ROOT points here.'), findsOneWidget);
+  });
+
+  // features/settings.feature — "Help links to the repository"
+  testWidgets('Help links to the repository', (tester) async {
+    final previous = openLink;
+    addTearDown(() => openLink = previous);
+    final opened = <String>[];
+    openLink = (url) async => opened.add(url);
+    await showSettings(tester, fixture(_twoProjects));
+
+    expect(find.text('Help'), findsOneWidget);
+    await tester.tap(find.text('Wharf on GitHub'));
+
+    expect(opened, ['https://github.com/kreativ-anders/wharf-dev']);
+  });
+
+  // features/settings.feature — "Copying debug information"
+  testWidgets('debug information is copied as plain text', (tester) async {
+    String? copied;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (
+      call,
+    ) async {
+      if (call.method == 'Clipboard.setData') {
+        copied = (call.arguments as Map)['text'] as String;
+      }
+      return null;
+    });
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await showSettings(tester, fixture(_twoProjects));
+
+    await tester.tap(find.text('Copy debug information'));
+    await tester.pump();
+
+    expect(copied, contains('Wharf v0.1.0'));
+    expect(copied, contains('Wharf folder: /Users/x/Wharf'));
+    expect(find.text('Debug information copied.'), findsOneWidget);
+
+    final state = WharfState.fromJson(jsonDecode(_twoProjects) as Map<String, dynamic>);
+    expect(
+      debugInformation(state, system: 'macos 26.0', architecture: 'macos_arm64'),
+      'Wharf v0.1.0\n'
+      'System: macos 26.0\n'
+      'Architecture: macos_arm64\n'
+      'Wharf folder: /Users/x/Wharf\n'
+      'Webserver: nginx 1.27.3\n'
+      'PHP: 8.4.3\n'
+      'SSL: trusted',
+    );
   });
 
   // features/php-runtime.feature — "First start prefers a supported version
@@ -714,7 +824,10 @@ void main() {
     await showSettings(tester, off, SettingsSection.php);
 
     await tester.ensureVisible(find.text('Use in terminal'));
-    expect(find.text('Terminals and editors run PHP 8.4 as php, from /Users/x/Wharf/bin/path.'), findsOneWidget);
+    expect(
+      find.text('Terminals and editors run PHP 8.4 as php, from /Users/x/Wharf/bin/path.'),
+      findsOneWidget,
+    );
     expect(find.text('A new terminal picks it up.'), findsNothing);
     await tester.tap(find.text('Use in terminal'));
     await tester.pump();
@@ -922,12 +1035,8 @@ const _twoProjects = '''
      "webserver_version": "1.27.3", "php_full_version": "8.4.3",
      "dir": "/Users/x/Code/my-kirby-site", "linked": true,
      "log_dir": "/Users/x/Wharf/data/log/projects/my-kirby-site",
-     "custom_configs": [
-       {"webserver": "apache", "path": "/Users/x/Wharf/config/vhosts/my-kirby-site.apache.conf",
-        "exists": false, "active": false},
-       {"webserver": "nginx", "path": "/Users/x/Wharf/config/vhosts/my-kirby-site.nginx.conf",
-        "exists": true, "active": true}
-     ]},
+     "custom_config": {"webserver": "nginx",
+       "path": "/Users/x/Wharf/config/vhosts/my-kirby-site.nginx.conf", "exists": true}},
     {"name": "legacy-app", "state": "stopped", "url": "https://legacy-app.localhost",
      "ssl": true,
      "webserver": "nginx", "php_version": "8.4", "port": 8081,

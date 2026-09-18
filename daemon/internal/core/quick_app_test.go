@@ -79,6 +79,11 @@ func TestScaffoldingANewKirbyProject(t *testing.T) {
 		}
 	}
 
+	// INFO: And its config template is "Kirby"
+	if got := h.d.Config().Projects[0].Template; got != "kirby" {
+		t.Fatalf("config template = %q, want kirby", got)
+	}
+
 	// INFO: And the project appears in the GUI's project list
 	found := h.project("my-kirby-site")
 	if found.Name != "my-kirby-site" {
@@ -199,19 +204,12 @@ func TestChoosingTheWebserverWhileCreatingAProject(t *testing.T) {
 		t.Fatalf("override = %v, want apache", entry.WebserverOverride)
 	}
 	// INFO: And its settings open, with its apache config one click away: the
-	// snapshot marks apache's file as the one in use, which is the entry the
-	// GUI puts first.
+	// custom config the snapshot offers is apache's.
 	if p.Webserver != "apache" {
 		t.Fatalf("webserver = %q, want apache", p.Webserver)
 	}
-	inUse := ""
-	for _, c := range p.CustomConfigs {
-		if c.Active {
-			inUse = c.Webserver
-		}
-	}
-	if inUse != "apache" {
-		t.Fatalf("custom config in use = %q, want apache", inUse)
+	if got := p.CustomConfig.Webserver; got != "apache" {
+		t.Fatalf("custom config offered for %q, want apache", got)
 	}
 
 	// INFO: And a project created with the webserver left at "Default" has no override
@@ -252,6 +250,10 @@ func TestCreatingAnEmptyProject(t *testing.T) {
 	body, _ := os.ReadFile(filepath.Join(h.root.ProjectDir("blank"), "index.php"))
 	if !strings.HasPrefix(string(body), "<?php") {
 		t.Fatalf("index.php is not PHP:\n%s", body)
+	}
+	// INFO: And it has no config template
+	if p, _ := h.d.Config().Project("blank"); p.Template != "" {
+		t.Fatalf("config template = %q, want none", p.Template)
 	}
 }
 

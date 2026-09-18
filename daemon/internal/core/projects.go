@@ -19,7 +19,7 @@ import (
 func (d *Daemon) AddProject(ctx context.Context, name string) (Project, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.addProjectLocked(ctx, name, "", "")
+	return d.addProjectLocked(ctx, name, "", "", "")
 }
 
 // AddFolder registers the folder at path, wherever it is — the folder
@@ -38,7 +38,7 @@ func (d *Daemon) AddFolder(ctx context.Context, path string) (Project, error) {
 		return Project{}, notFound("no folder at %s", abs)
 	}
 	if sameDir(filepath.Dir(abs), d.root.WWW()) {
-		return d.addProjectLocked(ctx, filepath.Base(abs), "", "")
+		return d.addProjectLocked(ctx, filepath.Base(abs), "", "", "")
 	}
 
 	name := project.Slug(filepath.Base(abs))
@@ -57,7 +57,7 @@ func (d *Daemon) AddFolder(ctx context.Context, path string) (Project, error) {
 			return Project{}, conflict("%s is already the project %q", abs, p.Name)
 		}
 	}
-	return d.addProjectLocked(ctx, name, abs, "")
+	return d.addProjectLocked(ctx, name, abs, "", "")
 }
 
 // sameDir compares folders after resolving symlinks, so that /tmp and
@@ -73,8 +73,9 @@ func sameDir(a, b string) bool {
 }
 
 // addProjectLocked registers a project; path is its folder when that is not
-// www/<name>, and server the webserver it is pinned to, if any.
-func (d *Daemon) addProjectLocked(ctx context.Context, name, path, server string) (Project, error) {
+// www/<name>, server the webserver it is pinned to and template its config
+// template, if any.
+func (d *Daemon) addProjectLocked(ctx context.Context, name, path, server, template string) (Project, error) {
 	if err := project.ValidateName(name); err != nil {
 		return Project{}, invalid("%s", err)
 	}
@@ -93,7 +94,7 @@ func (d *Daemon) addProjectLocked(ctx context.Context, name, path, server string
 
 	// INFO: No hosts entry: <name>.localhost resolves to loopback without one, so
 	// adding a project never asks for a password (pretty-urls.feature).
-	entry := config.Project{Name: name, Port: port, Path: path}
+	entry := config.Project{Name: name, Port: port, Path: path, Template: template}
 	if server != "" {
 		if !slices.Contains(cfg.Services.Webserver.Available, server) {
 			return Project{}, invalid("%q is not an available webserver", server)
@@ -115,10 +116,8 @@ func (d *Daemon) addProjectLocked(ctx context.Context, name, path, server string
 	return d.projectState(next, entry), nil
 }
 
-// RemoveProject unregisters a project: its services are stopped, and a hosts
-// entry left from when projects were <name>.wharf is deleted, leaving every
-// other line untouched (pretty-urls.feature). The folder itself
-// is left on disk — the folder is the project, and deleting a user's files is
+// RemoveProject unregisters a project: its services are stopped and its
+// certificate revoked. The folder itself is left on disk — the folder is the project, and deleting a user's files is
 // not implied by removing it from the list.
 func (d *Daemon) RemoveProject(ctx context.Context, name string) error {
 	d.mu.Lock()
@@ -134,12 +133,6 @@ func (d *Daemon) RemoveProject(ctx context.Context, name string) error {
 	d.setStarted(name, false)
 	if err := d.sup.Stop(ctx, projectServiceID(name)); err != nil {
 		d.log.Error("stop project before removal", "project", name, "err", err)
-	}
-	// WARNING: The file decides, not the config: a project removed while the prompt
-	// was declined and then added again has a line and nothing recording it.
-	// Remove asks for nothing when the file holds no line for the project.
-	if err := d.hosts.Remove(name); err != nil && !errors.Is(err, elevate.ErrDeclined) {
-		return err
 	}
 	if p.SSL {
 		_ = d.certs.Revoke(wruntime.CertPath(d.root, name), wruntime.KeyPath(d.root, name))
@@ -188,6 +181,9 @@ func (d *Daemon) startProjectLocked(ctx context.Context, cfg *config.Config, p c
 			d.startFailed(p.Name, err)
 		}
 	}()
+	if err := d.checkRules(cfg, p); err != nil {
+		return err
+	}
 	if err := d.ensurePHP(ctx, cfg, cfg.PHPVersionFor(p)); err != nil {
 		return err
 	}
@@ -253,6 +249,9 @@ func (d *Daemon) RestartProject(ctx context.Context, name string) (err error) {
 			d.startFailed(p.Name, err)
 		}
 	}()
+	if err := d.checkRules(cfg, p); err != nil {
+		return err
+	}
 	if cfg.OwnInstance(p) {
 		if cfg, p, err = d.ownPort(cfg, p); err != nil {
 			return err
@@ -280,6 +279,9 @@ type Settings struct {
 	Webserver *string `json:"webserver_override"`
 	PHP       *string `json:"php_version"`
 	SSL       *bool   `json:"ssl"`
+	// Template is the config template's id; "" picks none
+	// (config-templates.feature, "Picking a config template for a project").
+	Template *string `json:"template"`
 }
 
 // UpdateSettings applies per-project overrides and restarts only what the
@@ -337,6 +339,12 @@ func (d *Daemon) UpdateSettings(ctx context.Context, name string, s Settings) (P
 	}
 	if s.SSL != nil {
 		after.SSL = *s.SSL
+	}
+	if s.Template != nil {
+		if *s.Template != "" && !d.res.Templates().Exists(*s.Template) {
+			return Project{}, notFound("no config template named %q", *s.Template)
+		}
+		after.Template = *s.Template
 	}
 
 	// WARNING: Certificates are issued before the config is written, so a failure to
@@ -433,7 +441,7 @@ func (d *Daemon) Scaffold(ctx context.Context, templateID, name, server string) 
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	p, err := d.addProjectLocked(ctx, name, "", server)
+	p, err := d.addProjectLocked(ctx, name, "", server, tpl.ConfigTemplate)
 	if err != nil {
 		// WARNING: The folder exists but could not be registered; leaving it behind
 		// with no config entry would be a project the GUI cannot see.

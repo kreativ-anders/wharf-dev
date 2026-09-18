@@ -8,21 +8,6 @@ import (
 
 type systemElevator struct{}
 
-// RequestElevatedWrite prompts via polkit. pkexec exits 126 when the
-// authorisation dialog is dismissed.
-func (systemElevator) RequestElevatedWrite(path string, content string) error {
-	tmp, cleanup, err := stage(content)
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-
-	if err := pkexec("/bin/cp", tmp, path); err != nil {
-		return fmt.Errorf("elevated write to %s: %w", path, err)
-	}
-	return nil
-}
-
 // RequestElevatedRun goes through /usr/bin/env because pkexec clears the
 // environment of the program it starts.
 func (systemElevator) RequestElevatedRun(program string, args []string, env []string) error {

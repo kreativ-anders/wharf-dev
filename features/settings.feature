@@ -33,13 +33,32 @@ Feature: Global settings
     When the user opens Settings
     Then a navigation on the left lists the settings pages
     And choosing a page shows that page alone
-    And "General" holds the appearance, the config folder, the version and "Reset Wharf…"
+    And "General" holds the appearance, the config folder, "About", "Help" and "Reset Wharf…"
 
   Scenario: General shows the version, and no update check yet
     When the user opens Settings on "General"
     Then the version of the running Wharf is shown, as the daemon reports it
     And "Check for updates" is shown but cannot be pressed
     And a note says Wharf does not check for updates yet, and will only ever look when asked
+
+  Scenario: General names the Wharf folder in use
+    When the user opens Settings on "General"
+    Then "About" shows the Wharf folder the daemon runs against, and can open it
+    And a Wharf folder other than ~/Wharf is marked as not the usual one, set by WHARF_ROOT
+    # `make gui` runs against build/dev/root and a plain `flutter run` against
+    # ~/Wharf; without this the two show different projects for no visible reason.
+
+  Scenario: Copying debug information
+    When the user presses "Copy debug information" under "Help"
+    Then the version, the operating system and architecture and the Wharf folder are copied as plain text
+    And so are the active webserver and the default PHP with their versions, and whether SSL is trusted
+    And a confirmation says the debug information was copied
+    And nothing is sent anywhere: the user decides where to paste it
+
+  Scenario: Help links to the repository
+    When the user opens Settings on "General"
+    Then "Help" links to Wharf's repository on GitHub, where issues are reported
+    And following the link opens it in the browser
 
   # The update check itself, fixed ahead of time so its constraints survive
   # until it is built. Wharf has no published releases to check against yet.
@@ -77,14 +96,22 @@ Feature: Global settings
     Given projects exist in "www/" and one was added from elsewhere
     When the user chooses "Reset Wharf…" in Settings and confirms
     Then every service is stopped
-    And every folder in "www/" is deleted
-    And a folder added from elsewhere is unregistered but left where it is
+    And every project is unregistered, and its folder is left where it is
     And everything in "config/" is deleted: settings, custom webserver configs and PHP settings
     And project certificates, generated configs and service logs are deleted
     And wharf.json is back to what a first start writes
     And downloaded PHP versions and webservers are kept
+    And no elevation prompt is shown
+
+  Scenario: Resetting Wharf and deleting the projects in www/
+    Given projects exist in "www/" and one was added from elsewhere
+    When the user chooses "Reset Wharf…", ticks "Also delete the projects in www/" and confirms
+    Then every folder in "www/" is deleted
+    And a folder added from elsewhere is still left where it is
 
   Scenario: Reset asks first
     When the user chooses "Reset Wharf…" in Settings
-    Then a warning names every folder that will be deleted and every folder that is kept
+    Then a warning says in plain words what is deleted and what is kept
+    And the folders in "www/" are kept unless the user ticks "Also delete the projects in www/"
+    And once ticked, the warning names every folder that will be deleted
     And nothing is deleted unless the user confirms

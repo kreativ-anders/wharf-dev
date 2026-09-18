@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -40,7 +41,9 @@ const usage = `usage: wharfctl [--root DIR] <command> [args]
   stop <name>                stop a project
   restart <name>             regenerate a project's config and restart what serves it
   stop-all                   stop every service and project
-  reset --yes                delete every project in www/ and all settings (downloads are kept)
+  reset --yes [--delete-projects]
+                             unregister every project and delete all settings (downloads are kept);
+                             --delete-projects also deletes every folder in www/
   webserver <apache|nginx>   set the globally active webserver
   webserver install <name>   install nginx or Apache
   webserver scan             re-scan the machine for webservers
@@ -54,7 +57,7 @@ const usage = `usage: wharfctl [--root DIR] <command> [args]
   php scan                   re-scan the machine for PHP installations
   php terminal <on|off>      put the default PHP (bin/path) on the terminal PATH, or take it off
   ssl                        install mkcert and trust its certificate authority
-  config <name> <webserver>  print (creating if needed) a project's custom config path
+  config <name>              print a project's custom config, or the rules it would start from
   set <name> [flags]         per-project overrides
        --php V | --php ""    override or clear the PHP version
        --webserver W | ""    override or clear the webserver
@@ -142,9 +145,10 @@ func run() error {
 
 	case "reset":
 		if len(args) < 2 || args[1] != "--yes" {
-			return fmt.Errorf("reset deletes every folder in www/ and all settings — run: wharfctl reset --yes")
+			return fmt.Errorf("reset deletes all settings — run: wharfctl reset --yes (add --delete-projects to delete every folder in www/ too)")
 		}
-		return callAndShow(ctx, c, ipc.MethodReset, nil)
+		deleteProjects := slices.Contains(args[2:], "--delete-projects")
+		return callAndShow(ctx, c, ipc.MethodReset, map[string]bool{"delete_projects": deleteProjects})
 
 	case "stop-all":
 		return callAndShow(ctx, c, ipc.MethodStopAll, nil)
@@ -176,16 +180,21 @@ func run() error {
 		return callAndShow(ctx, c, ipc.MethodSetupSSL, nil)
 
 	case "config":
-		if len(args) < 3 {
-			return fmt.Errorf("usage: wharfctl config <name> <apache|nginx>")
+		if len(args) < 2 {
+			return fmt.Errorf("usage: wharfctl config <name>")
 		}
 		var out struct {
-			Path string `json:"path"`
+			Webserver string `json:"webserver"`
+			Content   string `json:"content"`
+			Exists    bool   `json:"exists"`
 		}
-		if err := c.Call(ctx, ipc.MethodProjectCustomConfig, map[string]string{"name": args[1], "webserver": args[2]}, &out); err != nil {
+		if err := c.Call(ctx, ipc.MethodCustomConfigRead, map[string]string{"name": args[1]}, &out); err != nil {
 			return err
 		}
-		fmt.Println(out.Path)
+		if !out.Exists {
+			fmt.Fprintf(os.Stderr, "# no custom %s config yet — this is where it would start\n", out.Webserver)
+		}
+		fmt.Print(out.Content)
 		return nil
 
 	case "new":

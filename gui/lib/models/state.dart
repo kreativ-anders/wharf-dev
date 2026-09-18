@@ -14,6 +14,7 @@ class WharfState {
     required this.busy,
     this.appearance = 'system',
     this.version = '',
+    this.configTemplates = const [],
   });
 
   final String root;
@@ -42,6 +43,9 @@ class WharfState {
   /// (features/local-ssl.feature).
   final SslStatus ssl;
   final bool busy;
+
+  /// Every config template, Wharf's own first (features/config-templates.feature).
+  final List<ConfigTemplate> configTemplates;
 
   static const empty = WharfState(
     root: '',
@@ -73,6 +77,39 @@ class WharfState {
         .toList(),
     ssl: SslStatus.fromJson(json['ssl'] as Map<String, dynamic>? ?? const {}),
     busy: json['busy'] as bool? ?? false,
+    configTemplates: (json['config_templates'] as List<dynamic>? ?? const [])
+        .map((e) => ConfigTemplate.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
+}
+
+/// The webserver rules one kind of project needs, for nginx and Apache
+/// (features/config-templates.feature).
+class ConfigTemplate {
+  const ConfigTemplate({
+    required this.id,
+    required this.name,
+    this.builtin = false,
+    this.changed = false,
+    this.projects = const [],
+  });
+
+  final String id;
+  final String name;
+
+  /// Wharf's own; [changed] once the user saved a change to one.
+  final bool builtin;
+  final bool changed;
+
+  /// The projects that use it.
+  final List<String> projects;
+
+  factory ConfigTemplate.fromJson(Map<String, dynamic> json) => ConfigTemplate(
+    id: json['id'] as String? ?? '',
+    name: json['name'] as String? ?? '',
+    builtin: json['builtin'] as bool? ?? false,
+    changed: json['changed'] as bool? ?? false,
+    projects: (json['projects'] as List<dynamic>? ?? const []).map((e) => e as String).toList(),
   );
 }
 
@@ -392,13 +429,15 @@ class Project {
     this.dir = '',
     this.linked = false,
     this.logDir = '',
-    this.customConfigs = const [],
+    this.customConfig = const CustomConfig(webserver: '', path: '', exists: false),
+    this.template = '',
     this.webserverVersion = '',
     this.phpFullVersion = '',
   });
 
   final String name;
   final String state;
+
   /// `<name>.localhost`, with no port whichever webserver serves the project
   /// (features/pretty-urls.feature).
   final String url;
@@ -421,6 +460,7 @@ class Project {
     final php = phpFullVersion.isEmpty ? phpVersion : phpFullVersion;
     return '$server · PHP $php';
   }
+
   final bool ssl;
   final int port;
   final String error;
@@ -432,8 +472,13 @@ class Project {
   /// The project's own log folder (features/project-logs.feature).
   final String logDir;
 
-  /// One per webserver (features/app-configuration.feature).
-  final List<CustomConfig> customConfigs;
+  /// The project's custom config for the webserver serving it; the other
+  /// webserver's is never offered (features/app-configuration.feature).
+  final CustomConfig customConfig;
+
+  /// The id of the project's config template; empty for none
+  /// (features/config-templates.feature).
+  final String template;
 
   bool get isRunning => state == 'running';
   bool get isBusy => state == 'starting' || state == 'stopping';
@@ -467,33 +512,40 @@ class Project {
     dir: json['dir'] as String? ?? '',
     linked: json['linked'] as bool? ?? false,
     logDir: json['log_dir'] as String? ?? '',
-    customConfigs: (json['custom_configs'] as List<dynamic>? ?? const [])
-        .map((e) => CustomConfig.fromJson(e as Map<String, dynamic>))
-        .toList(),
+    customConfig: CustomConfig.fromJson(json['custom_config'] as Map<String, dynamic>? ?? const {}),
+    template: json['template'] as String? ?? '',
   );
 }
 
-/// A project's custom directives for one webserver.
+/// A project's own rules for one webserver, used instead of its config
+/// template.
 class CustomConfig {
-  const CustomConfig({
-    required this.webserver,
-    required this.path,
-    required this.exists,
-    required this.active,
-  });
+  const CustomConfig({required this.webserver, required this.path, required this.exists});
 
   final String webserver;
   final String path;
   final bool exists;
 
-  /// This is the file of the webserver serving the project now.
-  final bool active;
-
   factory CustomConfig.fromJson(Map<String, dynamic> json) => CustomConfig(
     webserver: json['webserver'] as String? ?? '',
     path: json['path'] as String? ?? '',
     exists: json['exists'] as bool? ?? false,
-    active: json['active'] as bool? ?? false,
+  );
+}
+
+/// A project's custom config as the editor opens it: its rules, or — while
+/// [exists] is false — its config template's to start from.
+class CustomConfigRules {
+  const CustomConfigRules({required this.webserver, required this.content, required this.exists});
+
+  final String webserver;
+  final String content;
+  final bool exists;
+
+  factory CustomConfigRules.fromJson(Map<String, dynamic> json) => CustomConfigRules(
+    webserver: json['webserver'] as String? ?? '',
+    content: json['content'] as String? ?? '',
+    exists: json['exists'] as bool? ?? false,
   );
 }
 

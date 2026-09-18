@@ -18,21 +18,19 @@ import 'e2e_daemon.dart';
 void main() {
   late Directory root;
   late Process daemon;
-  late String hostsPath;
 
   setUpAll(() async {
     final binary = e2eDaemonBinary();
 
     root = await Directory.systemTemp.createTemp('wharf-e2e');
-    hostsPath = '${root.path}/hosts';
-    await File(hostsPath).writeAsString('127.0.0.1\tlocalhost\n');
     await Directory('${root.path}/www/my-kirby-site').create(recursive: true);
 
     daemon = await Process.start(binary, [
       '--root', root.path,
-      '--hosts', hostsPath,
-      // WARNING: No password prompt, and the real /etc/hosts is never touched.
+      // WARNING: No password prompt.
       '--elevator', 'direct',
+      // WARNING: The user's shell startup files are never changed either.
+      '--terminal=false',
     ]);
     // WARNING: Keep the daemon's stderr drained; a full pipe would block it.
     daemon.stderr.drain<void>();
@@ -82,7 +80,7 @@ void main() {
   });
 
   // features/pretty-urls.feature — "Adding a project never asks for a password"
-  test('adding a folder from the GUI registers it without touching the hosts file', () async {
+  test('adding a folder from the GUI registers it under .localhost', () async {
     await _waitForFile(endpointPathFor(root.path));
     final gui = Daemon(root: root.path);
     addTearDown(gui.dispose);
@@ -95,10 +93,6 @@ void main() {
     final project = gui.state.projects.firstWhere((p) => p.name == 'my-kirby-site');
     expect(project.url, 'http://my-kirby-site.localhost');
     expect(gui.state.unregistered, isNot(contains('my-kirby-site')));
-
-    final hosts = await File(hostsPath).readAsString();
-    expect(hosts, isNot(contains('my-kirby-site')), reason: '.localhost needs no hosts entry');
-    expect(hosts, contains('localhost'), reason: 'the rest of the file must survive');
 
     // INFO: The config the daemon wrote stays readable by hand.
     final config = await File('${root.path}/config/wharf.json').readAsString();

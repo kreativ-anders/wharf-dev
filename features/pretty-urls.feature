@@ -28,11 +28,3 @@ Feature: Pretty URLs under .localhost
     Given "my-kirby-site" is running
     Then the webserver listens on port 80 on both 127.0.0.1 and ::1
     And Safari, which resolves "my-kirby-site.localhost" to ::1 first, reaches it
-
-  Scenario: Removing a project added under the old domain removes its hosts entry
-    Given "my-kirby-site" was added when projects were published as "my-kirby-site.wharf"
-    And its hosts entry "127.0.0.1 my-kirby-site.wharf" still exists
-    When the user removes the project
-    Then that hosts entry is deleted through one elevation prompt
-    And on macOS, the same prompt restarts the system resolver so it re-reads the hosts file
-    And no other line of the hosts file is affected

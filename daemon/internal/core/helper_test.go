@@ -27,7 +27,7 @@ import (
 var testNow = time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
 
 // harness is a daemon with every outside-world collaborator faked: no real
-// processes, no real ports, no real hosts file, no real mkcert. What is left
+// processes, no real ports, no real mkcert, no password prompt. What is left
 // under test is the behaviour the feature files describe.
 type harness struct {
 	t      *testing.T
@@ -37,7 +37,6 @@ type harness struct {
 	ports  *supervisor.FakePorts
 	el     *elevate.Fake
 	certs  *certs.Fake
-	hosts  string
 	sup    *supervisor.Supervisor
 	php    *fakeInstaller
 	web    *fakeWebInstaller
@@ -137,11 +136,6 @@ func newHarness(t *testing.T, adjust ...func(*Options)) *harness {
 		stubBinary(t, exeName(filepath.Join(root.PHPBin(v), "php-cgi")))
 	}
 
-	hostsPath := filepath.Join(dir, "hosts")
-	if err := os.WriteFile(hostsPath, []byte("127.0.0.1\tlocalhost\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
 	ports := supervisor.NewFakePorts()
 	runner := supervisor.NewFakeRunner(ports)
 	sup := supervisor.New(runner, ports)
@@ -150,7 +144,6 @@ func newHarness(t *testing.T, adjust ...func(*Options)) *harness {
 	sup.Poll = time.Millisecond
 
 	el := elevate.NewFake()
-	el.Apply = true
 	ca := certs.NewFake()
 
 	store, err := config.Load(root.ConfigFile())
@@ -179,7 +172,6 @@ func newHarness(t *testing.T, adjust ...func(*Options)) *harness {
 
 		Supervisor:   sup,
 		Elevator:     el,
-		HostsPath:    hostsPath,
 		Certs:        ca,
 		PHPInstaller: installer,
 		WebDetector:  testWebDetector(),
@@ -200,7 +192,7 @@ func newHarness(t *testing.T, adjust ...func(*Options)) *harness {
 		_ = d.Shutdown(ctx)
 	})
 
-	return &harness{t: t, d: d, root: root, runner: runner, ports: ports, el: el, certs: ca, hosts: hostsPath, sup: sup, php: installer, web: webFake, shell: shell, opts: opts}
+	return &harness{t: t, d: d, root: root, runner: runner, ports: ports, el: el, certs: ca, sup: sup, php: installer, web: webFake, shell: shell, opts: opts}
 }
 
 func stubBinary(t *testing.T, path string) {
@@ -281,15 +273,6 @@ func (h *harness) readGenerated(name string) string {
 		}
 		return string(included)
 	})
-}
-
-func (h *harness) hostsContent() string {
-	h.t.Helper()
-	body, err := os.ReadFile(h.hosts)
-	if err != nil {
-		h.t.Fatal(err)
-	}
-	return string(body)
 }
 
 // shortSocket returns a socket path well inside the ~104-byte sun_path limit.

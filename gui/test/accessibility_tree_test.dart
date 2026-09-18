@@ -26,12 +26,22 @@ void main() {
 
   test('the engine model rejects what Windows rejects', () {
     _Node n(List<int> children) => _Node(children, '');
-    _engine.commit({0: n([1]), 1: n([2]), 2: n([3]), 3: n([])});
+    _engine.commit({
+      0: n([1]),
+      1: n([2]),
+      2: n([3]),
+      3: n([]),
+    });
     expect(_engine.errors, isEmpty);
 
     // INFO: 1 moves under a new node 4. 2 is unchanged and not resent, but 3 is:
     // taking 1 off its old parent took 2 and 3 with it, and 3 has no parent.
-    _engine.commit({0: n([4]), 4: n([1]), 1: n([2]), 3: n([])});
+    _engine.commit({
+      0: n([4]),
+      4: n([1]),
+      1: n([2]),
+      3: n([]),
+    });
     expect(_engine.errors.single, startsWith('3 will not be in the tree and is not the new root'));
   });
 
@@ -73,10 +83,13 @@ void main() {
   // comes back.
   for (final (name, open) in <(String, Future<void> Function(WidgetTester))>[
     ('the main window', (_) async {}),
-    ('a tooltip', (tester) async {
-      final mouse = await _mouse(tester);
-      await mouse.moveTo(tester.getCenter(find.byTooltip('Stop my-kirby-site').first));
-    }),
+    (
+      'a tooltip',
+      (tester) async {
+        final mouse = await _mouse(tester);
+        await mouse.moveTo(tester.getCenter(find.byTooltip('Stop my-kirby-site').first));
+      },
+    ),
     ('the project sheet', (tester) => tester.tap(find.text('my-kirby-site'))),
     ('the new project dialog', (tester) => tester.tap(find.text('New project'))),
     ('settings', (tester) => tester.tap(find.byTooltip('Settings'))),
@@ -167,7 +180,10 @@ void main() {
   testWidgets('settings rows that change under the mouse', (tester) async {
     final semantics = tester.ensureSemantics();
     final daemon = _FakeDaemon()
-      ..change((json) => _server(json, 'apache')['install'] = {'installable': true, 'hint': 'Downloads Apache'});
+      ..change(
+        (json) =>
+            _server(json, 'apache')['install'] = {'installable': true, 'hint': 'Downloads Apache'},
+      );
     await _app(tester, daemon);
     final mouse = await _mouse(tester);
     await tester.tap(find.byTooltip('Settings'));
@@ -188,7 +204,11 @@ void main() {
     await _wait(tester);
     daemon.change((json) => _services(json, 'webserver')['switching'] = true);
     await _wait(tester);
-    daemon.change((json) => _services(json, 'webserver')..['switching'] = false..['active'] = 'apache');
+    daemon.change(
+      (json) => _services(json, 'webserver')
+        ..['switching'] = false
+        ..['active'] = 'apache',
+    );
     await _wait(tester);
 
     await tester.tap(find.byKey(const ValueKey('nav:php')));
@@ -562,9 +582,9 @@ Map<String, dynamic> _services(Map<String, dynamic> json, String name) =>
     (json['services'] as Map<String, dynamic>)[name] as Map<String, dynamic>;
 
 Map<String, dynamic> _server(Map<String, dynamic> json, String name) =>
-    (_services(json, 'webserver')['servers'] as List)
-        .cast<Map<String, dynamic>>()
-        .firstWhere((s) => s['name'] == name);
+    (_services(json, 'webserver')['servers'] as List).cast<Map<String, dynamic>>().firstWhere(
+      (s) => s['name'] == name,
+    );
 
 class _FakeDaemon extends Daemon {
   _FakeDaemon({int extra = 0}) : super(root: '/tmp/wharf-test') {
@@ -573,7 +593,9 @@ class _FakeDaemon extends Daemon {
         {'name': 'site-$i', 'state': 'stopped', 'url': 'http://site-$i.localhost'},
     ]);
     state = WharfState.fromJson(_json);
-    templates = [Template.fromJson({'id': 'kirby', 'name': 'Kirby', 'runtime': 'php'})];
+    templates = [
+      Template.fromJson({'id': 'kirby', 'name': 'Kirby', 'runtime': 'php'}),
+    ];
   }
 
   final Map<String, dynamic> _json = jsonDecode(_snapshot) as Map<String, dynamic>;
@@ -586,7 +608,8 @@ class _FakeDaemon extends Daemon {
 
   @override
   Future<void> projectAction(ProjectAction action, String name) async => change(
-    (json) => _project(json, name)['state'] = action == ProjectAction.stop ? 'stopping' : 'starting',
+    (json) =>
+        _project(json, name)['state'] = action == ProjectAction.stop ? 'stopping' : 'starting',
   );
 
   @override
@@ -595,9 +618,11 @@ class _FakeDaemon extends Daemon {
     String? webserverOverride,
     String? phpOverride,
     bool? ssl,
+    String? template,
   }) async => change((json) {
     final project = _project(json, name);
     if (ssl != null) project['ssl'] = ssl;
+    if (template != null) project['template'] = template;
     if (phpOverride != null && phpOverride.isNotEmpty) project['php_version'] = phpOverride;
   });
 
@@ -655,10 +680,8 @@ const _snapshot = '''
     {"name": "my-kirby-site", "state": "running", "url": "http://my-kirby-site.localhost",
      "webserver": "nginx", "php_version": "8.4", "webserver_version": "1.27.3", "php_full_version": "8.4.3",
      "dir": "/Users/x/Code/my-kirby-site", "linked": true, "log_dir": "/Users/x/Wharf/data/log/my-kirby-site",
-     "custom_configs": [
-       {"webserver": "nginx", "path": "/Users/x/Wharf/config/vhosts/my-kirby-site.nginx.conf",
-        "exists": true, "active": true}
-     ]},
+     "custom_config": {"webserver": "nginx",
+       "path": "/Users/x/Wharf/config/vhosts/my-kirby-site.nginx.conf", "exists": true}},
     {"name": "legacy-app", "state": "stopped", "url": "http://legacy-app.localhost",
      "webserver": "nginx", "php_version": "8.1", "dir": "/Users/x/Wharf/www/legacy-app"}
   ],
@@ -694,7 +717,9 @@ class _Recorder implements ui.SemanticsUpdateBuilder {
   // INFO: updateNode has some forty named parameters; only two matter here.
   @override
   dynamic noSuchMethod(Invocation invocation) {
-    if (invocation.memberName != #updateNode) return super.noSuchMethod(invocation);
+    if (invocation.memberName != #updateNode) {
+      return super.noSuchMethod(invocation);
+    }
     final args = invocation.namedArguments;
     _nodes[args[#id] as int] = _Node(
       (args[#childrenInTraversalOrder] as Int32List).toList(),
@@ -812,13 +837,17 @@ class _Engine {
 
     for (final (id, children) in nodes) {
       if (!present(id)) {
-        if (id != newRoot) return fail('$id will not be in the tree and is not the new root', id);
+        if (id != newRoot) {
+          return fail('$id will not be in the tree and is not the new root', id);
+        }
         exists[id] = true;
         needsData.add(id);
       }
       if (needsData.remove(id)) {
         for (final child in children) {
-          if (present(child)) return fail('Node $child is already pending for creation', child);
+          if (present(child)) {
+            return fail('Node $child is already pending for creation', child);
+          }
           exists[child] = true;
           needsData.add(child);
         }
@@ -826,7 +855,9 @@ class _Engine {
         final old = (known[id] ?? _tree[id] ?? const <int>[]).toSet();
         final now = children.toSet();
         for (final child in now.difference(old)) {
-          if (present(child)) return fail('Node $child would be reparented to $id', child);
+          if (present(child)) {
+            return fail('Node $child would be reparented to $id', child);
+          }
           exists[child] = true;
           needsData.add(child);
         }

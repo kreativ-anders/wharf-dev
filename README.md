@@ -37,6 +37,7 @@ one is renamed, deleted or left unimplemented. See [CLAUDE.md](CLAUDE.md) §1.
 | PHP runtime | Detected on the machine and adopted where it is, or downloaded from Settings with one click. |
 | SSL | mkcert is downloaded (pinned, checksum-verified) and its authority trusted when a project first turns SSL on. |
 | Webservers | Adopted where installed (a Mac's own Apache is used out of the box), or installed from Settings: nginx on Linux/Windows by download, on macOS via Homebrew; Apache on Windows by download. |
+| Config templates | nginx and Apache rules for Kirby, Laravel, WordPress, Statamic, Symfony, Craft CMS and Drupal built in; each project picks one, and Settings → Webserver edits them or adds your own. |
 | Appearance | Kirby-plain light and dark themes, or follow the system. |
 | Updates | Settings → General shows the running version. "Check for updates" is there but disabled until releases exist; its behaviour is specified as `@roadmap`. |
 | Releases | A release workflow builds and publishes all three platforms from one version in `gui/pubspec.yaml` (`dev/releasing.md`). Nothing is published yet. |

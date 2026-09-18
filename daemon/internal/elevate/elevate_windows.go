@@ -3,32 +3,10 @@ package elevate
 import (
 	"fmt"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
 type systemElevator struct{}
-
-// RequestElevatedWrite prompts via UAC. Start-Process -Verb RunAs raises the
-// consent dialog; a dismissed dialog surfaces as a Win32 "operation was
-// cancelled by the user" error, which maps to ErrDeclined.
-func (systemElevator) RequestElevatedWrite(path string, content string) error {
-	tmp, cleanup, err := stage(content)
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-
-	// WARNING: Start-Process joins -ArgumentList verbatim, so each path is
-	// quoted for cmd.exe itself: a user name with a space in it would split
-	// the temp path in two, and copy reads an unquoted "C:/…" as a switch.
-	args := fmt.Sprintf(`'/c','copy','/y','"%s"','"%s"'`,
-		quoteForPowerShell(filepath.FromSlash(tmp)), quoteForPowerShell(path))
-	if err := runAs(args); err != nil {
-		return fmt.Errorf("elevated write to %s: %w", path, err)
-	}
-	return nil
-}
 
 // RequestElevatedRun goes through cmd.exe's `set`, because a process started
 // with RunAs does not inherit the caller's environment.
