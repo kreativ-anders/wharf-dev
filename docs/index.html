@@ -59,7 +59,7 @@
           {
             "@type": "Question",
             "name": "Does Wharf use Docker or a virtual machine?",
-            "acceptedAnswer": { "@type": "Answer", "text": "No. PHP, nginx, Apache and mkcert run as ordinary programs on your computer. Nothing is put in a container and nothing is virtualised, so your files are as fast as your disk." }
+            "acceptedAnswer": { "@type": "Answer", "text": "No. PHP, nginx, Apache and mkcert run as ordinary programs on your computer, so reading your files is as fast as your disk." }
           },
           {
             "@type": "Question",
@@ -84,12 +84,7 @@
           {
             "@type": "Question",
             "name": "What is the www folder for?",
-            "acceptedAnswer": { "@type": "Answer", "text": "It is optional: a place inside Wharf's own folder (~/Wharf/www) for anyone who likes all projects in one spot. A folder put there shows up in the app, ready to add with one click, and its name is the project's name. Most projects live somewhere else, and Add project… takes them from there." }
-          },
-          {
-            "@type": "Question",
-            "name": "Can I use Wharf without the app?",
-            "acceptedAnswer": { "@type": "Answer", "text": "The app is what runs Wharf, but you never have to click through it: the whole setup is one JSON file that Wharf picks up again when you edit it by hand." }
+            "acceptedAnswer": { "@type": "Answer", "text": "It is optional. A folder put in ~/Wharf/www shows up in the app, ready to add with one click, under its own name. Projects anywhere else are added with Add project…." }
           },
           {
             "@type": "Question",
@@ -98,23 +93,8 @@
           },
           {
             "@type": "Question",
-            "name": "What about MySQL, PostgreSQL, Node.js or Mailpit?",
-            "acceptedAnswer": { "@type": "Answer", "text": "They are planned, but not built yet. The first version does PHP, and does it well." }
-          },
-          {
-            "@type": "Question",
             "name": "Can I install an older nginx or Apache for one project?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Not yet. Wharf installs the newest nginx and Apache, because the places it gets them from rarely offer older versions. What works today: each project can use either nginx or Apache, and its address stays the same." }
-          },
-          {
-            "@type": "Question",
-            "name": "Is Wharf free?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Yes. Wharf is open source under the MIT licence: free to use, for personal and client work alike. The code is on GitHub." }
-          },
-          {
-            "@type": "Question",
-            "name": "Does Wharf collect any data?",
-            "acceptedAnswer": { "@type": "Answer", "text": "No. There is no account, no analytics and no crash reporting. Wharf goes online only to download something you asked for. The privacy page lists every file it changes on your computer." }
+            "acceptedAnswer": { "@type": "Answer", "text": "Not yet. Wharf installs the newest nginx and Apache, because the places it gets them from rarely offer older versions." }
           },
           {
             "@type": "Question",
@@ -224,8 +204,8 @@
           </li>
           <li>
             <h3>Start it from the tray</h3>
-            <p>Start, stop and open live in the tray menu. The window is there
-            when you need it, not for a two-second action.</p>
+            <p>Start, stop and open live in the tray menu, no window needed.
+            Quit Wharf, and everything it started stops.</p>
           </li>
           <li>
             <h3>Open a real URL</h3>
@@ -244,11 +224,6 @@
       <h2 id="features-title">Everything a PHP project needs.<br><span class="soft">Nothing it doesn't.</span></h2>
 
       <ul class="grid">
-        <li>
-          <h3>Real addresses, no password</h3>
-          <p>Each project answers at <code>&lt;name&gt;.localhost</code>, which
-          your computer knows by itself. No hosts file, no port numbers.</p>
-        </li>
         <li>
           <h3>HTTPS with one switch</h3>
           <p>Turn it on, and Wharf makes a certificate your browser trusts.
@@ -270,19 +245,9 @@
           Wharf recognises the folder and picks the right webserver rules.</p>
         </li>
         <li>
-          <h3>Your own settings</h3>
-          <p>One <code>php.ini</code> for every PHP version, and webserver rules
-          per project — plain files, edited right in Wharf.</p>
-        </li>
-        <li>
-          <h3>Logs per project</h3>
-          <p>Requests and errors, PHP's warnings included — one folder per
-          project, one click away.</p>
-        </li>
-        <li>
-          <h3>Lives in your tray</h3>
-          <p>Start, stop and open projects without a window. Quit Wharf, and
-          everything it started stops.</p>
+          <h3>Settings and logs</h3>
+          <p>One <code>php.ini</code> for every PHP version; webserver rules and
+          a log folder per project. Plain files, one click away.</p>
         </li>
         <li>
           <h3>Accessible</h3>
@@ -296,9 +261,9 @@
     <section id="config" class="wrap" aria-labelledby="config-title">
       <p class="eyebrow">Plain text</p>
       <h2 id="config-title">Your whole setup is one file you can read.</h2>
-      <p class="intro">No database, no scattered formats. If you like a text
-      editor, skip the app entirely: Wharf picks up your changes when you save.
-      Only what differs from the defaults is written down.</p>
+      <p class="intro">Edit it by hand instead of clicking, and Wharf picks up
+      your changes when you save. Only what differs from the defaults is
+      written down.</p>
 
       <div class="pair">
         <figure>
@@ -309,9 +274,9 @@
     "php": { "version": "8.4", "available": ["8.2", "8.4"] }
   },
   "projects": [
-    { "name": "my-kirby-site", "ssl": true },
+    { "name": "my-kirby-site", "ssl": true, <b>"template": "kirby"</b> },
     { "name": "legacy-app", <b>"webserver_override": "apache"</b>,
-      <b>"php_version": "8.2"</b>, "ssl": false, "port": 8081 },
+      <b>"php_version": "8.2"</b>, "ssl": false, "port": 8080 },
     { "name": "client-site", "ssl": false,
       <b>"path": "/Users/you/Code/Client Site"</b> }
   ]
@@ -319,14 +284,15 @@
         </figure>
         <figure>
           <figcaption>The Wharf folder</figcaption>
-<pre class="code">wharf/
+<pre class="code">~/Wharf/
 ├── bin/      <span class="dim">PHP, nginx, Apache, mkcert</span>
-├── www/      <span class="dim">your projects</span>
+├── www/      <span class="dim">optional home for projects</span>
 ├── config/   <span class="dim">worth backing up</span>
 │   ├── wharf.json
 │   ├── php.ini
-│   └── vhosts/  <span class="dim">my-site.nginx.conf</span>
-└── data/     <span class="dim">generated; safe to delete</span></pre>
+│   ├── vhosts/     <span class="dim">my-kirby-site.nginx.conf</span>
+│   └── templates/  <span class="dim">laravel.nginx.conf</span>
+└── data/     <span class="dim">logs, certificates, generated configs</span></pre>
         </figure>
       </div>
     </section>
@@ -337,8 +303,7 @@
         <div class="prose">
           <p class="eyebrow">Open source</p>
           <h2 id="open-title">Free, and yours to read.</h2>
-          <p>Wharf is open source under the MIT licence. Read how it works,
-          report what breaks, or send a fix.</p>
+          <p>MIT licence: free for personal and client work.</p>
           <p class="cta">
             <a class="button" href="https://github.com/kreativ-anders/wharf-dev">Source on GitHub</a>
             <a class="button ghost" href="https://github.com/kreativ-anders/wharf-dev/issues">Report an issue</a>
@@ -372,7 +337,7 @@
       </dl>
 
       <h3 class="roadmap-title">On the roadmap</h3>
-      <p class="intro">Planned, not built yet. The first version does PHP, and does it well.</p>
+      <p class="intro">Specified, not built yet. Version 1 is PHP only.</p>
       <ul class="tags">
         <li>MySQL / PostgreSQL</li>
         <li>Mailpit</li>
@@ -392,8 +357,7 @@
           <details>
             <summary>Does Wharf use Docker or a virtual machine?</summary>
             <p>No. PHP, nginx, Apache and mkcert run as ordinary programs on your
-            computer. Nothing is put in a container and nothing is virtualised,
-            so your files are as fast as your disk.</p>
+            computer, so reading your files is as fast as your disk.</p>
           </details>
           <details>
             <summary>Will Wharf ask for my password?</summary>
@@ -427,17 +391,9 @@
           </details>
           <details>
             <summary>What is the <code>www</code> folder for?</summary>
-            <p>It is optional: a place inside Wharf's own folder
-            (<code>~/Wharf/www</code>) for anyone who likes all projects in one
-            spot. A folder put there shows up in the app, ready to add with one
-            click, and its name is the project's name. Most projects live
-            somewhere else, and “Add project…” takes them from there.</p>
-          </details>
-          <details>
-            <summary>Can I use Wharf without the app?</summary>
-            <p>The app is what runs Wharf, but you never have to click through
-            it: the whole setup is one JSON file that Wharf picks up again when
-            you edit it by hand.</p>
+            <p>It is optional. A folder put in <code>~/Wharf/www</code> shows up
+            in the app, ready to add with one click, under its own name. Projects
+            anywhere else are added with “Add project…”.</p>
           </details>
           <details>
             <summary>Is Wharf only for Kirby?</summary>
@@ -447,29 +403,9 @@
             can change the pick, or choose none, for each project.</p>
           </details>
           <details>
-            <summary>What about MySQL, PostgreSQL, Node.js or Mailpit?</summary>
-            <p>They are planned, but not built yet. The first version does PHP,
-            and does it well.</p>
-          </details>
-          <details>
             <summary>Can I install an older nginx or Apache for one project?</summary>
             <p>Not yet. Wharf installs the newest nginx and Apache, because the
-            places it gets them from rarely offer older versions. What works
-            today: each project can use either nginx or Apache, and its address
-            stays the same.</p>
-          </details>
-          <details>
-            <summary>Is Wharf free?</summary>
-            <p>Yes. Wharf is open source under the MIT licence: free to use, for
-            personal and client work alike. The code is on
-            <a href="https://github.com/kreativ-anders/wharf-dev">GitHub</a>.</p>
-          </details>
-          <details>
-            <summary>Does Wharf collect any data?</summary>
-            <p>No. There is no account, no analytics and no crash reporting.
-            Wharf goes online only to download something you asked for. The
-            <a href="privacy.html">privacy page</a> lists every file it changes
-            on your computer.</p>
+            places it gets them from rarely offer older versions.</p>
           </details>
           <details>
             <summary>Can I download Wharf?</summary>
