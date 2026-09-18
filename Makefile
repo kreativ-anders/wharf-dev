@@ -15,7 +15,7 @@ EXE     := $(if $(filter Windows_NT,$(OS)),.exe,)
 # a release Wharf.app is universal, so the daemon it embeds must be too.
 UNIVERSAL := $(and $(filter 1,$(DARWIN_UNIVERSAL)),$(filter Darwin,$(shell uname)))
 
-.PHONY: all build test spec race vet fmt cross clean run check gui gui-test gui-e2e gui-analyze gui-desktop \
+.PHONY: all build test spec race vet fmt cross clean run check gui gui-test gui-e2e gui-analyze gui-desktop gui-host \
 	version bump release dmg
 
 all: fmt vet test build
@@ -74,15 +74,31 @@ run: build
 
 FLUTTER ?= flutter
 
-gui-analyze:
+# WARNING: Flutter's generated files (.dart_tool/, build/, */ephemeral/) are
+# the host's own. Left over from another OS — a checkout synced between a Mac
+# and a Linux machine — they make tests fail that pass after `flutter clean`.
+# So every Flutter target cleans first, but only when the host changed: an
+# unconditional clean would throw away the app build and pub resolution each
+# time. The stamp lives in .dart_tool/, which the clean itself removes.
+HOST_STAMP := gui/.dart_tool/wharf-host
+HOST_ID    := $(shell uname -sm)
+
+gui-host:
+	@if [ "$$(cat $(HOST_STAMP) 2>/dev/null)" != "$(HOST_ID)" ]; then \
+		echo "Flutter build files are not from $(HOST_ID) — cleaning"; \
+		cd gui && $(FLUTTER) clean >/dev/null && $(FLUTTER) pub get >/dev/null && cd .. && \
+		echo "$(HOST_ID)" > $(HOST_STAMP); \
+	fi
+
+gui-analyze: gui-host
 	cd gui && $(FLUTTER) analyze
 
 # INFO: Unit and widget tests only: hermetic, no daemon binary needed.
-gui-test:
+gui-test: gui-host
 	cd gui && $(FLUTTER) test --exclude-tags e2e
 
 # INFO: Drives the real daemon binary, so build it first.
-gui-e2e: build
+gui-e2e: build gui-host
 	cd gui && $(FLUTTER) test --tags e2e
 
 # INFO: Launch the app against a throwaway root. The app starts its own daemon, as
@@ -91,7 +107,7 @@ gui-e2e: build
 DEV_ROOT := $(PWD)/$(BUILD)/dev/root
 FLUTTER_DEVICE ?= $(shell uname | tr 'A-Z' 'a-z' | sed 's/darwin/macos/')
 
-gui: build $(if $(filter linux,$(FLUTTER_DEVICE)),gui-desktop)
+gui: build gui-host $(if $(filter linux,$(FLUTTER_DEVICE)),gui-desktop)
 	@mkdir -p $(DEV_ROOT)/www
 	cd gui && WHARF_ROOT=$(DEV_ROOT) \
 		WHARFD_ARGS="--elevator direct" \
@@ -134,7 +150,7 @@ release:
 # INFO: The release build of Wharf.app in a DMG, through the same script the release
 # workflow runs: signed and notarised when the credentials are there, unsigned
 # otherwise (dev/releasing.md §5).
-dmg:
+dmg: gui-host
 	cd gui && $(FLUTTER) build macos --release
 	./packaging/macos/build_dmg.sh
 
