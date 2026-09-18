@@ -123,3 +123,7 @@ names the command. Everything else installs itself on request.
 Working title **Wharf**. Not finalised — placeholder used consistently
 across these documents so it can be search-and-replaced once a name is
 locked in.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).

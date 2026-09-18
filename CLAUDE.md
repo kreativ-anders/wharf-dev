@@ -85,6 +85,7 @@ twice becomes a test in `docsync`**, not just a corrected sentence.
 wharf/
 ├── CLAUDE.md                  ← this file: the working agreement and the map — the only instruction file
 ├── README.md                  project overview and status
+├── LICENSE                    MIT
 ├── CONTRIBUTING.md            set-up, workflow, commit subjects — points here for the rules
 ├── CHANGELOG.md               written by the release workflow, never by hand
 ├── Makefile                   build, test, cross-compile, spec matrix, version and release
