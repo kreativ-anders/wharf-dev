@@ -335,6 +335,7 @@ make run       # run the daemon against a throwaway root, no password prompt
 make gui-test  # GUI unit and widget tests
 make gui-e2e   # GUI driving the real daemon binary (needs `make build` first)
 make gui       # build and launch the desktop app against a throwaway root
+make gui WHARFD_ARGS=  # the same, with the elevation prompts a user gets
 make gui-desktop  # Linux: install the .desktop entry and icon, so the taskbar shows Wharf's
 make check     # everything above that is not interactive
 

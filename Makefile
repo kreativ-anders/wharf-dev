@@ -107,10 +107,16 @@ gui-e2e: build gui-host
 DEV_ROOT := $(PWD)/$(BUILD)/dev/root
 FLUTTER_DEVICE ?= $(shell uname | tr 'A-Z' 'a-z' | sed 's/darwin/macos/')
 
+# INFO: `make gui WHARFD_ARGS=` takes the elevator a user gets, prompts and all.
+# It is how to see elevation work — on Linux the front door cannot take ports 80
+# and 443 until it has asked once, so with the default every project stops with
+# "Wharf needs permission to use ports 80 and 443" (internal/core/frontdoor.go).
+WHARFD_ARGS ?= --elevator direct
+
 gui: build gui-host $(if $(filter linux,$(FLUTTER_DEVICE)),gui-desktop)
 	@mkdir -p $(DEV_ROOT)/www
 	cd gui && WHARF_ROOT=$(DEV_ROOT) \
-		WHARFD_ARGS="--elevator direct" \
+		WHARFD_ARGS="$(WHARFD_ARGS)" \
 		$(FLUTTER) run -d $(FLUTTER_DEVICE)
 
 # INFO: Linux only. A Wayland compositor shows a window's icon only through the
