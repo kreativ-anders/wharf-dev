@@ -27,8 +27,8 @@ import (
 const (
 	HTTPPort  = 80
 	HTTPSPort = 443
-	// phpBasePort is the first FastCGI port; each installed PHP version gets
-	// the next one.
+	// phpBasePort is where the FastCGI ports start; PHPPort adds the version
+	// itself, so 8.4 listens on 9804 and 8.5 on 9805.
 	phpBasePort = 9000
 	// projectBasePort is the first loopback port handed to a project's own
 	// webserver instance, behind the front door.
@@ -139,15 +139,21 @@ func (r *Resolver) PHPBinary(cfg *config.Config, version string) (string, error)
 	return p, nil
 }
 
-// PHPPort is the FastCGI port for a version, derived from its position in the
-// installed list so that it is stable for as long as that list is.
-func PHPPort(cfg *config.Config, version string) int {
-	for i, v := range cfg.Services.PHP.Available {
-		if v == version {
-			return phpBasePort + i
-		}
+// PHPPort is the FastCGI port for a version, derived from the version number
+// alone: 8.4 listens on 9804, 8.5 on 9805.
+//
+// WARNING: Never from a position in the installed list. Downloading 8.4 while
+// 8.5 served a project moved 8.5 behind it in the sorted list, so every
+// generated config named a port its backend was not listening on, and
+// starting a project waited out the stop timeout on a port the old backend
+// still held (php-runtime.feature, "Adding a PHP version leaves a running
+// backend on its port").
+func PHPPort(version string) int {
+	var major, minor int
+	if _, err := fmt.Sscanf(php.Minor(version), "%d.%d", &major, &minor); err != nil {
+		return phpBasePort
 	}
-	return phpBasePort
+	return phpBasePort + major*100 + minor
 }
 
 // NextProjectPort returns a port not yet claimed by another project and, as
@@ -177,7 +183,7 @@ func (r *Resolver) PHPSpec(cfg *config.Config, version string) (supervisor.Spec,
 	if err != nil {
 		return supervisor.Spec{}, err
 	}
-	port := PHPPort(cfg, version)
+	port := PHPPort(version)
 
 	confPath := filepath.Join(r.genDir(), fmt.Sprintf("php-fpm-%s.conf", version))
 	if err := writeFile(confPath, renderPHPFPMConf(version, port, r.Root)); err != nil {

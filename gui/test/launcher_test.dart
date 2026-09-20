@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -62,4 +63,66 @@ void main() {
     }
     expect(launcher.ownsDaemon, isFalse);
   });
+
+  // features/single-application.feature — "Quitting an application that
+  // started its own daemon"
+  test('a daemon that stops when asked is neither signalled nor killed', () async {
+    final acts = <String>[];
+    await awaitDaemonExit(
+      exited: Future<void>.value(),
+      signal: () => acts.add('signal'),
+      kill: () => acts.add('kill'),
+      patience: _quick,
+      grace: _quick,
+    );
+    expect(acts, isEmpty);
+  });
+
+  // features/single-application.feature — "Quitting an application that
+  // started its own daemon"
+  //
+  // INFO: A signal is a clean shutdown on macOS and Linux — the daemon still
+  // stops its services — so it comes before the kill, never instead of it.
+  test('a daemon still busy is signalled, and not killed if it then goes', () async {
+    final exited = Completer<void>();
+    final acts = <String>[];
+    await awaitDaemonExit(
+      exited: exited.future,
+      signal: () {
+        acts.add('signal');
+        exited.complete();
+      },
+      kill: () => acts.add('kill'),
+      patience: _quick,
+      grace: _quick,
+    );
+    expect(acts, ['signal']);
+  });
+
+  // features/single-application.feature — "Quitting an application that
+  // started its own daemon"
+  test('only a daemon that ignores the signal too is killed', () async {
+    final exited = Completer<void>();
+    final acts = <String>[];
+    await awaitDaemonExit(
+      exited: exited.future,
+      signal: () => acts.add('signal'),
+      kill: () {
+        acts.add('kill');
+        exited.complete();
+      },
+      patience: _quick,
+      grace: _quick,
+    );
+    expect(acts, ['signal', 'kill'], reason: 'a killed daemon stops nothing it started');
+  });
+
+  // features/single-application.feature — "Quitting an application that
+  // started its own daemon"
+  test('the app outwaits the daemon shutdown budget in cmd/wharfd/main.go', () {
+    expect(daemonShutdownPatience, greaterThan(const Duration(seconds: 20)));
+  });
 }
+
+/// Long enough to be a real wait, short enough to run in a unit test.
+const _quick = Duration(milliseconds: 20);

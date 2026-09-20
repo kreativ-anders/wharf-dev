@@ -82,10 +82,9 @@ func TestOverridingPHPVersionForOneProject(t *testing.T) {
 	}
 
 	// INFO: Then requests to "my-kirby-site" are served by the "8.1" PHP binary
-	cfg := h.d.Config()
 	conf := h.readGenerated("nginx.conf")
-	want81 := fmt.Sprintf("fastcgi_pass 127.0.0.1:%d;", runtime.PHPPort(cfg, "8.1"))
-	want83 := fmt.Sprintf("fastcgi_pass 127.0.0.1:%d;", runtime.PHPPort(cfg, "8.3"))
+	want81 := fmt.Sprintf("fastcgi_pass 127.0.0.1:%d;", runtime.PHPPort("8.1"))
+	want83 := fmt.Sprintf("fastcgi_pass 127.0.0.1:%d;", runtime.PHPPort("8.3"))
 
 	mine := vhostBlock(t, conf, "my-kirby-site.localhost")
 	if !strings.Contains(mine, want81) {

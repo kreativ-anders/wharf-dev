@@ -24,6 +24,9 @@ Feature: One application
     When the user quits the application
     Then the daemon it started is stopped
     And no managed service is left running
+    And the application waits out the daemon's own shutdown before it signals it,
+    and kills it only if that is ignored too: a killed daemon stops nothing,
+    and leaves its webserver holding port 80
 
   Scenario: Quitting an application that attached to an existing daemon
     Given the daemon was already running before the application started

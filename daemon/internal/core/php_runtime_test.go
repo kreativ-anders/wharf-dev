@@ -266,8 +266,7 @@ func TestChoosingADifferentPHPVersionGlobally(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := f.d.Config()
-	want := "fastcgi_pass 127.0.0.1:" + itoa(runtime.PHPPort(cfg, "8.3")) + ";"
+	want := "fastcgi_pass 127.0.0.1:" + itoa(runtime.PHPPort("8.3")) + ";"
 	if !strings.Contains(vhostBlock(t, string(conf), "plain.localhost"), want) {
 		t.Fatalf("plain is not routed to the new backend:\n%s", conf)
 	}
@@ -367,6 +366,53 @@ func TestDownloadingAPHPVersionThatIsNotInstalled(t *testing.T) {
 	}
 	if err := h.d.SetPHPVersion(h.ctx(), "8.4"); err != nil {
 		t.Fatalf("select the downloaded version: %v", err)
+	}
+}
+
+// features/php-runtime.feature — "Adding a PHP version leaves a running
+// backend on its port"
+//
+// The port used to be the version's position in the installed list, so adding
+// a version that sorted before a running one moved its port onto the one the
+// running backend held, and every start after that waited out the stop
+// timeout on a port that would never come free.
+func TestAddingAVersionLeavesARunningBackendOnItsPort(t *testing.T) {
+	f := newFirstRun(t, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), "8.5")
+
+	running, err := f.d.res.PHPSpec(f.d.Config(), "8.5")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.d.sup.Start(f.ctx(), running); err != nil {
+		t.Fatalf("start the 8.5 backend: %v", err)
+	}
+
+	// INFO: A downloaded build, as InstallPHP leaves one behind.
+	stubBinary(t, filepath.Join(f.root.PHPBin("8.4"), php.FastCGIName()))
+	if err := f.d.AddPHPVersion(f.ctx(), "8.4"); err != nil {
+		t.Fatalf("add 8.4: %v", err)
+	}
+
+	// INFO: Then the backend of "8.5" keeps the port it is listening on
+	after, err := f.d.res.PHPSpec(f.d.Config(), "8.5")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Port != running.Port {
+		t.Fatalf("the running 8.5 backend was moved from port %d to %d", running.Port, after.Port)
+	}
+
+	// INFO: And "8.4" is given a port of its own — one it can actually take,
+	// with 8.5 still on its own.
+	added, err := f.d.res.PHPSpec(f.d.Config(), "8.4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if added.Port == running.Port {
+		t.Fatalf("8.4 was given port %d, which the 8.5 backend holds", added.Port)
+	}
+	if err := f.d.sup.Start(f.ctx(), added); err != nil {
+		t.Fatalf("start the 8.4 backend beside 8.5: %v", err)
 	}
 }
 

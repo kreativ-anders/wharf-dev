@@ -127,7 +127,7 @@ func (r *Resolver) renderWebserverConf(cfg *config.Config, in webserver.Install,
 			SSL:      p.SSL && front,
 			CertFile: forwardSlash(CertPath(r.Root, p.Name)),
 			KeyFile:  forwardSlash(KeyPath(r.Root, p.Name)),
-			PHPPort:  PHPPort(cfg, cfg.PHPVersionFor(p)),
+			PHPPort:  PHPPort(cfg.PHPVersionFor(p)),
 			Port:     p.Port,
 			Conf:     data,
 		}

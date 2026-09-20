@@ -52,6 +52,12 @@ Feature: PHP runtime detection and selection
     And the picker shows it as downloading until it is done
     And it becomes selectable without any further setup
 
+  Scenario: Adding a PHP version leaves a running backend on its port
+    Given PHP "8.5" is installed and its backend is running
+    When PHP "8.4" is downloaded, adopted or found by a re-scan
+    Then the backend of "8.5" keeps the port it is listening on
+    And "8.4" is given a port of its own
+
   Scenario: A PHP download fails
     Given the machine has no internet connection
     When the user downloads PHP "8.4"

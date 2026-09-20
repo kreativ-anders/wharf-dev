@@ -81,7 +81,8 @@ class DaemonLauncher {
 
   /// Stops the daemon if this app started it. Asked over IPC first so it can
   /// stop its webservers — on Windows a signal is TerminateProcess, which the
-  /// daemon never sees. Killed if it does not go.
+  /// daemon never sees. Signalled if it does not answer, and killed only as a
+  /// last resort: see [awaitDaemonExit].
   ///
   /// [includingAttached] also asks a daemon this app only attached to — what
   /// "Cast off" means by everything. In development a hot restart makes every
@@ -95,25 +96,31 @@ class DaemonLauncher {
     _owned = null;
 
     if (!await _askToShutDown()) process.kill(ProcessSignal.sigterm);
-    try {
-      await process.exitCode.timeout(const Duration(seconds: 20));
-    } on TimeoutException {
-      process.kill(ProcessSignal.sigkill);
-      await process.exitCode;
-    }
+    await awaitDaemonExit(
+      exited: process.exitCode,
+      signal: () => process.kill(ProcessSignal.sigterm),
+      kill: () => process.kill(ProcessSignal.sigkill),
+    );
   }
 
-  /// False if the daemon could not be reached to ask.
+  /// False if the daemon could not be reached, or never answered: either way
+  /// it may not be shutting down, and the caller must not assume it is.
   Future<bool> _askToShutDown() async {
     final client = await _tryConnect(endpointPathFor(root));
     if (client == null) return false;
+    var answered = true;
     try {
       await client.call('daemon.shutdown').timeout(const Duration(seconds: 5));
+    } on TimeoutException {
+      // WARNING: Not the same as an error: the daemon drops its connections as
+      // it goes down, so a lost reply is a shutdown under way, while silence
+      // is a request that may never have been read.
+      answered = false;
     } catch (_) {
       // INFO: The daemon drops its connections as it goes down; the reply can be lost.
     }
     await client.close().catchError((_) {});
-    return true;
+    return answered;
   }
 
   Future<IpcClient?> _tryConnect(String endpointPath) async {
@@ -124,6 +131,45 @@ class DaemonLauncher {
       return null;
     }
   }
+}
+
+/// How long the daemon is given to go of its own accord, having been asked
+/// over IPC.
+///
+/// WARNING: It must outlast the daemon's own shutdown budget — 20 seconds, in
+/// cmd/wharfd/main.go — or the app kills it halfway through stopping its
+/// services, and the webserver it had not reached yet is left holding port 80.
+const daemonShutdownPatience = Duration(seconds: 30);
+
+/// How long a signalled daemon is given before the last resort.
+const daemonSignalGrace = Duration(seconds: 5);
+
+/// Waits for the daemon to exit, escalating only as far as it must: it was
+/// asked over IPC already, is signalled if it does not go, and killed only if
+/// it ignores that too (single-application.feature, "Quitting an application
+/// that started its own daemon").
+///
+/// A signal is a graceful shutdown on macOS and Linux, so the daemon still
+/// stops its services; the kill is not, which is why nothing reaches it until
+/// both waits have run out.
+Future<void> awaitDaemonExit({
+  required Future<void> exited,
+  required void Function() signal,
+  required void Function() kill,
+  Duration patience = daemonShutdownPatience,
+  Duration grace = daemonSignalGrace,
+}) async {
+  try {
+    return await exited.timeout(patience);
+  } on TimeoutException {
+    signal();
+  }
+  try {
+    return await exited.timeout(grace);
+  } on TimeoutException {
+    kill();
+  }
+  await exited;
 }
 
 /// The binary's file name on this OS.

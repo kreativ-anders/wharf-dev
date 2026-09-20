@@ -365,6 +365,16 @@ func (s *Supervisor) watch(id string, gen uint64, h Handle) {
 		s.mu.Unlock()
 		return
 	}
+	// WARNING: A start that already failed keeps its own error. Both run when a
+	// service exits during startup, and this one knows only that it exited:
+	// letting it win replaced nginx's own words with "nginx exited
+	// unexpectedly", whichever way the race fell (app-configuration.feature,
+	// "A custom config the webserver refuses names the problem").
+	if m.state == StateFailed && m.err != nil {
+		m.handle = nil
+		s.mu.Unlock()
+		return
+	}
 	m.state = StateFailed
 	m.handle = nil
 	if waitErr != nil {
