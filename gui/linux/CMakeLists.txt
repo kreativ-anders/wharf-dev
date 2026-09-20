@@ -74,6 +74,16 @@ set_target_properties(${BINARY_NAME}
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# WARNING: libayatana-appindicator 0.5.94 marks the whole app_indicator_* API
+# deprecated in favour of ayatana_appindicator_*, and tray_manager 0.5.3 still
+# calls the old names. apply_standard_settings above compiles every plugin with
+# -Werror, so the Linux build fails outright on a current Ubuntu. Warn instead
+# of failing, for that one target: the code is a vendored dependency we do not
+# edit, and Wharf's own code keeps -Werror.
+if(TARGET tray_manager_plugin)
+  target_compile_options(tray_manager_plugin PRIVATE -Wno-deprecated-declarations)
+endif()
+
 
 # === Installation ===
 # By default, "installing" just makes a relocatable bundle in the build

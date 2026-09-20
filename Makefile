@@ -117,13 +117,16 @@ gui: build gui-host $(if $(filter linux,$(FLUTTER_DEVICE)),gui-desktop)
 # .desktop file named after its app id (APPLICATION_ID in gui/linux/CMakeLists.txt);
 # without one the taskbar shows a generic icon, even under `flutter run`. Installed
 # for this user and hidden from the app menu, as it points at no installed binary.
+# WARNING: GLib drops a .desktop file whose Exec program is not on PATH, and GNOME
+# then shows no icon at all. `wharf_gui` is not on PATH under `flutter run`, so the
+# development copy launches through `env`, which always is.
 APPS_DIR := $(HOME)/.local/share/applications
 ICONS_DIR := $(HOME)/.local/share/icons/hicolor
 APP_ID := dev.wharf.wharf_gui
 
 gui-desktop:
 	@mkdir -p $(APPS_DIR)
-	sed '$$a NoDisplay=true' gui/linux/$(APP_ID).desktop > $(APPS_DIR)/$(APP_ID).desktop
+	sed -e 's|^Exec=|Exec=env |' -e '$$a NoDisplay=true' gui/linux/$(APP_ID).desktop > $(APPS_DIR)/$(APP_ID).desktop
 	@for n in 16 32 64 128 256 512; do \
 		install -Dm644 gui/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_$$n.png \
 			$(ICONS_DIR)/$${n}x$${n}/apps/$(APP_ID).png; \
