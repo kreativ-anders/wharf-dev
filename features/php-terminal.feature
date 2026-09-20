@@ -32,6 +32,8 @@ Feature: PHP in the terminal
     Given "bin/path" is on PATH
     When Wharf scans the machine for PHP
     Then "bin/path" is not offered as a PHP installation of its own
+    And the "bin/path" of another Wharf folder is passed over the same way,
+    whichever folder the terminal PATH names
 
   Scenario: Putting Wharf's PHP on the terminal PATH
     Given the user's shell is zsh

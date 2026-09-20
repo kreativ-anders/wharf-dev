@@ -165,6 +165,9 @@ func (d *Detector) system(ctx context.Context) []Install {
 		if d.PathDir != "" && filepath.Clean(dir) == filepath.Clean(d.PathDir) {
 			continue
 		}
+		if otherPathBin(dir) {
+			continue
+		}
 		resolved, err := filepath.EvalSymlinks(cli)
 		if err != nil {
 			resolved = cli
@@ -191,6 +194,24 @@ func (d *Detector) system(ctx context.Context) []Install {
 		})
 	}
 	return out
+}
+
+// otherPathBin reports whether dir is the bin/path of some other Wharf
+// folder: a "bin" holding both "path" and the "php" that folder's link points
+// into. PathDir above covers this folder's own; the terminal PATH names
+// whichever Wharf switched "Use in terminal" on last, which need not be this
+// one (php-terminal.feature, "Only the last Wharf folder switched on is on
+// the terminal PATH").
+//
+// WARNING: Adopted, such a folder is listed as a PHP found on the machine
+// that holds no php-fpm, so it can never be selected — a row the user can
+// only stare at, while the version is offered for download beside it.
+func otherPathBin(dir string) bool {
+	if filepath.Base(dir) != "path" || filepath.Base(filepath.Dir(dir)) != "bin" {
+		return false
+	}
+	info, err := os.Stat(filepath.Join(filepath.Dir(dir), "php"))
+	return err == nil && info.IsDir()
 }
 
 // systemCandidates lists plausible php binaries for this OS. Globs keep the

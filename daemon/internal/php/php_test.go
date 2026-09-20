@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -193,6 +194,48 @@ func TestDetectPassesOverWharfsPathFolder(t *testing.T) {
 	got := d.Detect(context.Background())
 	if len(got) != 1 || got[0].Dir != bin {
 		t.Fatalf("detected %+v, want only the install in %s", got, bin)
+	}
+}
+
+// features/php-terminal.feature — "Wharf's own folder is not adopted as another PHP"
+//
+// The folder on PATH is the one another Wharf switched "Use in terminal" on
+// in, holding a link into its own bin/php. Adopted, it was listed as PHP
+// found on the machine and could not be selected, having no php-fpm.
+func TestDetectPassesOverAnotherWharfsPathFolder(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bin/path holds php.cmd on Windows, which is never a php.exe candidate")
+	}
+	dir := t.TempDir()
+	vendor := filepath.Join(dir, "Wharf", "bin", "php")
+	stub(t, filepath.Join(vendor, "8.5", CLIName()))
+	stub(t, filepath.Join(vendor, "8.5", FastCGIName()))
+
+	other := filepath.Join(dir, "elsewhere", "root", "bin")
+	stub(t, filepath.Join(other, "php", "8.4", CLIName()))
+	if err := os.MkdirAll(filepath.Join(other, "path"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(other, "path", CLIName())
+	if err := os.Symlink(filepath.Join(other, "php", "8.4", CLIName()), link); err != nil {
+		t.Fatal(err)
+	}
+
+	d := &Detector{
+		VendorDir:  vendor,
+		Candidates: []string{link},
+		PathDir:    filepath.Join(dir, "Wharf", "bin", "path"),
+		Probe: func(_ context.Context, bin string) (string, error) {
+			if strings.Contains(bin, "8.5") {
+				return "8.5.8", nil
+			}
+			return "8.4.23", nil
+		},
+		Now: func() time.Time { return at("2026-03-01") },
+	}
+	got := d.Detect(context.Background())
+	if len(got) != 1 || got[0].Version != "8.5" {
+		t.Fatalf("detected %+v, want only the vendored 8.5", got)
 	}
 }
 
