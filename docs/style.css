@@ -111,6 +111,24 @@ p + p { margin-top: 0.9rem; }
 }
 .skip:focus { top: 1rem; }
 
+/* INFO: the early-development notice borrows the busy mark — "in progress" is
+   what it means in the app too — so the warning is a shape and words, not a
+   colour alone (dev/design-principles.md §4). */
+
+.notice {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  border-top: 3px solid var(--busy);
+  font-size: 0.9375rem;
+}
+.notice p {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding-block: 0.6rem;
+}
+.notice .status { flex: none; }
+
 /* Header and footer */
 
 header.site {
