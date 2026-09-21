@@ -84,13 +84,17 @@ Rules the pipeline keeps, each learned the hard way in finanzgecko:
   by `daemon/go.mod`. A floating toolchain changes what a tag builds without a
   commit. Raise the pin on purpose, after `make check` passes locally.
 - **One versioned file per platform**, and no unversioned copy beside it.
-  The file-name suffixes (`-mac.dmg`, `-linux-x64.tar.gz`,
-  `-windows-x64.zip`) are what the update check will look for
+  The file-name suffixes (`-mac.dmg`, `-linux-x64.AppImage`,
+  `-windows-x64-setup.exe`) are what the update check will look for
   (`features/settings.feature`, "Checking for updates on request"), so they
   are renamed together or not at all.
 - **The VC++ runtime DLLs ship next to the Windows exe.** Flutter's template
   links them dynamically. finanzgecko's winget validation VM, which lacked
   them, failed at start with `STATUS_DLL_NOT_FOUND`.
+- **Every action is pinned to a commit SHA**, the tag it came from in a
+  comment. A tag can be moved to other code without a commit here.
+- **Read-only by default.** Only `bump` and `release` get `contents: write`;
+  the build legs, which run third-party actions, cannot push or publish.
 - **`SHA256SUMS` proves integrity, not authenticity.** It is unsigned, and
   the release notes say only what it proves.
 - **The changelog is dated by the tagged commit**, not by the day the job
@@ -104,7 +108,24 @@ subject since the previous tag, merges and the release bookkeeping itself
 release notes, which is why CONTRIBUTING.md asks for gitmoji + an imperative
 sentence written for a reader.
 
-## 5. The macOS DMG
+## 5. Packaging
+
+One script per platform in `packaging/`, run the same way locally and on
+the release leg, so the file someone tested by hand is the one CI ships.
+
+| Platform | Script | Ships as |
+|---|---|---|
+| macOS | `packaging/macos/build_dmg.sh` (`make dmg`) | `Wharf-<version>-mac.dmg`, signed and notarised (below) |
+| Linux | `packaging/linux/build_appimage.sh` | `Wharf-<version>-linux-x64.AppImage`: the bundle with `wharfd` next to `wharf_gui`, one file, no install. `appimagetool` is pinned and checksum-verified |
+| Windows | `packaging/windows/wharf.iss` (Inno Setup) | `Wharf-<version>-windows-x64-setup.exe`: Program Files, a Start menu entry, an uninstaller. Not code-signed yet, so SmartScreen warns |
+
+None of them puts anything the user keeps next to the app: the root is
+`~/Wharf` (`dev/architecture.md` §5), so a read-only mount or Program Files
+works, and an uninstall leaves projects and PHP builds alone. The installer's
+`AppId` is fixed for good; a new one would install beside the old version
+instead of over it.
+
+### The macOS DMG
 
 `packaging/macos/build_dmg.sh` turns a built `Wharf.app` into
 `Wharf-<version>-mac.dmg`. The same script runs locally (`make dmg`) and on the
@@ -136,11 +157,16 @@ the job, including after a failure.
 - **Workflow permissions:** Settings → Actions → General → *Read and write*.
   The workflow pushes the version commit, the tag and `CHANGELOG.md` to
   `main`. If `main` is protected, allow `github-actions[bot]` to push to it.
-- **The version to start from:** gui/pubspec.yaml says `1.0.0+1`. For a
-  first release below 1.0, set it by hand once (`version: 0.1.0+1`).
-  `tool/version.sh` only ever moves forward.
-- **Linux and Windows ship as a tarball and a zip** for now. An AppImage and
-  an installer replace them when packaging exists (README, "Status"); the
-  steps before *Package* in the workflow stay as they are.
+- **The first release is the pubspec's own version.** gui/pubspec.yaml
+  starts at `1.0.0+1`, and `tool/version.sh` only ever moves forward, so a
+  bump would skip 1.0.0. Tag the commit that carries it instead:
+  `git tag -a v1.0.0 -m "Wharf 1.0.0" && git push origin v1.0.0`. The gate
+  accepts it because tag and pubspec agree. Every later release uses A or B.
+  (For a first release below 1.0, set `version: 0.1.0+1` by hand once.)
+- **The signing secrets (§5) must be set before a real release.** A tag or a
+  bump sets `REQUIRE_NOTARIZED=1`, and without them the macOS leg fails
+  rather than publish an unsigned DMG.
+- **The repository must be public** for anyone but its members to download
+  a release, and for the update check to see one.
 - The update check stays `@roadmap` until there is a release to check
   against; its rules are already fixed in `features/settings.feature`.

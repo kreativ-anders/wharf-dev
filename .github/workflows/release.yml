@@ -29,8 +29,12 @@ on:
         required: false
         default: ""
 
+# INFO: Read-only by default. Only `bump` and `release` push, and only they get
+# write access — a compromised build step can neither push nor publish.
+# WARNING: Every action is pinned to a commit, not a movable tag: a tag can be
+# re-pointed at other code without a commit here. Raise a pin deliberately.
 permissions:
-  contents: write
+  contents: read
 
 # WARNING: Two runs bumping from the same gui/pubspec.yaml would claim the same version.
 concurrency:
@@ -48,14 +52,14 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: daemon/go.mod
           cache: false # no dependencies to cache
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -83,6 +87,8 @@ jobs:
     needs: gate
     if: github.event_name == 'workflow_dispatch' && (inputs.bump != 'none' || inputs.version != '')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       tag: ${{ steps.bump.outputs.tag }}
     steps:
@@ -92,7 +98,7 @@ jobs:
           echo "::error::Run the release from main, not ${GITHUB_REF_NAME}."
           exit 1
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0 # the tags, so an existing one is refused
 
@@ -135,18 +141,22 @@ jobs:
         shell: bash
     env:
       PLATFORM: ${{ matrix.platform }}
+      # INFO: Only a yes/no at job level, not the secrets themselves: a step's `if:`
+      # sees env but not secrets, and the secrets should reach the two steps
+      # that need them, not the third-party actions in the same job.
+      HAS_SIGNING_CERT: ${{ secrets.MACOS_CERT_P12_BASE64 != '' }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.bump.outputs.tag || github.ref }}
           fetch-depth: 0 # `version.sh describe` needs the tags
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: daemon/go.mod
           cache: false
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -219,16 +229,12 @@ jobs:
       # Without the secrets — a fork — this is skipped and build_dmg.sh makes
       # an unsigned DMG instead of blocking the release.
       - name: Signing certificate and notarisation key
-        if: matrix.platform == 'macos'
+        if: matrix.platform == 'macos' && env.HAS_SIGNING_CERT == 'true'
         env:
           MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
           APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
         run: |
-          if [ -z "$MACOS_CERT_P12_BASE64" ]; then
-            echo "::notice::No signing certificate — the DMG will be unsigned."
-            exit 0
-          fi
           keychain="$RUNNER_TEMP/signing.keychain-db"
           keychain_pw="$(uuidgen)"
           security create-keychain -p "$keychain_pw" "$keychain"
@@ -253,10 +259,9 @@ jobs:
       # INFO: One versioned file per platform, and no unversioned copy beside it:
       # a duplicate doubles every upload for nothing. The file-name suffixes
       # are what a future update check will look for — rename them together.
-      # macOS goes through the same script `make dmg` runs locally.
-      # TODO: replace the Linux tarball and Windows zip with an AppImage and an
-      # installer once packaging exists (README "Status"); the steps above stay.
+      # Each goes through the same script that runs locally (dev/releasing.md §5).
       - name: Package
+        if: matrix.platform != 'windows'
         env:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
@@ -269,13 +274,23 @@ jobs:
         run: |
           name="Wharf-$ASSET_VERSION"
           case "$PLATFORM" in
-            macos)
-              OUT_FILE="$PWD/$name-mac.dmg" ./packaging/macos/build_dmg.sh ;;
-            linux)
-              tar -C gui/build/linux/x64/release -czf "$name-linux-x64.tar.gz" bundle ;;
-            windows)
-              pwsh -NoProfile -Command "Compress-Archive -Path gui/build/windows/x64/runner/Release/* -DestinationPath '$name-windows-x64.zip'" ;;
+            macos) OUT_FILE="$PWD/$name-mac.dmg" ./packaging/macos/build_dmg.sh ;;
+            linux) OUT_FILE="$PWD/$name-linux-x64.AppImage" ./packaging/linux/build_appimage.sh ;;
           esac
+
+      # WARNING: PowerShell, not the job's bash: Git Bash rewrites an argument that
+      # starts with "/" into a Windows path, and ISCC's /D and /O would arrive
+      # as C:/Program Files/Git/D…
+      - name: Package (Windows installer)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          iscc "/DAppVersion=$env:ASSET_VERSION" `
+            "/DBuildDir=$PWD\gui\build\windows\x64\runner\Release" `
+            "/DOutputName=Wharf-$env:ASSET_VERSION-windows-x64-setup" `
+            "/O$PWD" packaging\windows\wharf.iss
+          if ($LASTEXITCODE -ne 0) { throw "iscc failed with exit code $LASTEXITCODE" }
 
       # WARNING: `always()`: no decrypted key may stay on the runner after a failure.
       - name: Remove the keychain and the notarisation key
@@ -284,7 +299,7 @@ jobs:
           security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
           rm -f "$RUNNER_TEMP/private_keys/AuthKey.p8"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: wharf-${{ matrix.platform }}
           path: Wharf-*
@@ -300,10 +315,12 @@ jobs:
       needs.build.result == 'success' &&
       (needs.bump.result == 'success' || startsWith(github.ref, 'refs/tags/'))
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       TAG: ${{ needs.bump.outputs.tag || github.ref_name }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: main
           fetch-depth: 0
@@ -318,7 +335,7 @@ jobs:
           git diff --cached --quiet || git commit -m "📝 Changelog for $TAG"
           git push origin HEAD:main
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: dist
           merge-multiple: true
@@ -342,7 +359,7 @@ jobs:
             echo "Check with \`shasum -a 256 <file>\` (macOS, Linux) or \`certutil -hashfile <file> SHA256\` (Windows)."
           } > "$RUNNER_TEMP/notes.md"
 
-      - uses: softprops/action-gh-release@v3
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: ${{ env.TAG }}
           name: Wharf ${{ env.TAG }}

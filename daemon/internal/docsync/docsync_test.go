@@ -36,7 +36,7 @@ func TestFileDirectoryNamesEveryFile(t *testing.T) {
 		}
 	}
 
-	for _, dir := range []string{".", "dev", "docs", "features", "tool", "packaging/macos", ".github/workflows", "gui/test"} {
+	for _, dir := range []string{".", "dev", "docs", "features", "tool", "packaging/macos", "packaging/linux", "packaging/windows", ".github/workflows", "gui/test"} {
 		entries, err := os.ReadDir(filepath.Join(repo, dir))
 		if os.IsNotExist(err) {
 			continue

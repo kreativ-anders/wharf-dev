@@ -41,7 +41,7 @@ one is renamed, deleted or left unimplemented. See [CLAUDE.md](CLAUDE.md) §1.
 | Appearance | Kirby-plain light and dark themes, or follow the system. |
 | Updates | Settings → General shows the running version. "Check for updates" is there but disabled until releases exist; its behaviour is specified as `@roadmap`. |
 | Releases | A release workflow builds and publishes all three platforms from one version in `gui/pubspec.yaml` (`dev/releasing.md`). Nothing is published yet. |
-| Packaging | macOS: a DMG, signed and notarised when the credentials are there. Linux and Windows: a tarball and a zip for now; AppImage and installer not started. |
+| Packaging | macOS: a DMG, signed and notarised when the credentials are there. Linux: an AppImage. Windows: an Inno Setup installer, not yet code-signed (SmartScreen warns). |
 
 ## Running it
 

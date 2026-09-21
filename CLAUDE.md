@@ -93,8 +93,10 @@ wharf/
 │   └── release.yml            THE ONLY WORKFLOW: gate → bump → build per OS → release
 ├── tool/
 │   └── version.sh             the one place a version is computed, bumped, tagged, changelogged
-├── packaging/macos/
-│   └── build_dmg.sh           Wharf.app → signed, notarised DMG; same script locally and in CI
+├── packaging/                 one file per platform, the same script locally and in CI
+│   ├── macos/build_dmg.sh     Wharf.app → signed, notarised DMG
+│   ├── linux/build_appimage.sh  the Linux bundle, wharfd included → one AppImage
+│   └── windows/wharf.iss      the Windows bundle → Inno Setup installer (Program Files, Start menu, uninstaller)
 │
 ├── dev/                       developer documentation — decisions, not user docs
 │   ├── architecture.md        components, cross-OS strategy, config shape
