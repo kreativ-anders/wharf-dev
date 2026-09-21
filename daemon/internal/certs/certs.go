@@ -8,10 +8,13 @@ package certs
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -87,6 +90,9 @@ type Mkcert struct {
 
 	mu     sync.Mutex
 	status *Status
+	// setupMu keeps two setups — the Trust button and a project's SSL switch
+	// — from downloading mkcert over each other or prompting twice.
+	setupMu sync.Mutex
 }
 
 // New returns an Issuer for the given root.
@@ -222,6 +228,8 @@ func systemTrusts(caRoot string) bool {
 // Setup installs, creates and trusts, skipping whatever is already done, so
 // it is safe to call every time a project turns SSL on.
 func (m *Mkcert) Setup(ctx context.Context) error {
+	m.setupMu.Lock()
+	defer m.setupMu.Unlock()
 	bin, err := m.binary()
 	if errors.Is(err, ErrMkcertMissing) {
 		bin, err = m.fetch(ctx)
@@ -247,12 +255,46 @@ func (m *Mkcert) Setup(ctx context.Context) error {
 	}
 
 	if !m.trusted(caRoot) {
+		if err := m.verifyVendored(bin); err != nil {
+			return err
+		}
 		err := m.Elevator.RequestElevatedRun(bin, []string{"-install"},
 			[]string{"CAROOT=" + caRoot, "TRUST_STORES=system"})
 		m.refresh(ctx)
 		return err
 	}
 	m.refresh(ctx)
+	return nil
+}
+
+// verifyVendored checks Wharf's own mkcert against its pinned checksum again,
+// right before it runs with administrator rights.
+//
+// WARNING: bin/mkcert/ is writable by the user, and so by anything running as
+// the user: a binary swapped in after the download would otherwise be handed
+// administrator rights by the next trust prompt. A mkcert found on the PATH
+// is the user's own install and has no pinned checksum to compare with.
+func (m *Mkcert) verifyVendored(bin string) error {
+	if bin != m.vendored() {
+		return nil
+	}
+	want, ok := m.Checksums[runtime.GOOS+"/"+runtime.GOARCH]
+	if !ok {
+		return nil
+	}
+	f, err := os.Open(bin)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return err
+	}
+	if got := hex.EncodeToString(h.Sum(nil)); !strings.EqualFold(got, want) {
+		return fmt.Errorf("%s is not mkcert %s as Wharf downloaded it, so it is not given administrator rights — "+
+			"delete %s and turn SSL on again", bin, Version, m.Root.MkcertBin())
+	}
 	return nil
 }
 

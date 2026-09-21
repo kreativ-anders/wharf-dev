@@ -88,15 +88,6 @@ func (e *MissingBinaryError) Error() string {
 	return fmt.Sprintf("%s is not installed (expected %s)", e.Service, e.Path)
 }
 
-// exe appends the Windows executable suffix. This and the php-fpm/php-cgi
-// choice below are the only OS differences in this package.
-func exe(name string) string {
-	if runtime.GOOS == "windows" {
-		return name + ".exe"
-	}
-	return name
-}
-
 // WebserverPath is where Wharf's own copy of a webserver goes, whether or
 // not it is there.
 func (r *Resolver) WebserverPath(name string) (string, error) {
@@ -197,11 +188,20 @@ func (r *Resolver) PHPSpec(cfg *config.Config, version string) (supervisor.Spec,
 		Port:    port,
 		Dir:     r.Root.Dir,
 		LogPath: filepath.Join(r.Root.LogDir(), fmt.Sprintf("php-%s.log", version)),
+		Logs:    []string{filepath.Join(r.Root.LogDir(), "php-"+version+"-fpm.log")},
 		// WARNING: PHP reads the user's config/php.ini after its own php.ini, so its
 		// values win (php-settings.feature). The empty first entry keeps the
 		// scan directory PHP was built with: a Homebrew PHP loads its
 		// extensions from there.
-		Env: []string{"PHP_INI_SCAN_DIR=" + string(os.PathListSeparator) + r.Root.Config()},
+		//
+		// WARNING: php-cgi — Windows' FastCGI backend — exits after 500
+		// requests unless PHP_FCGI_MAX_REQUESTS says otherwise, and nothing
+		// restarts it: every project on that version would stop answering
+		// until Wharf was restarted. 0 lifts the limit; php-fpm ignores it.
+		Env: []string{
+			"PHP_INI_SCAN_DIR=" + string(os.PathListSeparator) + r.Root.Config(),
+			"PHP_FCGI_MAX_REQUESTS=0",
+		},
 	}
 	// TODO(xdebug): offer Xdebug, per project rather than per PHP version —
 	// it slows every request down while loaded. A likely shape: a project
@@ -259,6 +259,7 @@ func (r *Resolver) WebserverSpec(cfg *config.Config) (supervisor.Spec, error) {
 		Dir:     r.Root.Dir,
 		Port:    HTTPPort,
 		LogPath: filepath.Join(r.Root.LogDir(), name+".log"),
+		Logs:    r.serverLogs(name, cfg.Projects),
 	}, nil
 }
 
@@ -298,7 +299,23 @@ func (r *Resolver) ProjectSpec(cfg *config.Config, p config.Project) (supervisor
 		// INFO: Its own instance's output — startup errors above all — belongs with
 		// the project's other logs (project-logs.feature).
 		LogPath: filepath.Join(r.Root.ProjectLogDir(p.Name), name+".log"),
+		Logs:    r.serverLogs(name, []config.Project{p}),
 	}, nil
+}
+
+// serverLogs are the logs a webserver instance writes itself (render.go): its
+// own two in data/log/, and those of each project it serves or forwards. A
+// project's custom config may name others; those are the user's to manage.
+func (r *Resolver) serverLogs(name string, projects []config.Project) []string {
+	out := []string{
+		filepath.Join(r.Root.LogDir(), name+"-error.log"),
+		filepath.Join(r.Root.LogDir(), name+"-access.log"),
+	}
+	for _, p := range projects {
+		dir := r.Root.ProjectLogDir(p.Name)
+		out = append(out, filepath.Join(dir, "access.log"), filepath.Join(dir, "error.log"))
+	}
+	return out
 }
 
 // webserverArgs is how each webserver is told to run in the foreground with a

@@ -156,7 +156,9 @@ func (d *Daemon) addedLocked(ctx context.Context, name, path, server, template s
 		if !ok {
 			return
 		}
-		if err := d.startProjectLocked(startCtx, cfg, entry); err != nil {
+		if err := d.startProjectLocked(startCtx, cfg, entry); errors.Is(err, supervisor.ErrShuttingDown) {
+			d.log.Info("start of added project called off: Wharf is quitting", "project", name)
+		} else if err != nil {
 			d.log.Error("start added project", "project", name, "err", err)
 		}
 	}()
@@ -358,15 +360,17 @@ func (d *Daemon) RestartProject(ctx context.Context, name string) (err error) {
 	if !ok {
 		return notFound("no project named %q", name)
 	}
-	if err := d.ensurePHP(ctx, cfg, cfg.PHPVersionFor(p)); err != nil {
-		return err
-	}
 	d.setStarted(p.Name, true)
 	defer func() {
 		if err != nil {
 			d.startFailed(p.Name, err)
 		}
 	}()
+	// INFO: After the failure is recorded, so a PHP that will not start shows
+	// on the project's row, as it does for a start.
+	if err := d.ensurePHP(ctx, cfg, cfg.PHPVersionFor(p)); err != nil {
+		return err
+	}
 	if err := d.checkRules(cfg, p); err != nil {
 		return err
 	}

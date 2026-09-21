@@ -189,6 +189,14 @@ verified by the same tests running against both transports.
 The cost is honest: one extra concept (the endpoint file) and one extra
 handshake on one OS, in exchange for a GUI that runs on all three.
 
+A connection's requests are answered in the order they arrive, so starting a
+service and then reading the state cannot race. The exceptions are the
+actions that take minutes — downloading PHP, installing a webserver, setting
+up SSL, looking up PHP releases. They run beside the other requests and are
+answered whenever they finish, because the GUI sends every click on one
+connection and would otherwise wait out a download before it could stop a
+project. Each one guards itself against running twice.
+
 ## 4b. Binaries Wharf installs
 
 Nothing is downloaded at first launch (`features/php-runtime.feature`): a PHP
@@ -269,7 +277,9 @@ wharf/
     │                   #   apache.conf include nginx/<project>.conf and
     │                   #   apache/<project>.conf; run/ holds pid files
     ├── log/            # per-service logs; projects/<name>/ holds one project's
-    │                   #   access.log and error.log, PHP's errors included
+    │                   #   access.log and error.log, PHP's errors included.
+    │                   #   A log past 10 MB is moved to <name>.1 when its
+    │                   #   service next starts, so none grows without end
     ├── certs/          # mkcert output, one pair per SSL project
     └── mailpit/        # roadmap
 ```

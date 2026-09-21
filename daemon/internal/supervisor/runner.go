@@ -30,6 +30,10 @@ type Spec struct {
 	Port int
 	// LogPath receives combined stdout/stderr. Empty discards output.
 	LogPath string
+	// Logs are the other logs the process writes itself — a webserver's
+	// access and error logs. Like LogPath, each is moved aside on start once
+	// it has grown past MaxLogSize.
+	Logs []string
 	// StopSignal is sent first on stop; SIGTERM if unset. Windows cannot
 	// deliver it, so there the process tree is killed at once.
 	StopSignal os.Signal

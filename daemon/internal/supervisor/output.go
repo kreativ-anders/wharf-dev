@@ -11,6 +11,24 @@ import (
 // that floods its log before dying must not stall the error report.
 const maxStartupOutput = 64 << 10
 
+// MaxLogSize is how large a log may grow before its service's next start
+// moves it aside (project-logs.feature, "A log that has grown large starts
+// afresh").
+const MaxLogSize = 10 << 20
+
+// trimLogs moves each log past MaxLogSize to "<log>.1", replacing the one
+// there, so a log never grows without end but the latest lines survive a
+// start. Best effort: a log that cannot be moved — on Windows, one another
+// running instance still holds open — is left to grow until the next start.
+func trimLogs(paths ...string) {
+	for _, path := range paths {
+		if path == "" || logSize(path) <= MaxLogSize {
+			continue
+		}
+		_ = os.Rename(path, path+".1")
+	}
+}
+
 // logSize is where a log ends before a run starts; zero when it has no log.
 func logSize(path string) int64 {
 	if path == "" {

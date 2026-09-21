@@ -375,3 +375,113 @@ func TestNetProberSeesLoopbackAndWildcardListeners(t *testing.T) {
 		}
 	}
 }
+
+// features/single-application.feature — "Nothing starts once Wharf is quitting"
+func TestNothingStartsOnceShutdownHasBegun(t *testing.T) {
+	s, runner, _ := newTestSupervisor()
+	if err := s.Start(context.Background(), spec("webserver", "nginx", 80)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if s.AnyRunning() {
+		t.Fatal("Shutdown left a process running")
+	}
+	if err := s.Start(context.Background(), spec("php:8.3", "PHP 8.3", 9083)); !errors.Is(err, ErrShuttingDown) {
+		t.Fatalf("Start after Shutdown = %v, want ErrShuttingDown", err)
+	}
+	if got := runner.StartedIDs(); len(got) != 1 {
+		t.Fatalf("started %v, want only the webserver from before Shutdown", got)
+	}
+}
+
+// startWaitingForPort starts a spec whose port another program holds, and
+// returns once the start is waiting for it.
+func startWaitingForPort(t *testing.T, s *Supervisor, ports *FakePorts) <-chan error {
+	t.Helper()
+	ports.Bind(80)
+	done := make(chan error, 1)
+	go func() { done <- s.Start(context.Background(), spec("webserver", "nginx", 80)) }()
+	deadline := time.Now().Add(time.Second)
+	for {
+		if st, ok := s.Status("webserver"); ok && st.State == StateStarting {
+			return done
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the start never began waiting for its port")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestStopCallsOffAStartStillWaitingForItsPort(t *testing.T) {
+	s, runner, ports := newTestSupervisor()
+	done := startWaitingForPort(t, s, ports)
+
+	if err := s.Stop(context.Background(), "webserver"); err != nil {
+		t.Fatal(err)
+	}
+	ports.Release(80)
+	if err := <-done; err != nil {
+		t.Fatalf("a start called off by Stop = %v, want nil", err)
+	}
+	if got := runner.StartedIDs(); len(got) != 0 {
+		t.Fatalf("started %v after Stop called the start off", got)
+	}
+	if st, _ := s.Status("webserver"); st.State != StateStopped {
+		t.Fatalf("state = %s, want stopped", st.State)
+	}
+}
+
+// features/single-application.feature — "Nothing starts once Wharf is quitting"
+func TestShutdownCallsOffAStartStillWaitingForItsPort(t *testing.T) {
+	s, runner, ports := newTestSupervisor()
+	done := startWaitingForPort(t, s, ports)
+
+	if err := s.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	ports.Release(80)
+	if err := <-done; !errors.Is(err, ErrShuttingDown) {
+		t.Fatalf("a start overtaken by Shutdown = %v, want ErrShuttingDown", err)
+	}
+	if got := runner.StartedIDs(); len(got) != 0 {
+		t.Fatalf("started %v after Shutdown", got)
+	}
+}
+
+// features/project-logs.feature — "A log that has grown large starts afresh"
+func TestALogThatHasGrownLargeStartsAfresh(t *testing.T) {
+	s, _, _ := newTestSupervisor()
+	dir := t.TempDir()
+	big := filepath.Join(dir, "nginx.log")
+	access := filepath.Join(dir, "access.log")
+	small := filepath.Join(dir, "error.log")
+	for path, size := range map[string]int{big: MaxLogSize + 1, access: MaxLogSize + 1, small: 10} {
+		if err := os.WriteFile(path, make([]byte, size), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(access+".1", []byte("older"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	sp := spec("webserver", "nginx", 80)
+	sp.LogPath, sp.Logs = big, []string{access, small}
+	if err := s.Start(context.Background(), sp); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, path := range []string{big, access} {
+		if logSize(path) > 0 {
+			t.Fatalf("%s was not started afresh", filepath.Base(path))
+		}
+		if logSize(path+".1") != MaxLogSize+1 {
+			t.Fatalf("%s was not moved aside to .1", filepath.Base(path))
+		}
+	}
+	if logSize(small) != 10 {
+		t.Fatal("a small log was moved aside")
+	}
+}

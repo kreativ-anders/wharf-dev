@@ -2,7 +2,9 @@ package elevate
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 )
 
@@ -11,6 +13,11 @@ type systemElevator struct{}
 // RequestElevatedRun goes through cmd.exe's `set`, because a process started
 // with RunAs does not inherit the caller's environment.
 func (systemElevator) RequestElevatedRun(program string, args []string, env []string) error {
+	for _, part := range append(append([]string{program}, args...), env...) {
+		if err := expandable(part); err != nil {
+			return err
+		}
+	}
 	var line strings.Builder
 	for _, kv := range env {
 		fmt.Fprintf(&line, `set "%s"&& `, kv)
@@ -40,6 +47,23 @@ func runAs(argumentList string) error {
 			return ErrDeclined
 		}
 		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+var cmdVariable = regexp.MustCompile(`%([^%]+)%`)
+
+// expandable refuses a part of the command line that cmd.exe would change.
+//
+// WARNING: cmd.exe expands %NAME% even inside quotes when NAME is set, so a
+// Wharf folder named like one would send the elevated program somewhere else.
+// A lone % or an unset name passes through as written and stays allowed.
+func expandable(part string) error {
+	for _, m := range cmdVariable.FindAllStringSubmatch(part, -1) {
+		if _, set := os.LookupEnv(m[1]); set {
+			return fmt.Errorf("%q holds %s, which Windows would replace with the value of %s before the administrator "+
+				"prompt runs it — rename the folder so it has no %%…%% in it", part, m[0], m[1])
+		}
 	}
 	return nil
 }

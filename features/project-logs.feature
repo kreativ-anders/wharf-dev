@@ -28,3 +28,9 @@ Feature: Per-project logs
   Scenario: Opening a project's logs
     When the user opens the settings of "my-kirby-site"
     Then "Logs" offers to open "data/log/projects/my-kirby-site/" in the file manager
+
+  Scenario: A log that has grown large starts afresh
+    Given a log a webserver or PHP writes has grown past 10 MB
+    When that service starts
+    Then the log is moved aside as "<name>.1", replacing an older one
+    And the service writes a new log, so logs never fill the disk

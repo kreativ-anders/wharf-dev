@@ -49,6 +49,19 @@ Feature: One application
     And a screen reader announces it as "Working…"
     And the line is gone once the action is done
 
+  Scenario: A download does not hold up other actions
+    Given a PHP version or a webserver is downloading
+    When the user starts, stops or restarts a project
+    Then that action is carried out at once
+    And the download goes on and reports when it is done
+
+  Scenario: Nothing starts once Wharf is quitting
+    Given a project is still starting — added with "Start it now", or started
+    just before the user quit
+    When the user quits the application
+    Then the start is abandoned, or what it started is stopped again
+    And no webserver or PHP is left running after the daemon has gone
+
   Scenario: The application exits without shutting its daemon down
     Given the application started the daemon itself
     When the application exits unexpectedly

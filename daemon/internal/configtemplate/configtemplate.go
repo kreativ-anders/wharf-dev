@@ -151,6 +151,11 @@ func (l Library) changed(id string) bool {
 
 // Exists reports whether id names a template.
 func (l Library) Exists(id string) bool {
+	// WARNING: An id is joined into a path: one like "../x" would reach files
+	// outside config/templates/ through Read, Save and Delete.
+	if !config.TemplateIDRe.MatchString(id) {
+		return false
+	}
 	if _, ok := builtinName(id); ok {
 		return true
 	}
@@ -160,6 +165,9 @@ func (l Library) Exists(id string) bool {
 // Read returns a template's rules for one webserver: the user's file where
 // there is one, Wharf's own otherwise.
 func (l Library) Read(id, server string) (string, error) {
+	if !config.TemplateIDRe.MatchString(id) {
+		return "", fmt.Errorf("%w: %q", ErrNotFound, id)
+	}
 	if !slices.Contains(Servers, server) {
 		return "", fmt.Errorf("%w: config templates have rules for nginx and apache, not %q", ErrNotFound, server)
 	}

@@ -346,3 +346,75 @@ func TestEndpointFileStaysPrivateOverAStaleOne(t *testing.T) {
 		t.Fatalf("endpoint file mode = %v, want 0600", perm)
 	}
 }
+
+// features/single-application.feature — "A download does not hold up other
+// actions"
+func TestABackgroundMethodDoesNotHoldUpTheNextRequest(t *testing.T) {
+	for _, transport := range []Transport{TransportUnix, TransportTCP} {
+		t.Run(string(transport), func(t *testing.T) {
+			dir, err := os.MkdirTemp("/tmp", "wh")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { os.RemoveAll(dir) })
+			srv := NewServer(filepath.Join(dir, "w.sock"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+			srv.SetTransport(transport)
+			release := make(chan struct{})
+			srv.HandleBackground("download", func(ctx context.Context, _ json.RawMessage) (any, error) {
+				select {
+				case <-release:
+				case <-ctx.Done():
+				}
+				return map[string]string{"done": "yes"}, nil
+			})
+			srv.Handle("echo", func(context.Context, json.RawMessage) (any, error) {
+				return map[string]string{"heard": "click"}, nil
+			})
+			if err := srv.Listen(); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			go srv.Serve(ctx)
+			t.Cleanup(func() { cancel(); srv.Close() })
+
+			c, err := DialEndpoint(srv.Endpoint())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer c.Close()
+
+			downloaded := make(chan error, 1)
+			go func() {
+				var out struct {
+					Done string `json:"done"`
+				}
+				err := c.Call(context.Background(), "download", nil, &out)
+				if err == nil && out.Done != "yes" {
+					err = errors.New("the download answered " + out.Done)
+				}
+				downloaded <- err
+			}()
+
+			callCtx, cancelCall := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancelCall()
+			if err := c.Call(callCtx, "echo", nil, nil); err != nil {
+				t.Fatalf("a request after a running download was not answered: %v", err)
+			}
+			select {
+			case err := <-downloaded:
+				t.Fatalf("the download answered before it finished: %v", err)
+			default:
+			}
+
+			close(release)
+			select {
+			case err := <-downloaded:
+				if err != nil {
+					t.Fatal(err)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("the download was never answered")
+			}
+		})
+	}
+}

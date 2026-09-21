@@ -360,3 +360,21 @@ func asIPC(err error, target **ipc.Error) bool {
 	}
 	return ok
 }
+
+// A restart whose PHP cannot start says why on the project's row, as a start
+// does, rather than leaving the row as it was.
+func TestARestartWhosePHPIsMissingShowsWhy(t *testing.T) {
+	h := newHarness(t)
+	h.mustAdd("my-kirby-site")
+	version := h.project("my-kirby-site").PHPVersion
+	if err := os.RemoveAll(h.root.PHPBin(version)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := h.d.RestartProject(h.ctx(), "my-kirby-site"); err == nil {
+		t.Fatal("a restart without its PHP succeeded")
+	}
+	if p := h.project("my-kirby-site"); p.State != "failed" || !strings.Contains(p.Error, version) {
+		t.Fatalf("row = %s %q, want failed naming PHP %s", p.State, p.Error, version)
+	}
+}

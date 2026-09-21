@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -214,12 +216,15 @@ func (d *Downloader) installWindows(ctx context.Context, version, destDir, tmp s
 	}
 	full, _ := rel["version"].(string)
 
+	// INFO: Keys in order, the newest compiler last, so the build is the same on
+	// every run when an index lists more than one.
+	keys := slices.Sorted(maps.Keys(rel))
 	var zipPath, sum string
-	for key, v := range rel {
+	for _, key := range keys {
 		if !strings.HasPrefix(key, "nts-") || !strings.HasSuffix(key, "-x64") {
 			continue
 		}
-		variant, _ := v.(map[string]any)
+		variant, _ := rel[key].(map[string]any)
 		z, _ := variant["zip"].(map[string]any)
 		zipPath, _ = z["path"].(string)
 		sum, _ = z["sha256"].(string)

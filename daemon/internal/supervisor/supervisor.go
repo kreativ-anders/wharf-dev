@@ -5,6 +5,7 @@ package supervisor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -61,6 +62,8 @@ type Supervisor struct {
 	mu    sync.Mutex
 	procs map[string]*managed
 	gen   uint64
+	// closing is set by Shutdown; from then on nothing starts.
+	closing bool
 
 	listenersMu sync.RWMutex
 	listeners   map[int]func(Status)
@@ -99,11 +102,18 @@ func (s *Supervisor) OnChange(fn func(Status)) func() {
 	}
 }
 
+// ErrShuttingDown is returned by Start once Shutdown has begun.
+var ErrShuttingDown = errors.New("nothing more is started: Wharf is quitting")
+
 // Start launches the spec's process unless it is already running. It returns
 // only once the process is confirmed running: a spec with a port must be
 // listening on it, which is what distinguishes "spawned" from "serving".
 func (s *Supervisor) Start(ctx context.Context, spec Spec) error {
 	s.mu.Lock()
+	if s.closing {
+		s.mu.Unlock()
+		return ErrShuttingDown
+	}
 	if m, ok := s.procs[spec.ID]; ok {
 		switch m.state {
 		case StateRunning, StateStarting:
@@ -126,7 +136,11 @@ func (s *Supervisor) Start(ctx context.Context, spec Spec) error {
 	if err != nil {
 		return s.fail(spec.ID, gen, err)
 	}
+	if off, err := s.calledOff(spec.ID, m, gen); off {
+		return err
+	}
 
+	trimLogs(append([]string{spec.LogPath}, spec.Logs...)...)
 	// INFO: Only what this run writes explains a failed start; earlier runs' lines
 	// in the same log would name problems long since fixed.
 	logFrom := logSize(spec.LogPath)
@@ -136,10 +150,15 @@ func (s *Supervisor) Start(ctx context.Context, spec Spec) error {
 	}
 
 	s.mu.Lock()
-	if s.procs[spec.ID] != m || m.gen != gen {
-		// INFO: A concurrent stop replaced this entry while we were starting.
+	if s.procs[spec.ID] != m || m.gen != gen || s.closing {
+		// INFO: A Stop called this start off while it was waiting for its port
+		// or spawning: what it spawned goes at once.
+		closing := s.closing
 		s.mu.Unlock()
-		terminate(ctx, h, spec)
+		terminate(context.WithoutCancel(ctx), h, spec)
+		if closing {
+			return ErrShuttingDown
+		}
 		return nil
 	}
 	m.handle = h
@@ -202,6 +221,19 @@ func (s *Supervisor) Start(ctx context.Context, spec Spec) error {
 func (s *Supervisor) Stop(ctx context.Context, id string) error {
 	s.mu.Lock()
 	m, ok := s.procs[id]
+	if ok && m.state == StateStarting && m.handle == nil {
+		// INFO: A start still waiting for its port, or still spawning, has no
+		// process to stop yet. It is called off instead: its generation moves
+		// on, so Start stops whatever it spawns (single-application.feature,
+		// "Nothing starts once Wharf is quitting").
+		s.gen++
+		m.gen = s.gen
+		m.state = StateStopped
+		status := statusOf(m)
+		s.mu.Unlock()
+		s.emit(status)
+		return nil
+	}
 	if !ok || m.handle == nil || m.state == StateStopped || m.state == StateStopping {
 		s.mu.Unlock()
 		return nil
@@ -282,6 +314,17 @@ func (s *Supervisor) Restart(ctx context.Context, spec Spec) error {
 		return err
 	}
 	return s.Start(ctx, spec)
+}
+
+// Shutdown stops every managed process and refuses every start from then
+// on, so a start that was waiting for the daemon's lock when the user quit
+// cannot bring a webserver up after its daemon has gone
+// (single-application.feature, "Nothing starts once Wharf is quitting").
+func (s *Supervisor) Shutdown(ctx context.Context) error {
+	s.mu.Lock()
+	s.closing = true
+	s.mu.Unlock()
+	return s.StopAll(ctx)
 }
 
 // StopAll stops every managed process (tray-actions.feature, "Stop all").
@@ -385,6 +428,17 @@ func (s *Supervisor) watch(id string, gen uint64, h Handle) {
 	status := statusOf(m)
 	s.mu.Unlock()
 	s.emit(status)
+}
+
+// calledOff reports whether a start must not spawn its process: Shutdown
+// has begun, which is ErrShuttingDown, or a Stop called the start off.
+func (s *Supervisor) calledOff(id string, m *managed, gen uint64) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closing {
+		return true, ErrShuttingDown
+	}
+	return s.procs[id] != m || m.gen != gen, nil
 }
 
 func (s *Supervisor) fail(id string, gen uint64, cause error) error {

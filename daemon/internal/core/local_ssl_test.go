@@ -204,6 +204,37 @@ func TestTrustIsDeclined(t *testing.T) {
 	}
 }
 
+// A mkcert swapped in bin/mkcert/ after its download is never given
+// administrator rights: the trust prompt checks it again first.
+func TestAChangedMkcertIsNotTrustedWithAdministratorRights(t *testing.T) {
+	w := newMkcertWorld(t, false)
+	h := w.h
+	h.mustAdd("my-kirby-site")
+	h.el.Decline = true
+	if _, err := enableSSL(h, "my-kirby-site"); err != nil {
+		t.Fatal(err)
+	}
+	runs := h.el.RunCount()
+
+	bin := filepath.Join(h.root.MkcertBin(), "mkcert")
+	body, err := os.ReadFile(bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(bin, append(body, []byte("# changed\n")...), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	h.el.Decline = false
+	err = h.d.SetupSSL(h.ctx())
+	if err == nil || !strings.Contains(err.Error(), "administrator rights") {
+		t.Fatalf("SetupSSL = %v, want the changed binary refused", err)
+	}
+	if h.el.RunCount() != runs {
+		t.Fatal("the changed binary was run with administrator rights")
+	}
+}
+
 // features/local-ssl.feature — "mkcert cannot be downloaded"
 func TestMkcertCannotBeDownloaded(t *testing.T) {
 	w := newMkcertWorld(t, true)

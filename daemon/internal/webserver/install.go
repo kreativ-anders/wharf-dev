@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/download"
@@ -67,6 +68,34 @@ type Downloader struct {
 	Elevator elevate.Elevator
 	// LookPath finds a Linux package manager; "" means exec.LookPath.
 	LookPath func(file string) (string, error)
+
+	// found caches what the last look around the machine found, when Brew and
+	// LookPath leave it to the machine.
+	found machineLookup
+}
+
+// machineLookupTTL is how long Plan trusts what it found on the machine.
+// Every state snapshot asks for the plan of each missing webserver, and a
+// search of PATH each time is wasted; Homebrew installed meanwhile still
+// shows up within seconds.
+const machineLookupTTL = 10 * time.Second
+
+type machineLookup struct {
+	mu      sync.Mutex
+	at      time.Time
+	brew    string
+	manager *linuxPackage
+}
+
+// lookup returns what fn finds, from the cache while it is fresh.
+func (m *machineLookup) lookup(fn func() (string, *linuxPackage)) (string, *linuxPackage) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.at.IsZero() || time.Since(m.at) > machineLookupTTL {
+		m.brew, m.manager = fn()
+		m.at = time.Now()
+	}
+	return m.brew, m.manager
 }
 
 // linuxPackage is how one family of distributions installs Apache.
@@ -84,16 +113,32 @@ var linuxPackages = []linuxPackage{
 }
 
 func (d *Downloader) linuxPackage() (linuxPackage, bool) {
-	look := d.LookPath
-	if look == nil {
-		look = exec.LookPath
+	if d.LookPath != nil {
+		return findPackage(d.LookPath)
 	}
+	_, p := d.found.lookup(d.lookAround)
+	if p == nil {
+		return linuxPackage{}, false
+	}
+	return *p, true
+}
+
+func findPackage(look func(string) (string, error)) (linuxPackage, bool) {
 	for _, p := range linuxPackages {
 		if _, err := look(p.manager); err == nil {
 			return p, true
 		}
 	}
 	return linuxPackage{}, false
+}
+
+// lookAround finds Homebrew and the Linux package manager on the machine.
+func (d *Downloader) lookAround() (string, *linuxPackage) {
+	brew := findBrew()
+	if p, ok := findPackage(exec.LookPath); ok {
+		return brew, &p
+	}
+	return brew, nil
 }
 
 // NewDownloader returns a Downloader pointed at the public sources.
@@ -119,6 +164,11 @@ func (d *Downloader) brew() string {
 	if d.Brew != "" {
 		return d.Brew
 	}
+	brew, _ := d.found.lookup(d.lookAround)
+	return brew
+}
+
+func findBrew() string {
 	for _, p := range []string{"/opt/homebrew/bin/brew", "/usr/local/bin/brew", "/home/linuxbrew/.linuxbrew/bin/brew"} {
 		if isExecutable(p, "darwin") {
 			return p
@@ -282,6 +332,11 @@ func (d *Downloader) downloadNginx(ctx context.Context, dest string) error {
 	}
 	if file == "" {
 		return fmt.Errorf("no nginx build is published for %s-%s", osName, archName)
+	}
+	// WARNING: An empty checksum would make download.File skip the check, and
+	// an unverified binary would run as the front door.
+	if sum == "" {
+		return fmt.Errorf("the nginx index lists %s without a checksum, so it cannot be verified — try again later", file)
 	}
 
 	bin := filepath.Join(dest, "nginx")

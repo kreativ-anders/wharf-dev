@@ -27,6 +27,9 @@ type Server struct {
 	path     string
 	log      *slog.Logger
 	handlers map[string]Handler
+	// background names the methods answered whenever they finish rather than
+	// in turn; see HandleBackground.
+	background map[string]bool
 
 	transport Transport
 	token     string
@@ -53,6 +56,7 @@ func NewServer(socketPath string, log *slog.Logger) *Server {
 		authTimeout: 10 * time.Second,
 		transport:   DefaultTransport(),
 		handlers:    map[string]Handler{},
+		background:  map[string]bool{},
 		clients:     map[*client]struct{}{},
 	}
 }
@@ -66,6 +70,15 @@ func (s *Server) Endpoint() Endpoint { return s.endpoint }
 
 // Handle registers a method handler. Must be called before Serve.
 func (s *Server) Handle(method string, h Handler) { s.handlers[method] = h }
+
+// HandleBackground registers a handler that runs beside the connection's
+// other requests and is answered whenever it finishes. It is for actions that
+// take minutes — a download, an install — and must not hold up every click
+// that comes after them on the same connection. Must be called before Serve.
+func (s *Server) HandleBackground(method string, h Handler) {
+	s.handlers[method] = h
+	s.background[method] = true
+}
 
 // Listen binds the transport for this OS and returns the endpoint clients
 // should use.
@@ -243,6 +256,9 @@ func (s *Server) serveClient(ctx context.Context, c *client) {
 		}
 	}()
 	defer func() {
+		// WARNING: A background handler still sends its answer on the queue;
+		// closing it first would make that send panic.
+		c.inflight.Wait()
 		c.closeOut()
 		<-c.gone
 	}()
@@ -266,9 +282,9 @@ func (s *Server) serveClient(ctx context.Context, c *client) {
 }
 
 // dispatch runs one request and reports whether the connection may stay
-// open. Requests are handled in order on the connection: starting a service
-// then reading state must not race, and a single GUI has no use for
-// concurrent calls.
+// open. Requests are handled in order on the connection — starting a service
+// then reading state must not race — except those registered with
+// HandleBackground, which run beside them.
 func (s *Server) dispatch(ctx context.Context, c *client, req Request) bool {
 	if s.token != "" && !c.authorised {
 		return s.authorise(c, req)
@@ -284,7 +300,20 @@ func (s *Server) dispatch(ctx context.Context, c *client, req Request) bool {
 		c.send(errorResponse(req.ID, CodeUnknownMethod, "unknown method "+req.Method))
 		return true
 	}
+	if s.background[req.Method] {
+		c.inflight.Add(1)
+		go func() {
+			defer c.inflight.Done()
+			s.answer(ctx, c, req, h)
+		}()
+		return true
+	}
+	s.answer(ctx, c, req, h)
+	return true
+}
 
+// answer runs one handler and sends its response.
+func (s *Server) answer(ctx context.Context, c *client, req Request, h Handler) {
 	result, err := h(ctx, req.Params)
 	if err != nil {
 		var ipcErr *Error
@@ -293,20 +322,19 @@ func (s *Server) dispatch(ctx context.Context, c *client, req Request) bool {
 			// does not exist is the user's typo, not the daemon's problem.
 			s.log.Debug("request refused", "method", req.Method, "code", ipcErr.Code)
 			c.send(Response{ID: req.ID, OK: false, Error: ipcErr})
-			return true
+			return
 		}
 		s.log.Error("handler failed", "method", req.Method, "err", err)
 		c.send(errorResponse(req.ID, CodeInternal, err.Error()))
-		return true
+		return
 	}
 
 	body, err := json.Marshal(result)
 	if err != nil {
 		c.send(errorResponse(req.ID, CodeInternal, "encode result: "+err.Error()))
-		return true
+		return
 	}
 	c.send(Response{ID: req.ID, OK: true, Result: body})
-	return true
 }
 
 // authorise handles a TCP client's requests until it has presented the
@@ -341,6 +369,8 @@ type client struct {
 
 	mu     sync.Mutex
 	closed bool
+	// inflight counts background handlers that have not sent their answer.
+	inflight sync.WaitGroup
 	// gone is closed when the connection's writer has stopped, and nothing
 	// queued will be written any more.
 	gone chan struct{}
@@ -349,8 +379,9 @@ type client struct {
 // send queues a response, waiting for room if events have filled the queue.
 // Unlike an event, a response is never dropped: its caller is waiting for
 // that one answer, and without it the call — a click in the GUI — hangs for
-// good. It runs only on the connection's own goroutine, the one that later
-// closes the queue, so it cannot send on a closed queue.
+// good. It runs on the connection's own goroutine, the one that later closes
+// the queue, or in a background handler that goroutine waits for before it
+// does, so it cannot send on a closed queue.
 func (c *client) send(resp Response) {
 	line, err := json.Marshal(resp)
 	if err != nil {

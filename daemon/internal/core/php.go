@@ -359,8 +359,8 @@ func (d *Daemon) CheckPHPReleases(ctx context.Context) error {
 	if last := d.phpLatest.Load(); last != nil && time.Since(last.at) < 10*time.Minute {
 		return nil
 	}
-	// WARNING: Bounded tightly: the GUI's requests are answered in order, so a lookup
-	// hanging on a bad connection would hold up every click behind it.
+	// WARNING: Bounded tightly: the offers name no release while a lookup
+	// hangs on a bad connection, and one started later waits for it.
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	latest, err := lister.Latest(ctx)

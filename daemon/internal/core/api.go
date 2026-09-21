@@ -67,9 +67,28 @@ type (
 func (d *Daemon) Register(srv *ipc.Server) {
 	d.OnState(func(st State) { srv.Broadcast(ipc.EventState, st) })
 
-	srv.Handle(ipc.MethodPing, query(func(context.Context) any { return map[string]string{"pong": "wharf"} }))
-	srv.Handle(ipc.MethodState, query(func(context.Context) any { return d.State() }))
-	srv.Handle(ipc.MethodDetectPHP, query(func(ctx context.Context) any { return d.RefreshPHP(ctx) }))
+	// INFO: A download or an install takes minutes, and the GUI sends every
+	// click on one connection: these run beside the other requests, so a
+	// click on another project is answered meanwhile (single-application
+	// .feature, "A download does not hold up other actions"). Each guards
+	// itself against running twice, and none holds mu while it waits.
+	background := map[string]bool{
+		ipc.MethodInstallPHP:       true,
+		ipc.MethodInstallWebserver: true,
+		ipc.MethodSetupSSL:         true,
+		ipc.MethodPHPReleases:      true,
+	}
+	handle := func(method string, h ipc.Handler) {
+		if background[method] {
+			srv.HandleBackground(method, h)
+			return
+		}
+		srv.Handle(method, h)
+	}
+
+	handle(ipc.MethodPing, query(func(context.Context) any { return map[string]string{"pong": "wharf"} }))
+	handle(ipc.MethodState, query(func(context.Context) any { return d.State() }))
+	handle(ipc.MethodDetectPHP, query(func(ctx context.Context) any { return d.RefreshPHP(ctx) }))
 
 	// INFO: An action answers with the snapshot it leaves behind, so the GUI
 	// renders its outcome without asking a second time.
@@ -79,7 +98,7 @@ func (d *Daemon) Register(srv *ipc.Server) {
 		ipc.MethodPHPReleases:      d.CheckPHPReleases,
 		ipc.MethodStopAll:          d.StopAll,
 	} {
-		srv.Handle(method, d.stateAfter(act))
+		handle(method, d.stateAfter(act))
 	}
 	for method, act := range map[string]func(context.Context, string) error{
 		ipc.MethodSetWebserver:     d.SetWebserver,
@@ -89,7 +108,7 @@ func (d *Daemon) Register(srv *ipc.Server) {
 		ipc.MethodProjectStop:      d.StopProject,
 		ipc.MethodProjectRestart:   d.RestartProject,
 	} {
-		srv.Handle(method, action(d, func(ctx context.Context, p nameParams) error { return act(ctx, p.Name) }))
+		handle(method, action(d, func(ctx context.Context, p nameParams) error { return act(ctx, p.Name) }))
 	}
 	for method, act := range map[string]func(context.Context, string) error{
 		ipc.MethodAddPHPVersion: d.AddPHPVersion,
@@ -97,34 +116,34 @@ func (d *Daemon) Register(srv *ipc.Server) {
 		ipc.MethodInstallPHP:    d.InstallPHP,
 		ipc.MethodRemovePHP:     d.RemovePHP,
 	} {
-		srv.Handle(method, action(d, func(ctx context.Context, p versionParams) error { return act(ctx, p.Version) }))
+		handle(method, action(d, func(ctx context.Context, p versionParams) error { return act(ctx, p.Version) }))
 	}
-	srv.Handle(ipc.MethodUnhidePHP, action(d, func(ctx context.Context, p dirParams) error { return d.UnhidePHP(ctx, p.Dir) }))
-	srv.Handle(ipc.MethodReset, action(d, func(ctx context.Context, p resetParams) error { return d.Reset(ctx, p.DeleteProjects) }))
-	srv.Handle(ipc.MethodSetPHPTerminal, action(d, func(ctx context.Context, p onParams) error { return d.SetPHPTerminal(ctx, p.On) }))
-	srv.Handle(ipc.MethodConfigTemplateSave, action(d, func(ctx context.Context, p configTemplateParams) error {
+	handle(ipc.MethodUnhidePHP, action(d, func(ctx context.Context, p dirParams) error { return d.UnhidePHP(ctx, p.Dir) }))
+	handle(ipc.MethodReset, action(d, func(ctx context.Context, p resetParams) error { return d.Reset(ctx, p.DeleteProjects) }))
+	handle(ipc.MethodSetPHPTerminal, action(d, func(ctx context.Context, p onParams) error { return d.SetPHPTerminal(ctx, p.On) }))
+	handle(ipc.MethodConfigTemplateSave, action(d, func(ctx context.Context, p configTemplateParams) error {
 		return d.SaveConfigTemplate(ctx, p.ID, p.Webserver, p.Content)
 	}))
-	srv.Handle(ipc.MethodConfigTemplateDelete, action(d, func(ctx context.Context, p configTemplateParams) error {
+	handle(ipc.MethodConfigTemplateDelete, action(d, func(ctx context.Context, p configTemplateParams) error {
 		return d.DeleteConfigTemplate(ctx, p.ID)
 	}))
-	srv.Handle(ipc.MethodCustomConfigSave, action(d, func(ctx context.Context, p customConfigParams) error {
+	handle(ipc.MethodCustomConfigSave, action(d, func(ctx context.Context, p customConfigParams) error {
 		return d.SaveCustomConfig(ctx, p.Name, p.Webserver, p.Content)
 	}))
-	srv.Handle(ipc.MethodCustomConfigDelete, action(d, func(ctx context.Context, p customConfigParams) error {
+	handle(ipc.MethodCustomConfigDelete, action(d, func(ctx context.Context, p customConfigParams) error {
 		return d.DeleteCustomConfig(ctx, p.Name, p.Webserver)
 	}))
-	srv.Handle(ipc.MethodSetAppearance, action(d, func(_ context.Context, p modeParams) error { return d.SetAppearance(p.Mode) }))
+	handle(ipc.MethodSetAppearance, action(d, func(_ context.Context, p modeParams) error { return d.SetAppearance(p.Mode) }))
 
 	// INFO: These answer with what they made or changed, not the snapshot.
-	srv.Handle(ipc.MethodPHPSettings, func(ctx context.Context, _ json.RawMessage) (any, error) {
+	handle(ipc.MethodPHPSettings, func(ctx context.Context, _ json.RawMessage) (any, error) {
 		path, err := d.PHPSettings(ctx)
 		if err != nil {
 			return nil, asIPCError(err)
 		}
 		return map[string]string{"path": path}, nil
 	})
-	srv.Handle(ipc.MethodProjectAdd, handler(func(ctx context.Context, p addParams) (any, error) {
+	handle(ipc.MethodProjectAdd, handler(func(ctx context.Context, p addParams) (any, error) {
 		// INFO: A name adds a folder from www/; a path adds a folder from
 		// anywhere (project-folders.feature).
 		if p.Path != "" {
@@ -132,20 +151,20 @@ func (d *Daemon) Register(srv *ipc.Server) {
 		}
 		return d.AddProject(ctx, p.Name)
 	}))
-	srv.Handle(ipc.MethodProjectSettings, handler(func(ctx context.Context, p settingsParams) (any, error) {
+	handle(ipc.MethodProjectSettings, handler(func(ctx context.Context, p settingsParams) (any, error) {
 		return d.UpdateSettings(ctx, p.Name, p.Settings)
 	}))
-	srv.Handle(ipc.MethodCustomConfigRead, handler(func(_ context.Context, p customConfigParams) (any, error) {
+	handle(ipc.MethodCustomConfigRead, handler(func(_ context.Context, p customConfigParams) (any, error) {
 		return d.ReadCustomConfig(p.Name)
 	}))
-	srv.Handle(ipc.MethodConfigTemplateRead, handler(func(_ context.Context, p configTemplateParams) (any, error) {
+	handle(ipc.MethodConfigTemplateRead, handler(func(_ context.Context, p configTemplateParams) (any, error) {
 		body, err := d.ReadConfigTemplate(p.ID, p.Webserver)
 		return map[string]string{"content": body}, err
 	}))
-	srv.Handle(ipc.MethodConfigTemplateCreate, handler(func(ctx context.Context, p nameParams) (any, error) {
+	handle(ipc.MethodConfigTemplateCreate, handler(func(ctx context.Context, p nameParams) (any, error) {
 		return d.CreateConfigTemplate(ctx, p.Name)
 	}))
-	srv.Handle(ipc.MethodProjectInspect, handler(func(_ context.Context, p pathParams) (any, error) {
+	handle(ipc.MethodProjectInspect, handler(func(_ context.Context, p pathParams) (any, error) {
 		return d.InspectFolder(p.Path)
 	}))
 }

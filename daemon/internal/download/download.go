@@ -84,9 +84,15 @@ func File(ctx context.Context, client *http.Client, url, dest, want string) (str
 	if algo, sum, ok := strings.Cut(want, ":"); ok && algo == "sha1" {
 		h, want = sha1.New(), sum
 	}
-	if _, err := io.Copy(io.MultiWriter(out, h), resp.Body); err != nil {
+	disk := &recordingWriter{w: out}
+	if _, err := io.Copy(io.MultiWriter(disk, h), resp.Body); err != nil {
 		out.Close()
 		os.Remove(dest)
+		// INFO: A full disk is not a network problem, and "check your internet
+		// connection" would send the user looking in the wrong place.
+		if disk.err != nil {
+			return "", fmt.Errorf("could not save %s: %w", filepath.Base(dest), disk.err)
+		}
 		return "", fmt.Errorf("%w: %v", ErrUnreachable, err)
 	}
 	if err := out.Close(); err != nil {
@@ -176,6 +182,21 @@ func Unzip(archive, destDir string) error {
 		}
 	}
 	return nil
+}
+
+// recordingWriter remembers the error its writer failed with, so a failed
+// copy can tell a write that failed from a read that did.
+type recordingWriter struct {
+	w   io.Writer
+	err error
+}
+
+func (r *recordingWriter) Write(p []byte) (int, error) {
+	n, err := r.w.Write(p)
+	if err != nil && r.err == nil {
+		r.err = err
+	}
+	return n, err
 }
 
 func writeFile(path string, r io.Reader, mode os.FileMode) error {

@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -157,7 +158,7 @@ func (d *Detector) system(ctx context.Context) []Install {
 	}
 
 	seen := map[string]bool{}
-	var out []Install
+	var clis []string
 	for _, cli := range candidates {
 		dir := filepath.Dir(cli)
 		// WARNING: Before the seen check: the link resolves to the install it
@@ -180,10 +181,34 @@ func (d *Detector) system(ctx context.Context) []Install {
 		if d.Hidden != nil && d.Hidden(dir) {
 			continue
 		}
-		full, err := d.probe(ctx, cli)
-		if err != nil || full == "" {
+		clis = append(clis, cli)
+	}
+
+	// INFO: Each probe starts a PHP and may take up to its timeout; one after
+	// another, a machine with many installs kept the daemon's start waiting.
+	fulls := make([]string, len(clis))
+	var wg sync.WaitGroup
+	slots := make(chan struct{}, 8)
+	for i, cli := range clis {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			slots <- struct{}{}
+			defer func() { <-slots }()
+			if full, err := d.probe(ctx, cli); err == nil {
+				fulls[i] = full
+			}
+		}()
+	}
+	wg.Wait()
+
+	var out []Install
+	for i, cli := range clis {
+		full := fulls[i]
+		if full == "" {
 			continue
 		}
+		dir := filepath.Dir(cli)
 		out = append(out, Install{
 			Version:     Minor(full),
 			FullVersion: full,

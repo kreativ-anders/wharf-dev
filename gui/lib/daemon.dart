@@ -75,8 +75,8 @@ class Daemon extends ChangeNotifier {
   String? notice;
 
   /// How many of the window's and the tray's actions are still under way. The
-  /// daemon answers one request at a time, so a click can wait behind another
-  /// one; counting them lets the window show the click was taken
+  /// daemon answers most requests one at a time, so a click can wait behind
+  /// another one; counting them lets the window show the click was taken
   /// (features/single-application.feature, "A click is acknowledged while
   /// Wharf works").
   int _pending = 0;
@@ -224,8 +224,8 @@ class Daemon extends ChangeNotifier {
   }
 
   /// A file the snapshot already lists as existing opens at once: the daemon
-  /// handles one request at a time, so asking it first would queue the editor
-  /// behind whatever it is busy with — a release lookup, a project start.
+  /// handles most requests one at a time, so asking it first would queue the
+  /// editor behind whatever it is busy with — a project start, a restart.
   /// Only a file that still has to be created goes through the daemon, and the
   /// editor opens before the snapshot is refreshed.
   Future<void> _openOrCreate(

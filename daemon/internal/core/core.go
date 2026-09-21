@@ -515,10 +515,14 @@ func (d *Daemon) clearLogs() error {
 	return nil
 }
 
-// Shutdown stops every managed process. Leaving orphaned webservers bound to
-// port 80 after the GUI quits is the one failure mode a tray app must not have.
+// Shutdown stops every managed process, and no process starts after it: a
+// start still waiting for mu — a project added with "Start it now" — would
+// otherwise bring a webserver up once this has run. Leaving orphaned
+// webservers bound to port 80 after the GUI quits is the one failure mode a
+// tray app must not have (single-application.feature, "Nothing starts once
+// Wharf is quitting").
 func (d *Daemon) Shutdown(ctx context.Context) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.sup.StopAll(ctx)
+	return d.sup.Shutdown(ctx)
 }
