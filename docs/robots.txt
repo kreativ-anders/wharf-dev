@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://kreativ-anders.github.io/wharf-dev/sitemap.xml
+Sitemap: https://wharf.kreativ-anders.dev/sitemap.xml

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Wharf — a friendly local PHP development environment, no Docker</title>
   <meta name="description" content="Run PHP projects locally on Windows, macOS and Linux. Native nginx, Apache and PHP — no Docker, no VM. A folder is a project at name.localhost, with HTTPS in one switch.">
-  <link rel="canonical" href="https://kreativ-anders.github.io/wharf-dev/">
+  <link rel="canonical" href="https://wharf.kreativ-anders.dev/">
   <meta name="robots" content="index, follow">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1c1c1c" media="(prefers-color-scheme: dark)">
@@ -16,14 +16,17 @@
   <meta property="og:site_name" content="Wharf">
   <meta property="og:title" content="Wharf — local PHP development. Just files and folders.">
   <meta property="og:description" content="Native nginx, Apache and PHP on Windows, macOS and Linux. No Docker, no VM. Every folder is a project at name.localhost, with HTTPS in one switch.">
-  <meta property="og:url" content="https://kreativ-anders.github.io/wharf-dev/">
-  <meta property="og:image" content="https://kreativ-anders.github.io/wharf-dev/og.png">
+  <meta property="og:url" content="https://wharf.kreativ-anders.dev/">
+  <meta property="og:image" content="https://wharf.kreativ-anders.dev/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="The Wharf mark — a pier standing in a wave — beside the words: Local PHP development. Just files and folders.">
   <meta name="twitter:card" content="summary_large_image">
 
   <link rel="stylesheet" href="style.css">
+  <script defer src="https://api.pirsch.io/pa.js"
+    id="pianjs"
+    data-code="ZofmomDudXybFGlh8XVY09NWh9as10iU"></script>
 
   <!-- Keep in step with the visible FAQ below: search engines compare the two. -->
   <script type="application/ld+json">
@@ -36,8 +39,8 @@
         "description": "A local development environment for PHP. Runs nginx, Apache and PHP as native processes on Windows, macOS and Linux — no Docker, no VM. Every folder is a project, reachable at name.localhost.",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Windows, Linux",
-        "url": "https://kreativ-anders.github.io/wharf-dev/",
-        "image": "https://kreativ-anders.github.io/wharf-dev/og.png",
+        "url": "https://wharf.kreativ-anders.dev/",
+        "image": "https://wharf.kreativ-anders.dev/og.png",
         "codeRepository": "https://github.com/kreativ-anders/wharf-dev",
         "downloadUrl": "https://github.com/kreativ-anders/wharf-dev/releases/latest",
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
@@ -121,6 +124,7 @@
     <nav aria-label="Main">
       <a href="#features">Features</a>
       <a href="#status">Status</a>
+      <a href="#support">Support</a>
       <a href="#faq">FAQ</a>
       <a href="privacy.html">Privacy</a>
       <a href="https://github.com/kreativ-anders/wharf-dev">GitHub</a>
@@ -142,7 +146,7 @@
         <a class="button" href="https://github.com/kreativ-anders/wharf-dev/releases/latest">Download</a>
         <a class="button ghost" href="#how">See how it works</a>
       </p>
-      <p class="note"><span class="status is-running" aria-hidden="true"></span> Available for macOS, Windows and Linux.</p>
+      <p class="note"><span class="status is-running" aria-hidden="true"></span> Released: native apps for macOS, Windows and Linux.</p>
 
       <figure class="shot">
         <div class="window" aria-hidden="true">
@@ -313,13 +317,22 @@
             <a class="button" href="https://github.com/kreativ-anders/wharf-dev">Source on GitHub</a>
             <a class="button ghost" href="https://github.com/kreativ-anders/wharf-dev/issues">Report an issue</a>
           </p>
+          <h3 id="support">Pay what you want</h3>
+          <p>Wharf is and stays free. If it saves you time, you can support
+          its development with an amount of your choice — once, no
+          subscription.</p>
+          <p class="cta">
+            <!-- INFO: no target="_blank" — the checkout replaces this tab, so Stripe's redirect lands on thanks.html here, not in an orphaned tab. -->
+            <a class="button ghost" href="https://buy.stripe.com/cNi7sL7h92jM4k9bKSes001">Support Wharf</a>
+          </p>
         </div>
         <div class="prose">
           <p class="eyebrow">Privacy</p>
           <h2>Nothing leaves your computer.</h2>
-          <p>No account, no analytics, no crash reports. Wharf downloads only
-          what you ask for, and never touches your hosts file or your project
-          folders.</p>
+          <p>The app has no account, no analytics, no crash reports. Wharf
+          downloads only what you ask for, and never touches your hosts file
+          or your project folders. This website counts visits without
+          cookies.</p>
           <p><a href="privacy.html">See everything Wharf changes on your computer</a></p>
         </div>
       </div>

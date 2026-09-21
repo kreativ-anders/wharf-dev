@@ -4,14 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Privacy — Wharf</title>
-  <meta name="description" content="What Wharf changes on your computer, what it downloads and from where, and what this website does with your data: nothing is collected.">
-  <link rel="canonical" href="https://kreativ-anders.github.io/wharf-dev/privacy.html">
+  <meta name="description" content="What Wharf changes on your computer, what it downloads and from where, and what this website does with your data: cookie-free visit counts, nothing more.">
+  <link rel="canonical" href="https://wharf.kreativ-anders.dev/privacy.html">
   <meta name="robots" content="index, follow">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1c1c1c" media="(prefers-color-scheme: dark)">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="stylesheet" href="style.css">
+  <script defer src="https://api.pirsch.io/pa.js"
+    id="pianjs"
+    data-code="ZofmomDudXybFGlh8XVY09NWh9as10iU"></script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
@@ -32,7 +35,7 @@
     <section class="page-head wrap" aria-labelledby="page-title">
       <p class="eyebrow">Privacy</p>
       <h1 id="page-title">Nothing leaves your computer.<br><span class="soft">Here is everything that changes on it.</span></h1>
-      <p class="lede">Wharf has no account, no analytics and no crash reports.
+      <p class="lede">The Wharf app has no account, no analytics and no crash reports.
       It runs on your computer and talks to the internet only to download
       something you asked for. This page lists every file it writes outside
       its own folder, and every place it downloads from.</p>
@@ -212,9 +215,47 @@
                 <li>
                   <span class="mark is-never" aria-hidden="true"></span>
                   <div>
-                    <h3>No cookies, no analytics, no tracking</h3>
-                    <p>This site sets no cookies, loads no scripts, and uses no
-                    fonts or anything else from other servers.</p>
+                    <h3>No cookies, no fonts from elsewhere</h3>
+                    <p>This site sets no cookies and loads no fonts or images
+                    from other servers. Its one script is the visit counter
+                    below. The Wharf app contains none of it.</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="mark is-writes" aria-hidden="true"></span>
+                  <div>
+                    <h3>Visits counted by Pirsch Analytics</h3>
+                    <p>To see which pages are found and read, this site loads
+                    Pirsch Analytics, a cookie-free counter. From your IP
+                    address, browser, the date and a salt it computes a hash
+                    as a visitor ID; your IP address is never stored, and you
+                    cannot be recognised after 24 hours or across other
+                    websites. It also records the page, where you came from,
+                    and a rough location (country, city) looked up locally.</p>
+                    <p>The provider is Emvi Software GmbH, Nickelstraße 1b,
+                    33378 Rheda-Wiedenbrück, Germany; the data stays on servers
+                    in Germany. The legal basis is our legitimate interest in
+                    knowing which content is read (Art. 6(1)(f) GDPR). No
+                    cookies are set and nothing beyond what is technically
+                    necessary is read from your device, so no consent under
+                    § 25 TDDDG is needed. More:
+                    <a href="https://docs.pirsch.io/privacy">privacy at Pirsch</a>.</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="mark is-writes" aria-hidden="true"></span>
+                  <div>
+                    <h3>Paying what you want, through Stripe</h3>
+                    <p>The <em>Support Wharf</em> button takes you to a payment
+                    page run by Stripe (Stripe Payments Europe, Ltd., 1 Grand
+                    Canal Street Lower, Dublin, Ireland). Nothing is sent to
+                    Stripe until you click it; this site embeds no Stripe
+                    script. Payment details such as card numbers go to Stripe
+                    only and never reach us. Stripe's
+                    <a href="https://stripe.com/privacy">privacy policy</a>
+                    applies. The legal basis is carrying out the payment you
+                    started (Art. 6(1)(b) GDPR).</p>
+                    <p>The Wharf app knows nothing of payments.</p>
                   </div>
                 </li>
                 <li>
@@ -246,15 +287,15 @@
             <section id="rights" aria-labelledby="rights-title">
               <h2 id="rights-title">Your rights</h2>
               <p>Responsible for this website is Manuel Steinberg — see the
-              <a href="imprint.html">imprint</a> for the address. Write to
-              <a href="mailto:impressum@kreativ-anders.de">impressum@kreativ-anders.de</a>
-              about your data at any time.</p>
+              <a href="imprint.html">imprint</a> for the address. Ask about your
+              data at any time through the
+              <a href="https://kreativ-anders.de/kontakt/#formular">contact form</a>.</p>
               <p>Under the GDPR you have the right to access your data, to have
               it corrected or deleted, to restrict or object to its processing,
               and to receive it in a portable form. You may also complain to a
               data protection authority — for us, the Bavarian State Office for
               Data Protection Supervision (<a href="https://www.lda.bayern.de">BayLDA</a>).</p>
-              <p class="pane-note">Last updated: 18 September 2026.</p>
+              <p class="pane-note">Last updated: 21 September 2026.</p>
             </section>
           </div>
         </div>
