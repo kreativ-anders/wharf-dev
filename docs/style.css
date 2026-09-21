@@ -277,7 +277,7 @@ h3 { margin: 0 0 0.4rem; font-size: 1.05rem; line-height: 1.35; }
   justify-content: space-between;
   padding: 1rem 1.25rem 0.5rem;
 }
-.toolbar strong { font-size: 1.05rem; }
+.toolbar .appname { font-size: 1.05rem; font-weight: 700; }
 .tools { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 
 .chip,
@@ -291,17 +291,17 @@ h3 { margin: 0 0 0.4rem; font-size: 1.05rem; line-height: 1.35; }
   font-size: 0.8rem;
   white-space: nowrap;
 }
-.chip b,
-.act b { font-weight: 400; color: var(--dim); }
+.chip .ico,
+.act .ico { font-weight: 400; color: var(--dim); }
 
 /* Actions: tinted with their own hue, and told by icon and label as well
    (tray-actions.feature, "Project actions keep their places in the list"). */
 .is-start { background: var(--surface); background: color-mix(in srgb, var(--running) 12%, var(--bg)); border-color: transparent; }
 .is-stop { background: var(--surface); background: color-mix(in srgb, var(--failed) 12%, var(--bg)); border-color: transparent; }
 .is-restart { background: var(--surface); background: color-mix(in srgb, var(--restart) 12%, var(--bg)); border-color: transparent; }
-.is-start b { color: var(--running); }
-.is-stop b { color: var(--failed); }
-.is-restart b { color: var(--restart); }
+.is-start .ico { color: var(--running); }
+.is-stop .ico { color: var(--failed); }
+.is-restart .ico { color: var(--restart); }
 .is-empty { visibility: hidden; }
 
 .rows { list-style: none; margin: 0; padding: 0.25rem 0 0.5rem; }
@@ -317,7 +317,7 @@ h3 { margin: 0 0 0.4rem; font-size: 1.05rem; line-height: 1.35; }
 .rows .status { justify-self: center; }
 
 .who { display: grid; min-width: 0; line-height: 1.4; }
-.who b { font-weight: 600; }
+.who .name { font-weight: 600; }
 .url { color: var(--link); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .meta { color: var(--dim); font-size: 0.82rem; }
 
@@ -430,7 +430,7 @@ h3 { margin: 0 0 0.4rem; font-size: 1.05rem; line-height: 1.35; }
   line-height: 1.7;
   overflow-x: auto;
 }
-.code b { font-weight: 700; }
+.code mark { font-weight: 700; background: none; color: inherit; }
 .band .code { background: var(--bg); }
 #config .code { background: var(--surface); }
 
@@ -655,7 +655,7 @@ footer.site { flex-wrap: wrap; }
 .appname { display: inline-flex; align-items: center; gap: 0.5rem; }
 .appname .pier { width: 1.1rem; height: 1.1rem; }
 .chip.is-stop-line { color: var(--failed); border-color: var(--failed); }
-.chip.is-stop-line b { color: var(--failed); }
+.chip.is-stop-line .ico { color: var(--failed); }
 .chip.is-plain { border-color: transparent; color: var(--dim); }
 
 .fabs {

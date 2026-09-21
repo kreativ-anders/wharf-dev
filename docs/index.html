@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Wharf — a friendly local PHP development environment, no Docker</title>
-  <meta name="description" content="Run PHP projects locally on Windows, macOS and Linux. Native nginx, Apache and PHP — no Docker, no VM. A folder is a project at name.localhost, with HTTPS in one switch.">
+  <title>Wharf — local PHP development environment, no Docker</title>
+  <meta name="description" content="A local PHP development environment for Windows, macOS and Linux: native nginx, Apache and PHP, no Docker. Every folder is a project at name.localhost.">
   <link rel="canonical" href="https://wharf.kreativ-anders.dev/">
   <meta name="robots" content="index, follow">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
@@ -34,8 +34,25 @@
     "@context": "https://schema.org",
     "@graph": [
       {
-        "@type": "SoftwareApplication",
+        "@type": "Organization",
+        "@id": "https://wharf.kreativ-anders.dev/#org",
+        "name": "kreativ-anders",
+        "url": "https://kreativ-anders.de/",
+        "founder": { "@type": "Person", "name": "Manuel Steinberg" }
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://wharf.kreativ-anders.dev/#website",
         "name": "Wharf",
+        "url": "https://wharf.kreativ-anders.dev/",
+        "inLanguage": "en",
+        "publisher": { "@id": "https://wharf.kreativ-anders.dev/#org" }
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://wharf.kreativ-anders.dev/#app",
+        "name": "Wharf",
+        "author": { "@id": "https://wharf.kreativ-anders.dev/#org" },
         "description": "A local development environment for PHP. Runs nginx, Apache and PHP as native processes on Windows, macOS and Linux — no Docker, no VM. Every folder is a project, reachable at name.localhost.",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Windows, Linux",
@@ -137,8 +154,8 @@
       <p class="eyebrow">Local PHP development · Windows, macOS &amp; Linux</p>
       <h1 id="hero-title">Local PHP development.<br><span class="soft">Just files and folders.</span></h1>
       <p class="lede">
-        Wharf runs PHP, nginx and Apache right on your computer, like MAMP or
-        Laragon — no Docker, no VM. Every folder is a project with a real address like
+        Wharf is a local PHP development environment that runs PHP, nginx and
+        Apache right on your computer, like MAMP or Laragon — no Docker, no VM. Every folder is a project with a real address like
         <code>my-kirby-site.localhost</code>, HTTPS in one switch, and the PHP
         version it needs.
       </p>
@@ -152,24 +169,24 @@
         <div class="window" aria-hidden="true">
           <div class="titlebar"><span class="lights"><i></i><i></i><i></i></span><span>Wharf</span></div>
           <div class="toolbar">
-            <strong class="appname"><svg class="pier" viewBox="0 0 100 100"><path d="M0 10h100v15H0zM16 10h15v52H16zM69 10h15v52H69zM0 72.5L5 74.66 10 76.61 15 78.16 20 79.16 25 79.5 30 79.16 35 78.16 40 76.61 45 74.66 50 72.5 55 70.34 60 68.39 65 66.84 70 65.84 75 65.5 80 65.84 85 66.84 90 68.39 95 70.34 100 72.5V87.5L95 85.34 90 83.39 85 81.84 80 80.84 75 80.5 70 80.84 65 81.84 60 83.39 55 85.34 50 87.5 45 89.66 40 91.61 35 93.16 30 94.16 25 94.5 20 94.16 15 93.16 10 91.61 5 89.66 0 87.5z"/></svg>Wharf</strong>
-            <span class="tools"><span class="chip is-stop-line"><b>■</b> Stop all</span><span class="chip is-plain">⚙</span></span>
+            <span class="appname"><svg class="pier" viewBox="0 0 100 100"><path d="M0 10h100v15H0zM16 10h15v52H16zM69 10h15v52H69zM0 72.5L5 74.66 10 76.61 15 78.16 20 79.16 25 79.5 30 79.16 35 78.16 40 76.61 45 74.66 50 72.5 55 70.34 60 68.39 65 66.84 70 65.84 75 65.5 80 65.84 85 66.84 90 68.39 95 70.34 100 72.5V87.5L95 85.34 90 83.39 85 81.84 80 80.84 75 80.5 70 80.84 65 81.84 60 83.39 55 85.34 50 87.5 45 89.66 40 91.61 35 93.16 30 94.16 25 94.5 20 94.16 15 93.16 10 91.61 5 89.66 0 87.5z"/></svg>Wharf</span>
+            <span class="tools"><span class="chip is-stop-line"><span class="ico">■</span> Stop all</span><span class="chip is-plain">⚙</span></span>
           </div>
           <ul class="rows">
             <li>
               <span class="status is-running"></span>
-              <span class="who"><b>my-kirby-site</b><span class="url">https://my-kirby-site.localhost</span><span class="meta">nginx 1.27.3 · PHP 8.4.12</span></span>
-              <span class="acts"><span class="act"><b>↗</b> Open</span><span class="act is-restart"><b>↻</b> Restart</span><span class="act"><b>⋯</b> Settings</span><span class="act is-stop"><b>■</b> Stop</span></span>
+              <span class="who"><span class="name">my-kirby-site</span><span class="url">https://my-kirby-site.localhost</span><span class="meta">nginx 1.27.3 · PHP 8.4.12</span></span>
+              <span class="acts"><span class="act"><span class="ico">↗</span> Open</span><span class="act is-restart"><span class="ico">↻</span> Restart</span><span class="act"><span class="ico">⋯</span> Settings</span><span class="act is-stop"><span class="ico">■</span> Stop</span></span>
             </li>
             <li>
               <span class="status is-running"></span>
-              <span class="who"><b>legacy-app</b><span class="url">http://legacy-app.localhost</span><span class="meta">Apache 2.4.62 · PHP 8.2.29</span></span>
-              <span class="acts"><span class="act"><b>↗</b> Open</span><span class="act is-restart"><b>↻</b> Restart</span><span class="act"><b>⋯</b> Settings</span><span class="act is-stop"><b>■</b> Stop</span></span>
+              <span class="who"><span class="name">legacy-app</span><span class="url">http://legacy-app.localhost</span><span class="meta">Apache 2.4.62 · PHP 8.2.29</span></span>
+              <span class="acts"><span class="act"><span class="ico">↗</span> Open</span><span class="act is-restart"><span class="ico">↻</span> Restart</span><span class="act"><span class="ico">⋯</span> Settings</span><span class="act is-stop"><span class="ico">■</span> Stop</span></span>
             </li>
             <li>
               <span class="status is-idle"></span>
-              <span class="who"><b>client-site</b><span class="url">http://client-site.localhost</span></span>
-              <span class="acts"><span class="act"><b>↗</b> Open</span><span class="act is-empty"></span><span class="act"><b>⋯</b> Settings</span><span class="act is-start"><b>▸</b> Start</span></span>
+              <span class="who"><span class="name">client-site</span><span class="url">http://client-site.localhost</span></span>
+              <span class="acts"><span class="act"><span class="ico">↗</span> Open</span><span class="act is-empty"></span><span class="act"><span class="ico">⋯</span> Settings</span><span class="act is-start"><span class="ico">▸</span> Start</span></span>
             </li>
           </ul>
           <div class="fabs"><span class="fab is-castoff">⛵ Cast off</span><span class="fab">+ Add project…</span></div>
@@ -283,11 +300,11 @@
     "php": { "version": "8.4", "available": ["8.2", "8.4"] }
   },
   "projects": [
-    { "name": "my-kirby-site", "ssl": true, <b>"template": "kirby"</b> },
-    { "name": "legacy-app", <b>"webserver_override": "apache"</b>,
-      <b>"php_version": "8.2"</b>, "ssl": false },
+    { "name": "my-kirby-site", "ssl": true, <mark>"template": "kirby"</mark> },
+    { "name": "legacy-app", <mark>"webserver_override": "apache"</mark>,
+      <mark>"php_version": "8.2"</mark>, "ssl": false },
     { "name": "client-site", "ssl": false,
-      <b>"path": "/Users/you/Code/Client Site"</b> }
+      <mark>"path": "/Users/you/Code/Client Site"</mark> }
   ]
 }</pre>
         </figure>
