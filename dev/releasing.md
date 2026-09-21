@@ -117,7 +117,7 @@ the release leg, so the file someone tested by hand is the one CI ships.
 |---|---|---|
 | macOS | `packaging/macos/build_dmg.sh` (`make dmg`) | `Wharf-<version>-mac.dmg`, signed and notarised (below) |
 | Linux | `packaging/linux/build_appimage.sh` | `Wharf-<version>-linux-x64.AppImage`: the bundle with `wharfd` next to `wharf_gui`, one file, no install. `appimagetool` is pinned and checksum-verified |
-| Windows | `packaging/windows/wharf.iss` (Inno Setup) | `Wharf-<version>-windows-x64-setup.exe`: Program Files, a Start menu entry, an uninstaller. Not code-signed yet, so SmartScreen warns |
+| Windows | `packaging/windows/wharf.iss` (Inno Setup) | `Wharf-<version>-windows-x64-setup.exe`: Program Files, a Start menu entry, an uninstaller. Not code-signed, by decision: a Windows code-signing certificate is a yearly cost a free tool does not carry. SmartScreen warns once ("More info" → "Run anyway"); `SHA256SUMS` still proves the download is intact |
 
 None of them puts anything the user keeps next to the app: the root is
 `~/Wharf` (`dev/architecture.md` §5), so a read-only mount or Program Files

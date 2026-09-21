@@ -39,12 +39,15 @@
         "url": "https://kreativ-anders.github.io/wharf-dev/",
         "image": "https://kreativ-anders.github.io/wharf-dev/og.png",
         "codeRepository": "https://github.com/kreativ-anders/wharf-dev",
+        "downloadUrl": "https://github.com/kreativ-anders/wharf-dev/releases/latest",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
         "license": "https://opensource.org/licenses/MIT",
         "isAccessibleForFree": true,
         "featureList": [
           "Every project at its own name.localhost address, with no hosts file and no password prompt",
           "HTTPS for a project with one switch, using mkcert",
           "PHP versions adopted from the machine or downloaded; one version per project",
+          "The default PHP on the terminal PATH",
           "nginx or Apache, chosen per project",
           "One php.ini for every PHP version",
           "Per-project logs",
@@ -99,7 +102,7 @@
           {
             "@type": "Question",
             "name": "Can I download Wharf?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Not yet — there are no installers. The desktop app runs on macOS today when built from source with make gui." }
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes: a DMG for macOS, an AppImage for Linux and an installer for Windows, on the GitHub releases page. The Windows installer is not code-signed — a certificate costs more than a free tool can carry — so SmartScreen warns once: choose More info, then Run anyway." }
           }
         ]
       }
@@ -130,16 +133,16 @@
       <p class="eyebrow">Local PHP development · Windows, macOS &amp; Linux</p>
       <h1 id="hero-title">Local PHP development.<br><span class="soft">Just files and folders.</span></h1>
       <p class="lede">
-        Wharf runs PHP, nginx and Apache right on your computer — no Docker,
-        no VM. Every folder is a project with a real address like
+        Wharf runs PHP, nginx and Apache right on your computer, like MAMP or
+        Laragon — no Docker, no VM. Every folder is a project with a real address like
         <code>my-kirby-site.localhost</code>, HTTPS in one switch, and the PHP
         version it needs.
       </p>
       <p class="cta">
-        <a class="button" href="#how">See how it works</a>
-        <a class="button ghost" href="https://github.com/kreativ-anders/wharf-dev">Open source on GitHub</a>
+        <a class="button" href="https://github.com/kreativ-anders/wharf-dev/releases/latest">Download</a>
+        <a class="button ghost" href="#how">See how it works</a>
       </p>
-      <p class="note"><span class="status is-busy" aria-hidden="true"></span> Early development. The app runs on macOS today; there are no downloads yet.</p>
+      <p class="note"><span class="status is-running" aria-hidden="true"></span> Available for macOS, Windows and Linux.</p>
 
       <figure class="shot">
         <div class="window" aria-hidden="true">
@@ -185,7 +188,8 @@
 
         <figcaption>
           One window, one list of projects: whether each one runs, its
-          address, and what serves it. The tray menu shows the same.
+          address, and what serves it. The tray menu shows the same;
+          “Cast off” stops everything and quits.
         </figcaption>
       </figure>
     </section>
@@ -232,7 +236,8 @@
         <li>
           <h3>The PHP you need</h3>
           <p>PHP already on your computer is used where it is. Any supported
-          version is one click away, and each project can pick its own.</p>
+          version is one click away, and each project can pick its own.
+          The default one is also <code>php</code> in your terminal.</p>
         </li>
         <li>
           <h3>nginx or Apache</h3>
@@ -276,7 +281,7 @@
   "projects": [
     { "name": "my-kirby-site", "ssl": true, <b>"template": "kirby"</b> },
     { "name": "legacy-app", <b>"webserver_override": "apache"</b>,
-      <b>"php_version": "8.2"</b>, "ssl": false, "port": 8080 },
+      <b>"php_version": "8.2"</b>, "ssl": false },
     { "name": "client-site", "ssl": false,
       <b>"path": "/Users/you/Code/Client Site"</b> }
   ]
@@ -332,8 +337,8 @@
       <dl class="state">
         <div><dt><span class="status is-running" aria-hidden="true"></span>Projects, addresses, tray</dt><dd><span class="sr-only">Done. </span>Add, start, stop, open</dd></div>
         <div><dt><span class="status is-running" aria-hidden="true"></span>PHP, nginx, Apache, HTTPS</dt><dd><span class="sr-only">Done. </span>Used if present, installed on request</dd></div>
-        <div><dt><span class="status is-busy" aria-hidden="true"></span>Desktop app</dt><dd><span class="sr-only">Partly. </span>Runs on macOS; Windows and Linux builds next</dd></div>
-        <div><dt><span class="status is-busy" aria-hidden="true"></span>Downloads</dt><dd><span class="sr-only">Partly. </span>A macOS DMG is built; no release published yet</dd></div>
+        <div><dt><span class="status is-running" aria-hidden="true"></span>Desktop app</dt><dd><span class="sr-only">Done. </span>macOS, Windows and Linux</dd></div>
+        <div><dt><span class="status is-running" aria-hidden="true"></span>Downloads</dt><dd><span class="sr-only">Done. </span><a href="https://github.com/kreativ-anders/wharf-dev/releases/latest">Latest release</a>; the Windows installer is not code-signed</dd></div>
       </dl>
 
       <h3 class="roadmap-title">On the roadmap</h3>
@@ -410,9 +415,12 @@
           </details>
           <details>
             <summary>Can I download Wharf?</summary>
-            <p>Not yet — there are no installers. The desktop app runs on macOS
-            today when built from source with <code>make gui</code>; see the
-            <a href="https://github.com/kreativ-anders/wharf-dev#running-it">README</a>.</p>
+            <p>Yes: a DMG for macOS, an AppImage for Linux and an
+            installer for Windows, on the
+            <a href="https://github.com/kreativ-anders/wharf-dev/releases/latest">GitHub releases page</a>. The Windows installer is not
+            code-signed — a certificate costs more than a free tool can carry —
+            so SmartScreen warns once: choose <em>More info</em>, then
+            <em>Run anyway</em>.</p>
           </details>
         </div>
       </div>

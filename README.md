@@ -32,7 +32,7 @@ one is renamed, deleted or left unimplemented. See [CLAUDE.md](CLAUDE.md) §1.
 | Component | State |
 |---|---|
 | Core daemon | Implemented. Every `@v1` scenario has a test claiming it. |
-| Flutter GUI | Implemented: project list, tray menu, settings, PHP version picker. Runs on macOS today; Linux and Windows shells are generated but unbuilt here. |
+| Flutter GUI | Implemented: project list, tray menu, settings, PHP version picker. Built for macOS, Linux and Windows. |
 | `wharfctl` CLI | Developer tool: drives a running daemon from the terminal. Not shipped in releases. |
 | PHP runtime | Detected on the machine and adopted where it is, or downloaded from Settings with one click. |
 | SSL | mkcert is downloaded (pinned, checksum-verified) and its authority trusted when a project first turns SSL on. |
@@ -40,8 +40,8 @@ one is renamed, deleted or left unimplemented. See [CLAUDE.md](CLAUDE.md) §1.
 | Config templates | nginx and Apache rules for Kirby, Laravel, WordPress, Statamic, Symfony, Craft CMS and Drupal built in; each project picks one, and Settings → Webserver edits them or adds your own. |
 | Appearance | Kirby-plain light and dark themes, or follow the system. |
 | Updates | Settings → General shows the running version. "Check for updates" is there but disabled until releases exist; its behaviour is specified as `@roadmap`. |
-| Releases | A release workflow builds and publishes all three platforms from one version in `gui/pubspec.yaml` (`dev/releasing.md`). Nothing is published yet. |
-| Packaging | macOS: a DMG, signed and notarised when the credentials are there. Linux: an AppImage. Windows: an Inno Setup installer, not yet code-signed (SmartScreen warns). |
+| Releases | A release workflow builds and publishes all three platforms from one version in `gui/pubspec.yaml` (`dev/releasing.md`). Released on GitHub. |
+| Packaging | macOS: a DMG, signed and notarised when the credentials are there. Linux: an AppImage. Windows: an Inno Setup installer, deliberately not code-signed (SmartScreen warns; `dev/releasing.md`). |
 
 ## Running it
 
