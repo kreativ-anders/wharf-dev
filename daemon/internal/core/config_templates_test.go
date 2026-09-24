@@ -376,8 +376,8 @@ func TestAConfigTemplateIsAWholeServerBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// INFO: Then the project's generated file holds the template's block once for
-	// port 80 and once for 443, with Wharf's values filled in
+	// INFO: Then the project's generated file holds the template's block once,
+	// listening on port 80 and on 443, with Wharf's values filled in
 	file, err := os.ReadFile(filepath.Join(h.root.Data(), "gen", "nginx", "my-kirby-site.conf"))
 	if err != nil {
 		t.Fatal(err)
@@ -386,8 +386,8 @@ func TestAConfigTemplateIsAWholeServerBlock(t *testing.T) {
 	if strings.Contains(conf, "{{") {
 		t.Fatalf("a placeholder is left:\n%s", conf)
 	}
-	if n := strings.Count(conf, "server {"); n != 2 {
-		t.Fatalf("%d server blocks, want one for HTTP and one for HTTPS:\n%s", n, conf)
+	if n := strings.Count(conf, "server {"); n != 1 {
+		t.Fatalf("%d server blocks, want one for HTTP and HTTPS together:\n%s", n, conf)
 	}
 	for _, want := range []string{
 		"listen 80;", "listen 443 ssl;", "ssl_certificate \"", "server_name my-kirby-site.localhost;",

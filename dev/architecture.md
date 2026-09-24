@@ -360,9 +360,11 @@ reads the same in Wharf. Wharf fills in placeholders for what only it knows:
 `{{php}}` and `{{fastcgi}}`. A template without `{{listen}}`,
 `{{ssl}}` or `{{server_name}}` is refused on save: those decide where a
 project is reachable. A project's generated file holds its template once
-per place it is reachable — ports 80 and 443 on the front door, its loopback
-port behind it. What differs between those places and is not a placeholder
-lives outside the template: nginx's `$wharf_port` and `$wharf_https`, which
+per place it is reachable — on the front door once for nginx, listening on
+port 80 and on 443, and once per port for Apache, whose virtual host has one
+address; behind the front door once on its loopback port. What differs
+between those places or requests and is not a placeholder lives outside the
+template: nginx's `$wharf_port` and `$wharf_https`, which
 Wharf's `fastcgi.conf` hands to PHP, and Apache's `ProxyFCGISetEnvIf` lines,
 set once for the whole instance. A project without a template gets a plain
 block: its folder, its logs and PHP. An earlier version inserted only a

@@ -15,7 +15,7 @@ Feature: Config templates
   Scenario: A config template is a whole server block, with placeholders for what only Wharf knows
     Given "my-kirby-site" uses the "Kirby" config template with SSL on
     When "my-kirby-site" is served by nginx
-    Then its generated file holds the template's server block once for port 80 and once for port 443
+    Then its generated file holds the template's server block once, listening on port 80 and on port 443
     And every placeholder is filled in: its ports, certificate, host name, folder, logs and PHP
     And the template's own PHP location is used as written
     And rules that leave out {{listen}}, {{ssl}} or {{server_name}} are refused on save, naming what is missing
