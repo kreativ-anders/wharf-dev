@@ -213,10 +213,10 @@ func (r *Resolver) PHPSpec(cfg *config.Config, version string) (supervisor.Spec,
 		// INFO: php-cgi has no config file of its own; it is told where to listen,
 		// and where its extension DLLs are — relative to the binary, which
 		// php.ini cannot express.
-		spec.Args = []string{
+		spec.Args = append([]string{
 			"-b", fmt.Sprintf("127.0.0.1:%d", port),
 			"-d", "extension_dir=" + filepath.Join(filepath.Dir(bin), "ext"),
-		}
+		}, php.ExtensionArgs(filepath.Dir(bin), r.Root.PHPIni())...)
 	} else {
 		spec.Args = []string{"--nodaemonize", "--fpm-config", confPath}
 	}

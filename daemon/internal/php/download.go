@@ -251,13 +251,66 @@ func (d *Downloader) installWindows(ctx context.Context, version, destDir, tmp s
 	return full, os.WriteFile(filepath.Join(destDir, "php.ini"), []byte(windowsINI()), 0o644)
 }
 
+// Extensions are loaded by every PHP Wharf runs, as static-php-cli's builds
+// carry them.
+//
+// WARNING: exif after mbstring, which it uses when loaded.
+var Extensions = []string{
+	"curl", "fileinfo", "gd", "intl", "mbstring", "exif", "mysqli",
+	"openssl", "pdo_mysql", "pdo_sqlite", "sqlite3", "zip",
+}
+
 func windowsINI() string {
 	var sb strings.Builder
 	sb.WriteString("; Written by Wharf when it downloaded this build. Edit freely.\n")
-	for _, ext := range []string{"curl", "fileinfo", "gd", "intl", "mbstring", "openssl", "pdo_sqlite", "sqlite3", "zip"} {
+	for _, ext := range Extensions {
 		fmt.Fprintf(&sb, "extension=%s\n", ext)
 	}
 	return sb.String()
+}
+
+// ExtensionArgs loads Extensions into a PHP found without a php.ini of its
+// own (php-runtime.feature, "A PHP found without a php.ini loads the common
+// extensions"). Arguments, not a file: the folder is not Wharf's to change.
+func ExtensionArgs(binDir, userINI string) []string {
+	if _, err := os.Stat(filepath.Join(binDir, "php.ini")); err == nil || os.Getenv("PHPRC") != "" {
+		return nil
+	}
+	// WARNING: An extension loaded twice makes PHP warn on every start.
+	loaded := iniExtensions(userINI)
+	var args []string
+	for _, ext := range Extensions {
+		if loaded[ext] {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(binDir, "ext", "php_"+ext+".dll")); err != nil {
+			continue
+		}
+		args = append(args, "-d", "extension="+ext)
+	}
+	return args
+}
+
+// iniExtensions names the extensions a php.ini loads: "curl",
+// "php_curl.dll" and a full path are one extension.
+func iniExtensions(path string) map[string]bool {
+	out := map[string]bool{}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return out
+	}
+	for _, line := range strings.Split(string(body), "\n") {
+		key, value, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(key) != "extension" {
+			continue
+		}
+		value, _, _ = strings.Cut(value, ";")
+		name := strings.Trim(strings.TrimSpace(value), `"'`)
+		name = name[strings.LastIndexAny(name, `/\`)+1:]
+		name = strings.TrimSuffix(strings.TrimSuffix(strings.ToLower(name), ".dll"), ".so")
+		out[strings.TrimPrefix(name, "php_")] = true
+	}
+	return out
 }
 
 // Downloadable lists the versions worth offering for download at a point in

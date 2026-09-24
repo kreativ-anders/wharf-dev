@@ -388,6 +388,11 @@ with — so the file is read *after* PHP's own php.ini and its values win,
 while an adopted Homebrew PHP still loads the extensions its own `conf.d`
 enables (`features/php-settings.feature`).
 
+Extensions are not in that file: one a version already loads makes PHP
+warn on every start. A PHP found without a php.ini of its own is started
+with `-d extension=…` for the list a downloaded build loads
+(`features/php-runtime.feature`).
+
 Reset deletes `config/` whole, not file by file: whatever the user put
 there, the next start begins from nothing. The folders in `www/` are the
 user's own work, so Reset keeps them unless the user ticks "Also delete the

@@ -58,6 +58,13 @@ Feature: PHP runtime detection and selection
     Then the backend of "8.5" keeps the port it is listening on
     And "8.4" is given a port of its own
 
+  Scenario: A PHP found without a php.ini loads the common extensions
+    Given PHP "8.5" was adopted from a folder that holds no php.ini
+    When its FastCGI backend starts
+    Then it loads the extensions a downloaded build loads
+    And an extension "config/php.ini" already loads is not loaded twice
+    And nothing in that folder is changed
+
   Scenario: A PHP download fails
     Given the machine has no internet connection
     When the user downloads PHP "8.4"

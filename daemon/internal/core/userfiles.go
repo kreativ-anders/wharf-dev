@@ -136,17 +136,20 @@ const phpIniStub = `; Your own PHP settings, for every PHP version Wharf runs.
 ;
 ; PHP reads this file after its own php.ini, so a value here wins. Saving it
 ; restarts PHP; the next request sees the change.
-;
+
+memory_limit = 512M
+upload_max_filesize = 64M
+post_max_size = 64M
+max_execution_time = 120
+display_errors = On
+error_reporting = E_ALL
+
 ; Examples — remove the ";" in front of a line to use it:
 ;
-; memory_limit = 512M
-; upload_max_filesize = 64M
-; post_max_size = 64M
-; max_execution_time = 120
-; display_errors = On
-; error_reporting = E_ALL
 ; date.timezone = Europe/Berlin
 ; opcache.enable = 0
+; extension = curl
+; extension = mbstring
 `
 
 // ApplyPHPSettings restarts every running PHP backend when config/php.ini

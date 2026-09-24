@@ -20,7 +20,8 @@ func TestEditingPHPSettings(t *testing.T) {
 		t.Fatalf("create php.ini: %v", err)
 	}
 
-	// INFO: Then "config/php.ini" is created with a commented starting point
+	// INFO: Then "config/php.ini" is created with development defaults and
+	// commented examples
 	if want := filepath.Join(h.root.Dir, "config", "php.ini"); path != want {
 		t.Fatalf("path = %s, want %s", path, want)
 	}
@@ -28,10 +29,21 @@ func TestEditingPHPSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
-		if line != "" && !strings.HasPrefix(line, ";") {
-			t.Fatalf("the starting point has a live setting %q", line)
+	var live []string
+	for _, line := range strings.Split(string(body), "\n") {
+		if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, ";") {
+			live = append(live, line)
 		}
+	}
+	defaults := []string{
+		"memory_limit = 512M", "upload_max_filesize = 64M", "post_max_size = 64M",
+		"max_execution_time = 120", "display_errors = On", "error_reporting = E_ALL",
+	}
+	if !slices.Equal(live, defaults) {
+		t.Fatalf("live settings = %q, want %q", live, defaults)
+	}
+	if !strings.Contains(string(body), "; date.timezone") {
+		t.Fatal("the starting point has no commented examples")
 	}
 	if php := h.d.State().Services.PHP; php.Settings != path || !php.SettingsExist {
 		t.Fatalf("snapshot does not show the file: %q exists=%v", php.Settings, php.SettingsExist)

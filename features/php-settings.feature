@@ -14,7 +14,7 @@ Feature: PHP settings
 
   Scenario: Editing PHP settings
     When the user chooses "Edit php.ini" under "PHP" in Settings
-    Then "config/php.ini" is created with a commented starting point and opened in the editor
+    Then "config/php.ini" is created with development defaults and commented examples, and opened in the editor
     And every PHP version Wharf runs reads it after its own php.ini
 
   Scenario: Saving PHP settings applies them

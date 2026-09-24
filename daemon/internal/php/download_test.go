@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -212,5 +213,44 @@ func TestDownloadableLeavesOutEndOfLifeReleases(t *testing.T) {
 	want := []string{"8.5", "8.4", "8.3", "8.2"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("Downloadable = %v, want %v", got, want)
+	}
+}
+
+// features/php-runtime.feature — "A PHP found without a php.ini loads the
+// common extensions"
+func TestAPHPFoundWithoutAPHPIniLoadsTheCommonExtensions(t *testing.T) {
+	t.Setenv("PHPRC", "")
+	dir := t.TempDir()
+	ext := filepath.Join(dir, "ext")
+	if err := os.MkdirAll(ext, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"curl", "mbstring", "openssl", "xdebug"} {
+		os.WriteFile(filepath.Join(ext, "php_"+name+".dll"), nil, 0o644)
+	}
+	userINI := filepath.Join(t.TempDir(), "php.ini")
+	os.WriteFile(userINI, []byte("; extension=openssl\nextension = \"C:\\php\\ext\\php_mbstring.dll\" ; mine\n"), 0o644)
+
+	// INFO: Then it loads the extensions a downloaded build loads — those it
+	// holds; mbstring is already in config/php.ini.
+	got := ExtensionArgs(dir, userINI)
+	want := []string{"-d", "extension=curl", "-d", "extension=openssl"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("args = %q, want %q", got, want)
+	}
+
+	// INFO: And nothing in that folder is changed.
+	if entries, _ := os.ReadDir(dir); len(entries) != 1 {
+		t.Fatalf("the PHP folder holds %d entries, want only ext", len(entries))
+	}
+
+	os.WriteFile(filepath.Join(dir, "php.ini"), []byte("extension=curl\n"), 0o644)
+	if got := ExtensionArgs(dir, userINI); got != nil {
+		t.Fatalf("a build with a php.ini got %q", got)
+	}
+	os.Remove(filepath.Join(dir, "php.ini"))
+	t.Setenv("PHPRC", dir)
+	if got := ExtensionArgs(dir, userINI); got != nil {
+		t.Fatalf("a build under PHPRC got %q", got)
 	}
 }
