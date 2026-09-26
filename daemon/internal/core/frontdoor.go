@@ -99,6 +99,9 @@ func (d *Daemon) setStarted(name string, on bool) {
 		d.started[name] = true
 	} else {
 		delete(d.started, name)
+		// INFO: Sharing ends with the project (sharing.feature, "Sharing ends
+		// with the project").
+		delete(d.shared, name)
 	}
 }
 
@@ -110,6 +113,7 @@ func (d *Daemon) startFailed(name string, err error) {
 	d.startedMu.Lock()
 	defer d.startedMu.Unlock()
 	delete(d.started, name)
+	delete(d.shared, name)
 	d.failed[name] = err.Error()
 }
 
@@ -138,6 +142,7 @@ func (d *Daemon) clearStarted() {
 	defer d.startedMu.Unlock()
 	d.started = map[string]bool{}
 	d.failed = map[string]string{}
+	d.shared = map[string]bool{}
 }
 
 // reloadGlobalWebserver regenerates the shared webserver's config and restarts

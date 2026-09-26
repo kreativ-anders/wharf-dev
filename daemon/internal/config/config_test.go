@@ -135,7 +135,7 @@ func TestCloneKeepsEveryField(t *testing.T) {
 				Terminal:  true,
 			},
 		},
-		Projects: []Project{{Name: "site", WebserverOverride: &override, PHPVersion: &version, SSL: true, Port: 8081, Path: "/src/site", Template: "kirby"}},
+		Projects: []Project{{Name: "site", WebserverOverride: &override, PHPVersion: &version, SSL: true, Port: 8081, LANPort: 8800, Path: "/src/site", Template: "kirby"}},
 	}
 	for _, v := range []reflect.Value{reflect.ValueOf(full.Services.PHP), reflect.ValueOf(full.Services.Webserver), reflect.ValueOf(full.Projects[0])} {
 		for i := range v.NumField() {

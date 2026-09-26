@@ -34,6 +34,8 @@ class Method {
   static const projectRestart = 'projects.restart';
   static const projectSettings = 'projects.settings';
   static const projectInspect = 'projects.inspect';
+  static const projectShare = 'projects.share';
+  static const replaceNetworkCertificate = 'network.replaceCertificate';
   static const customConfigRead = 'projects.customConfig.read';
   static const customConfigSave = 'projects.customConfig.save';
   static const customConfigDelete = 'projects.customConfig.delete';
@@ -164,6 +166,16 @@ class Daemon extends ChangeNotifier {
     ProjectAction.restart => restartProject(name),
   };
   Future<void> removeProject(String name) => _act(Method.projectRemove, {'name': name});
+
+  /// Shares a running project on the local network, or stops sharing it
+  /// (features/sharing.feature). Why it could not be shared — not running,
+  /// no network — becomes the notice.
+  Future<void> shareProject(String name, {bool on = true}) =>
+      _act(Method.projectShare, {'name': name, 'on': on});
+
+  /// Deletes the network certificate authority and serves every project
+  /// shared over HTTPS with a new one; phones must install it again.
+  Future<void> replaceNetworkCertificate() => _act(Method.replaceNetworkCertificate);
   Future<void> stopAll() => _act(Method.stopAll);
 
   /// Back to a first start: every setting deleted, every project forgotten,

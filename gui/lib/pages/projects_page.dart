@@ -9,6 +9,7 @@ import '../theme.dart';
 import 'add_project.dart';
 import 'project_sheet.dart';
 import 'settings_page.dart';
+import 'share_dialog.dart';
 
 /// The one primary view: a list of projects, each showing name, status and
 /// URL. Nothing else is visible by default (dev/design-principles.md §2).
@@ -220,6 +221,17 @@ class _ProjectRow extends StatelessWidget {
                               ),
                             ],
                           ),
+                          // INFO: Said in words, not by the Share button's tint alone
+                          // (features/sharing.feature).
+                          if (project.shared) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              'Shared on your network: ${project.shareUrl}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: muted,
+                            ),
+                          ],
                           // INFO: Only a running project has something serving it
                           // (features/app-configuration.feature).
                           if (project.isRunning) ...[
@@ -246,8 +258,8 @@ class _ProjectRow extends StatelessWidget {
   }
 }
 
-/// The row's actions, always in one order — Open, Restart, Settings, then
-/// Start or Stop — so they line up from row to row. An action the project
+/// The row's actions, always in one order — Open, Restart, Share, Settings,
+/// then Start or Stop — so they line up from row to row. An action the project
 /// does not offer leaves its place empty (features/tray-actions.feature,
 /// "Project actions keep their places in the list"). Which of them a project
 /// offers is [Project.actions], which the tray reads too.
@@ -310,6 +322,20 @@ class _Actions extends StatelessWidget {
         _place(
           offers.contains(ProjectAction.restart)
               ? action(ProjectAction.restart, Icons.restart_alt, c.restart)
+              : null,
+        ),
+        // INFO: Only a running project can be shared (features/sharing.feature).
+        // Once shared, the same button shows its QR code again.
+        _place(
+          project.isRunning
+              ? IconButton(
+                  tooltip: project.shared
+                      ? 'Show ${project.name} on a phone'
+                      : 'Share ${project.name} on your network',
+                  isSelected: project.shared,
+                  icon: const Icon(Icons.qr_code, size: 18),
+                  onPressed: () => shareProject(context, daemon, project),
+                )
               : null,
         ),
         // INFO: The row itself opens the settings too, but nothing about a row

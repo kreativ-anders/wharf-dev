@@ -102,7 +102,10 @@ Every design decision favours identical behaviour across OS over the most
   it, and Ctrl+C asks "Terminate batch job"; a `php.exe` shim of Wharf's own
   would remove both, once packaging can ship one. Editors started from the Dock on macOS see it only if they ask
   a login shell for PATH, as VS Code does.
-- **SSL** — `mkcert`, already cross-platform, used unmodified.
+- **SSL** — `mkcert`, already cross-platform, used unmodified. A project
+  shared on the network is served over HTTPS with a certificate from
+  Wharf's own network certificate authority instead (§4d), made with Go's
+  `crypto/x509`: nothing to install, the same on every OS.
 - **Distribution shell** — a portable root folder (`bin/`, `www/`, `config/`)
   is the shared internal model; only the outer package format differs
   (installer / DMG / AppImage), never the content or config format.
@@ -145,7 +148,8 @@ browser ──► nginx :80/:443 (active) ──► my-kirby-site   served direc
   the front door would see the front door's own `127.0.0.1` as the client,
   which is what Kirby checks before it lets the Panel be installed
   (`features/service-management.feature`, "The front door answers this
-  machine only").
+  machine only"). The one way past it is a project the user shares (§4d),
+  on a port of its own.
 - On Linux, only administrators may listen below port 1024 until
   `net.ipv4.ip_unprivileged_port_start` is lowered. Before the front door
   starts, Wharf lowers it to 80 behind one password prompt — now, and in
@@ -160,6 +164,64 @@ browser ──► nginx :80/:443 (active) ──► my-kirby-site   served direc
   started project running; the front door stops once none is left. Which
   projects are started is daemon state, not config: everything stops when
   Wharf quits, so there is nothing to remember across runs.
+
+## 4d. Sharing on the network
+
+A phone cannot open `<name>.localhost`: on the phone, that name is the phone.
+So a running project the user *shares* gets a port of its own, and the front
+door serves it at this machine's address on the local network —
+`http://192.168.1.23:8800` — to every device (`features/sharing.feature`).
+The GUI shows the URL as a QR code.
+
+- **Address** — the one the default route leaves from: dialling UDP to a
+  TEST-NET address sends nothing and names it, on every OS alike, with no
+  guessing among the interfaces a VPN, Docker or WSL add. Only a private
+  address (RFC 1918, IPv6 ULA) is used; a public one would put the project
+  on the internet. While anything is shared, the config watcher's tick
+  looks again; a new address is served at once.
+- **Port** — the first from 8800 up that no project records and nothing
+  holds, recorded as `projects[].lan_port` so a phone's bookmark works the
+  next time. Which projects are shared is daemon state, like which are
+  started: sharing ends with the project, and nothing is shared at a start.
+- **The rule it lifts** — the shared block is the project's own config
+  template filled in once more, on its port, named after the address. nginx
+  lifts the front door's `deny all` inside that block alone (`allow all`);
+  Apache's rule lets a request through that carries `WHARF_SHARED`, which
+  `SetEnvIf` sets inside the shared virtual host. A virtual host is chosen
+  by the port a request arrived on, and a client sets headers, not
+  environment variables, so no request on ports 80 or 443 can claim it.
+  `%{SERVER_PORT}` could: Apache takes it from the Host header. A shared
+  block whose `<VirtualHost>` opening Wharf cannot find stays closed.
+- **What PHP is told** — the Host header as the phone sent it, port
+  included, and the port through `$wharf_port`; a project on the other
+  webserver is forwarded with `$http_host`, since `$host` drops the port.
+  Kirby builds every link from those.
+- **HTTPS** — a project with SSL is shared over HTTPS. mkcert's authority
+  is trusted by this machine for every name, so its key must never be
+  needed on a phone. Wharf's network certificate authority
+  (`internal/lan`, `data/network-ca/`) is installed there instead, once:
+  - it may sign only for private addresses, and for no name at all — its
+    name constraints permit the reserved `invalid` alone — so its key,
+    were it ever copied, could vouch for no real website;
+  - it lasts a year and signs nothing but server certificates, with no
+    authority below it;
+  - the certificate for this machine's address lasts a month, and a new
+    address or a month's end only issues another from the same authority:
+    nothing new on the phone;
+  - "Replace network certificate", and Reset, delete it with its key;
+    every copy on a phone is then left without a key that could sign for
+    it again.
+  While a project is shared over HTTPS, the front door's default server
+  offers the authority's certificate at `http://<address>/wharf-network-ca.crt`
+  (DER, which iOS and Android install from a download) — from a folder
+  that holds nothing else. The GUI shows its SHA-256 fingerprint, the
+  one the phone shows before installing: that download is plain HTTP.
+- **Firewall** — not touched. Windows and macOS allow a program rather
+  than a port, and the front door already listens on every address (§4c),
+  so they asked about it when it first started. A Linux firewall that
+  blocks by port — firewalld, on by default in Fedora — needs the port
+  opened by hand, and a guest network that keeps devices apart is beyond
+  Wharf; the Share dialog says both.
 
 ## 4a. IPC transport: the one place the plan did not survive contact
 
@@ -281,6 +343,9 @@ wharf/
     │                   #   A log past 10 MB is moved to <name>.1 when its
     │                   #   service next starts, so none grows without end
     ├── certs/          # mkcert output, one pair per SSL project
+    ├── network-ca/     # the network certificate authority, its key 0600, and
+    │                   #   the certificate for this machine's address; public/
+    │                   #   holds the authority's certificate alone (§4d)
     └── mailpit/        # roadmap
 ```
 
@@ -314,6 +379,9 @@ them surviving a restart:
   first port from 8080 up that no other project records and no other program
   listens on; if another program has taken it by the time the instance
   starts, the project moves to the next free port and the file records it.
+- `projects[].lan_port` — the port the project was last shared on in the
+  local network, so a phone's bookmark still works the next time (§4d).
+  Absent until the project is first shared.
 - `projects[].hosts_entry` — *removed.* It recorded a hosts line from the
   `<name>.wharf` days; an old file loses the key on its next write.
 - `appearance` — `"light"` or `"dark"`; absent means follow the system.

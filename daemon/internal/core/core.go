@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/certs"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/config"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/elevate"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/lan"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/layout"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/php"
 	wruntime "github.com/kreativ-anders/wharf-dev/daemon/internal/runtime"
@@ -88,6 +91,16 @@ type Daemon struct {
 	// out of started, so the next project's start does not bring it up again,
 	// but its row still shows the reason.
 	failed map[string]string
+	// shared holds the started projects shared on the local network, and
+	// address this machine's address there as last seen (sharing.feature).
+	// Neither outlives the run: sharing ends with the project.
+	shared  map[string]bool
+	address netip.Addr
+
+	// lan is the network certificate authority, and lanAddress finds this
+	// machine's address on the local network.
+	lan        *lan.Authority
+	lanAddress func() (netip.Addr, error)
 
 	// shell puts bin/path on the user's PATH (php-terminal.feature), and
 	// terminalPlaces is where it last did.
@@ -137,6 +150,10 @@ type Options struct {
 	// window and the tray name the same one (settings.feature, "General
 	// shows the version, and no update check yet").
 	Version string
+	// LANAddress finds this machine's address on the local network. The
+	// default asks the OS; tests supply one, so the suite never depends on
+	// the network it runs on.
+	LANAddress func() (netip.Addr, error)
 }
 
 // New builds a Daemon, filling in system implementations where none is given.
@@ -223,6 +240,9 @@ func New(opts Options) (*Daemon, error) {
 		installing:   map[string]bool{},
 		started:      map[string]bool{},
 		failed:       map[string]string{},
+		shared:       map[string]bool{},
+		lan:          &lan.Authority{Dir: opts.Root.NetworkCADir(), Now: now, Host: shortHost()},
+		lanAddress:   opts.LANAddress,
 		web:          webDetector,
 		webInstaller: webInstaller,
 		now:          now,
@@ -232,7 +252,11 @@ func New(opts Options) (*Daemon, error) {
 		noTerminal:   opts.NoTerminal,
 	}
 	d.setTerminalPlaces(nil)
+	if d.lanAddress == nil {
+		d.lanAddress = lan.Address
+	}
 	d.res.Installs = d.WebInstalls
+	d.res.Sharing = d.sharing
 	detector.Hidden = d.phpHidden
 	d.RefreshWebservers(context.Background())
 	// INFO: Custom configs present at start are applied by the first webserver
@@ -448,6 +472,13 @@ func (d *Daemon) Reset(ctx context.Context, deleteProjects bool) error {
 		os.Remove(wruntime.CertPath(d.root, p.Name))
 		os.Remove(wruntime.KeyPath(d.root, p.Name))
 	}
+	// INFO: The network certificate authority is Wharf's own and trusted by no
+	// system store: it goes, key and all, so a copy left on a phone vouches
+	// for nothing (sharing.feature, "Resetting Wharf retires the network
+	// certificate authority").
+	if err := d.lan.Replace(); err != nil {
+		return err
+	}
 	// INFO: config/ goes whole — wharf.json, custom webserver configs, php.ini and
 	// anything else put there — so nothing configured survives. data/gen is
 	// generated again on the next start.
@@ -480,6 +511,17 @@ func (d *Daemon) Reset(ctx context.Context, deleteProjects bool) error {
 	d.applyTerminal(d.store.Get().Services.PHP.Terminal, false)
 	d.publish()
 	return nil
+}
+
+// shortHost is this machine's name without its domain, which names the
+// network certificate authority on a phone.
+func shortHost() string {
+	host, err := os.Hostname()
+	if err != nil {
+		return ""
+	}
+	host, _, _ = strings.Cut(host, ".")
+	return host
 }
 
 // deleteWWW deletes every folder in www/, with everything in it.

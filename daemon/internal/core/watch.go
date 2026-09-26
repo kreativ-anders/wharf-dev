@@ -31,6 +31,9 @@ func (d *Daemon) WatchConfig(ctx context.Context) {
 			// hand-edited the same way (app-configuration.feature).
 			d.ApplyCustomConfigs(ctx)
 			d.ApplyPHPSettings(ctx)
+			// INFO: A laptop moves between networks; a shared project follows its
+			// address (sharing.feature).
+			d.CheckNetwork(ctx)
 
 			info, err := os.Stat(d.store.Path())
 			if err != nil || !info.ModTime().After(last) {

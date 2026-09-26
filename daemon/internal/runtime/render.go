@@ -32,9 +32,30 @@ type vhost struct {
 	// Port is the loopback port of a project's own instance; unused by the
 	// front door, which serves every project on the shared ports.
 	Port int
+	// LAN is where the front door shares the project on the network; its
+	// Port is zero while the project is not shared.
+	LAN lanPlace
 	// Conf is the instance the vhost belongs to, for its ports and paths.
 	Conf *confData
 }
+
+// lanPlace is where a shared project is reachable from other devices: its
+// own port on this machine's address in the local network, over HTTPS while
+// the project uses SSL (sharing.feature).
+type lanPlace struct {
+	Port     int
+	Address  string
+	SSL      bool
+	CertFile string
+	KeyFile  string
+}
+
+// sharedEnv marks a request that came in on a shared port. Apache's rule
+// that the front door answers this machine only lets such a request through
+// (see apacheTemplate). A virtual host is chosen by the port a request
+// arrived on, so no request can set it for another port; and a client cannot
+// set an environment variable, only headers.
+const sharedEnv = `SetEnvIf Remote_Addr "." WHARF_SHARED`
 
 // forward is a project the front door hands on to the project's own
 // instance, so that its URL needs no port whichever webserver serves it
@@ -52,6 +73,7 @@ type forward struct {
 	SSL      bool
 	CertFile string
 	KeyFile  string
+	LAN      lanPlace
 	Conf     *confData
 }
 
@@ -79,7 +101,18 @@ type confData struct {
 	Includes []string
 	Vhosts   []vhost
 	Forwards []forward
+	// AnySSL is true when anything the instance serves speaks HTTPS, and
+	// FrontSSL when that includes port 443.
 	AnySSL   bool
+	FrontSSL bool
+	// Shared is true while the front door shares a project on the network,
+	// or offers the network certificate authority there; LANListens are the
+	// shared ports. CADir, when set, is the folder holding the authority's
+	// certificate alone, served on port 80 as CAFile (sharing.feature).
+	Shared     bool
+	LANListens []lanPlace
+	CADir      string
+	CAFile     string
 }
 
 // rendered is a webserver instance's configuration: its main file and one
@@ -102,8 +135,21 @@ func (r *Resolver) VhostPath(server, project string) string {
 // renderWebserverConf generates an instance's configuration: one file per
 // project, each either serving the project — its document root, PHP routed to
 // the FastCGI backend for its PHP version — or, on the front door, forwarding
-// it to its own instance; and a main file that includes them.
-func (r *Resolver) renderWebserverConf(cfg *config.Config, in webserver.Install, instance string, front bool, served, forwarded []config.Project) (rendered, error) {
+// it to its own instance; and a main file that includes them. share is nil
+// for a project's own instance, and what the front door shares on the local
+// network for the front door.
+func (r *Resolver) renderWebserverConf(cfg *config.Config, in webserver.Install, instance string, share *Sharing, served, forwarded []config.Project) (rendered, error) {
+	front := share != nil
+	lan := func(p config.Project) lanPlace {
+		if share == nil || share.Ports[p.Name] == 0 {
+			return lanPlace{}
+		}
+		at := lanPlace{Port: share.Ports[p.Name], Address: share.Address}
+		if p.SSL && share.CertFile != "" {
+			at.SSL, at.CertFile, at.KeyFile = true, forwardSlash(share.CertFile), forwardSlash(share.KeyFile)
+		}
+		return at
+	}
 	data := &confData{
 		Front:       front,
 		HTTPPort:    HTTPPort,
@@ -129,6 +175,7 @@ func (r *Resolver) renderWebserverConf(cfg *config.Config, in webserver.Install,
 			KeyFile:  forwardSlash(KeyPath(r.Root, p.Name)),
 			PHPPort:  PHPPort(cfg.PHPVersionFor(p)),
 			Port:     p.Port,
+			LAN:      lan(p),
 			Conf:     data,
 		}
 		body, err := r.ProjectRules(p, in.Name)
@@ -137,8 +184,9 @@ func (r *Resolver) renderWebserverConf(cfg *config.Config, in webserver.Install,
 		}
 		v.Template = body
 		if v.SSL {
-			data.AnySSL = true
+			data.AnySSL, data.FrontSSL = true, true
 		}
+		data.share(v.LAN)
 		data.Vhosts = append(data.Vhosts, v)
 	}
 	for _, p := range forwarded {
@@ -152,12 +200,23 @@ func (r *Resolver) renderWebserverConf(cfg *config.Config, in webserver.Install,
 			SSL:      p.SSL,
 			CertFile: forwardSlash(CertPath(r.Root, p.Name)),
 			KeyFile:  forwardSlash(KeyPath(r.Root, p.Name)),
+			LAN:      lan(p),
 			Conf:     data,
 		}
 		if f.SSL {
-			data.AnySSL = true
+			data.AnySSL, data.FrontSSL = true, true
 		}
+		data.share(f.LAN)
 		data.Forwards = append(data.Forwards, f)
+	}
+	// INFO: The authority's certificate is offered only while a project is
+	// shared over HTTPS: the phone needs it for nothing else.
+	for _, at := range data.LANListens {
+		if at.SSL && share.CADir != "" {
+			data.CADir = forwardSlash(share.CADir)
+			data.CAFile = LANCAFile
+			break
+		}
 	}
 
 	var main, fwd *template.Template
@@ -193,6 +252,23 @@ func (r *Resolver) renderWebserverConf(cfg *config.Config, in webserver.Install,
 	}
 	out.Main = sb.String()
 	return out, nil
+}
+
+// LANCAFile is the path the front door offers the network certificate
+// authority's certificate at, on port 80: lan.CAFileName, which names the
+// file in the folder it serves.
+const LANCAFile = "wharf-network-ca.crt"
+
+// share records a shared place in the instance's config.
+func (c *confData) share(at lanPlace) {
+	if at.Port == 0 {
+		return
+	}
+	c.Shared = true
+	c.LANListens = append(c.LANListens, at)
+	if at.SSL {
+		c.AnySSL = true
+	}
 }
 
 // write puts an instance's configuration on disk, with the support files
@@ -345,31 +421,57 @@ func siteFile(server string, v vhost) string {
 		configtemplate.PHP:        fmt.Sprintf("127.0.0.1:%d", v.PHPPort),
 		configtemplate.FastCGI:    v.Conf.FastCGIConf,
 	}
-	type place struct{ listen, ssl string }
+	// INFO: name replaces the server name where it is not the project's: a
+	// shared block is reached by address. shared marks that block, which
+	// every device may reach.
+	type place struct {
+		listen, ssl, name string
+		shared            bool
+	}
 	var places []place
 	switch {
 	case !v.Conf.Front && server == webserver.Nginx:
-		places = []place{{fmt.Sprintf("listen 127.0.0.1:%d;", v.Port), ""}}
+		places = []place{{listen: fmt.Sprintf("listen 127.0.0.1:%d;", v.Port)}}
 	case !v.Conf.Front:
-		places = []place{{fmt.Sprintf("127.0.0.1:%d", v.Port), ""}}
+		places = []place{{listen: fmt.Sprintf("127.0.0.1:%d", v.Port)}}
 	case server == webserver.Nginx:
 		// INFO: One block for both ports: a template cannot tell its HTTP copy
 		// from its HTTPS one anyway, and what differs per request reaches PHP
 		// through $wharf_port and $wharf_https (see dev/architecture.md §6).
-		at := place{fmt.Sprintf("listen %d;\nlisten [::]:%d;", v.Conf.HTTPPort, v.Conf.HTTPPort), ""}
+		at := place{listen: fmt.Sprintf("listen %d;\nlisten [::]:%d;", v.Conf.HTTPPort, v.Conf.HTTPPort)}
 		if v.SSL {
 			at.listen += fmt.Sprintf("\nlisten %d ssl;\nlisten [::]:%d ssl;", v.Conf.HTTPSPort, v.Conf.HTTPSPort)
-			at.ssl = fmt.Sprintf("ssl_certificate \"%s\";\nssl_certificate_key \"%s\";", v.CertFile, v.KeyFile)
+			at.ssl = nginxSSL(v.CertFile, v.KeyFile)
 		}
 		places = []place{at}
 	default:
-		places = []place{{fmt.Sprintf("*:%d", v.Conf.HTTPPort), ""}}
+		places = []place{{listen: fmt.Sprintf("*:%d", v.Conf.HTTPPort)}}
 		if v.SSL {
 			places = append(places, place{
-				fmt.Sprintf("*:%d", v.Conf.HTTPSPort),
-				fmt.Sprintf("SSLEngine on\nSSLCertificateFile \"%s\"\nSSLCertificateKeyFile \"%s\"", v.CertFile, v.KeyFile),
+				listen: fmt.Sprintf("*:%d", v.Conf.HTTPSPort),
+				ssl:    apacheSSL(v.CertFile, v.KeyFile),
 			})
 		}
+	}
+	if at := v.LAN; v.Conf.Front && at.Port > 0 {
+		// INFO: Its own block on its own port, which a request reaches only by
+		// that port: the project's blocks on 80 and 443 still answer this
+		// machine only (sharing.feature).
+		shared := place{name: at.Address, shared: true}
+		if server == webserver.Nginx {
+			ssl := ""
+			if at.SSL {
+				ssl = " ssl"
+				shared.ssl = nginxSSL(at.CertFile, at.KeyFile)
+			}
+			shared.listen = fmt.Sprintf("listen %d%s;\nallow all;", at.Port, ssl)
+		} else {
+			shared.listen = fmt.Sprintf("*:%d", at.Port)
+			if at.SSL {
+				shared.ssl = apacheSSL(at.CertFile, at.KeyFile)
+			}
+		}
+		places = append(places, shared)
 	}
 
 	body := configtemplate.WithoutHeader(v.Template)
@@ -380,9 +482,42 @@ func siteFile(server string, v vhost) string {
 	}
 	for _, at := range places {
 		values[configtemplate.Listen], values[configtemplate.SSL] = at.listen, at.ssl
-		sb.WriteString("\n" + strings.TrimSpace(configtemplate.Fill(body, values)) + "\n")
+		values[configtemplate.ServerName] = v.Hostname
+		if at.name != "" {
+			values[configtemplate.ServerName] = at.name
+		}
+		block := strings.TrimSpace(configtemplate.Fill(body, values))
+		if at.shared {
+			if server == webserver.Apache {
+				block = markShared(block, at.listen)
+			}
+			block = "# Shared on the network: every device may reach this block.\n" + block
+		}
+		sb.WriteString("\n" + block + "\n")
 	}
 	return sb.String()
+}
+
+// markShared lets every device reach an Apache virtual host: it sets
+// sharedEnv right inside the <VirtualHost> opening on addr. A block whose
+// opening differs is left as it is, and so answers this machine only — it
+// fails closed.
+func markShared(block, addr string) string {
+	open := "<VirtualHost " + addr + ">"
+	i := strings.Index(block, open)
+	if i < 0 {
+		return block
+	}
+	end := i + len(open)
+	return block[:end] + "\n  " + sharedEnv + block[end:]
+}
+
+func nginxSSL(cert, key string) string {
+	return fmt.Sprintf("ssl_certificate \"%s\";\nssl_certificate_key \"%s\";", cert, key)
+}
+
+func apacheSSL(cert, key string) string {
+	return fmt.Sprintf("SSLEngine on\nSSLCertificateFile \"%s\"\nSSLCertificateKeyFile \"%s\"", cert, key)
 }
 
 var nginxTemplate = template.Must(template.New("nginx").Parse(generatedHeader + `
@@ -419,7 +554,23 @@ http {
   server {
     listen {{.HTTPPort}} default_server;
     listen [::]:{{.HTTPPort}} default_server;
+{{- if .CADir}}
+
+    # Wharf's network certificate authority, for a phone to install before it
+    # opens a project shared over HTTPS. The folder holds its certificate
+    # alone, never a key.
+    location = /{{.CAFile}} {
+      allow all;
+      root "{{.CADir}}";
+      types { }
+      default_type application/x-x509-ca-cert;
+    }
+    location / {
+      return 404;
+    }
+{{- else}}
     return 404;
+{{- end}}
   }
 
   # The port and HTTPS PHP is told, through fastcgi.conf. On the front door
@@ -477,6 +628,27 @@ server {
   ssl_certificate "{{.CertFile}}";
   ssl_certificate_key "{{.KeyFile}}";
 {{template "forward" .}}}
+{{end}}{{if .LAN.Port}}
+# Shared on the network: every device may reach this block.
+server {
+  listen {{.LAN.Port}}{{if .LAN.SSL}} ssl{{end}};
+  allow all;
+  server_name {{.LAN.Address}};
+{{- if .LAN.SSL}}
+  ssl_certificate "{{.LAN.CertFile}}";
+  ssl_certificate_key "{{.LAN.KeyFile}}";
+{{- end}}
+  error_log "{{.LogDir}}/error.log";
+  location / {
+    proxy_pass http://127.0.0.1:{{.Port}};
+    proxy_http_version 1.1;
+    # $http_host keeps the port the phone used, which $host drops.
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Port $server_port;
+  }
+}
 {{end}}`))
 
 var apacheTemplate = template.Must(template.New("apache").Parse(generatedHeader + `
@@ -485,7 +657,8 @@ DefaultRuntimeDir "{{.RunDir}}"
 PidFile "{{.RunDir}}/httpd.pid"
 ServerName localhost
 {{if .Front}}Listen {{.HTTPPort}}
-{{if .AnySSL}}Listen {{.HTTPSPort}}
+{{if .FrontSSL}}Listen {{.HTTPSPort}}
+{{end}}{{range .LANListens}}Listen {{.Port}}{{if .SSL}} https{{end}}
 {{end}}{{else}}{{range .Vhosts}}Listen 127.0.0.1:{{.Port}}
 {{end}}{{end}}
 {{range .Modules}}LoadModule {{.Name}} "{{.Path}}"
@@ -513,7 +686,11 @@ ProxyFCGISetEnvIf "%{HTTP:X-Forwarded-Proto} == 'https'" HTTPS "on"
 # process bind a port below 1024 nowhere else — so it answers this machine
 # only. Anyone on the network could otherwise reach a project by name, and a
 # project behind it would see the front door's 127.0.0.1 as the client.
-<If "! -R '127.0.0.0/8' && ! -R '::1/128'">
+{{- if .Shared}}
+# A request on a shared port, or for the network certificate authority on
+# port 80, carries WHARF_SHARED, set where it arrived (sharing.feature).
+{{- end}}
+<If "! -R '127.0.0.0/8' && ! -R '::1/128'{{if .Shared}} && -z reqenv('WHARF_SHARED'){{end}}">
   Require all denied
 </If>
 
@@ -524,6 +701,18 @@ ProxyFCGISetEnvIf "%{HTTP:X-Forwarded-Proto} == 'https'" HTTPS "on"
   <Location "/">
     Require all denied
   </Location>
+{{- if .CADir}}
+
+  # Wharf's network certificate authority, for a phone to install before it
+  # opens a project shared over HTTPS. The folder holds its certificate
+  # alone, never a key.
+  DocumentRoot "{{.CADir}}"
+  SetEnvIf Request_URI "^/wharf-network-ca\.crt$" WHARF_SHARED
+  <Location "/{{.CAFile}}">
+    Require all granted
+    ForceType application/x-x509-ca-cert
+  </Location>
+{{- end}}
 </VirtualHost>
 {{end}}
 # One file per project.
@@ -553,5 +742,21 @@ var apacheForwardTemplate = template.Must(template.New("apache-forward").Parse(g
   ProxyPass "/" "http://127.0.0.1:{{.Port}}/"
   RequestHeader set X-Forwarded-Proto "https"
   RequestHeader set X-Forwarded-Port "{{.Conf.HTTPSPort}}"
+</VirtualHost>
+{{end}}{{if .LAN.Port}}
+# Shared on the network: every device may reach this block.
+<VirtualHost *:{{.LAN.Port}}>
+  SetEnvIf Remote_Addr "." WHARF_SHARED
+  ServerName {{.LAN.Address}}
+{{- if .LAN.SSL}}
+  SSLEngine on
+  SSLCertificateFile "{{.LAN.CertFile}}"
+  SSLCertificateKeyFile "{{.LAN.KeyFile}}"
+{{- end}}
+  ErrorLog "{{.LogDir}}/error.log"
+  ProxyPreserveHost On
+  ProxyPass "/" "http://127.0.0.1:{{.Port}}/"
+  RequestHeader set X-Forwarded-Proto "{{if .LAN.SSL}}https{{else}}http{{end}}"
+  RequestHeader set X-Forwarded-Port "{{.LAN.Port}}"
 </VirtualHost>
 {{end}}`))

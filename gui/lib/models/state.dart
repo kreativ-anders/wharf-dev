@@ -15,6 +15,7 @@ class WharfState {
     this.appearance = 'system',
     this.version = '',
     this.configTemplates = const [],
+    this.network = Network.empty,
   });
 
   final String root;
@@ -46,6 +47,9 @@ class WharfState {
 
   /// Every config template, Wharf's own first (features/config-templates.feature).
   final List<ConfigTemplate> configTemplates;
+
+  /// Sharing on the local network (features/sharing.feature).
+  final Network network;
 
   static const empty = WharfState(
     root: '',
@@ -80,6 +84,51 @@ class WharfState {
     configTemplates: (json['config_templates'] as List<dynamic>? ?? const [])
         .map((e) => ConfigTemplate.fromJson(e as Map<String, dynamic>))
         .toList(),
+    network: Network.fromJson(json['network'] as Map<String, dynamic>? ?? const {}),
+  );
+}
+
+/// This machine on the local network, as sharing shows it
+/// (features/sharing.feature).
+class Network {
+  const Network({this.address = '', this.certificate, this.certificateUrl = ''});
+
+  /// This machine's address there; empty before anything was shared.
+  final String address;
+
+  /// Wharf's network certificate authority, while a project is shared over
+  /// HTTPS; [certificateUrl] is where a phone downloads it.
+  final NetworkCertificate? certificate;
+  final String certificateUrl;
+
+  static const empty = Network();
+
+  factory Network.fromJson(Map<String, dynamic> json) {
+    final cert = json['certificate'] as Map<String, dynamic>?;
+    return Network(
+      address: json['address'] as String? ?? '',
+      certificate: cert == null ? null : NetworkCertificate.fromJson(cert),
+      certificateUrl: json['certificate_url'] as String? ?? '',
+    );
+  }
+}
+
+/// The network certificate authority a phone installs.
+class NetworkCertificate {
+  const NetworkCertificate({required this.fingerprint, required this.expires, required this.file});
+
+  /// SHA-256, as pairs of hex digits — what the phone shows before
+  /// installing it.
+  final String fingerprint;
+  final DateTime? expires;
+
+  /// The certificate on this machine, for sending it another way.
+  final String file;
+
+  factory NetworkCertificate.fromJson(Map<String, dynamic> json) => NetworkCertificate(
+    fingerprint: json['fingerprint'] as String? ?? '',
+    expires: DateTime.tryParse(json['expires'] as String? ?? ''),
+    file: json['file'] as String? ?? '',
   );
 }
 
@@ -433,6 +482,8 @@ class Project {
     this.template = '',
     this.webserverVersion = '',
     this.phpFullVersion = '',
+    this.shared = false,
+    this.shareUrl = '',
   });
 
   final String name;
@@ -480,6 +531,11 @@ class Project {
   /// (features/config-templates.feature).
   final String template;
 
+  /// Shared on the local network, reached from a phone at [shareUrl]
+  /// (features/sharing.feature).
+  final bool shared;
+  final String shareUrl;
+
   bool get isRunning => state == 'running';
   bool get isBusy => state == 'starting' || state == 'stopping';
   bool get hasFailed => state == 'failed';
@@ -514,6 +570,8 @@ class Project {
     logDir: json['log_dir'] as String? ?? '',
     customConfig: CustomConfig.fromJson(json['custom_config'] as Map<String, dynamic>? ?? const {}),
     template: json['template'] as String? ?? '',
+    shared: json['shared'] as bool? ?? false,
+    shareUrl: json['share_url'] as String? ?? '',
   );
 }
 

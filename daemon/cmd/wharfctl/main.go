@@ -45,6 +45,8 @@ const usage = `usage: wharfctl [--root DIR] <command> [args]
   start <name>               start a project
   stop <name>                stop a project
   restart <name>             regenerate a project's config and restart what serves it
+  share <name> [off]         share a running project on the local network, or stop sharing it
+  network-cert replace       replace the network certificate authority phones install
   stop-all                   stop every service and project
   reset --yes [--delete-projects]
                              unregister every project and delete all settings (downloads are kept);
@@ -170,6 +172,19 @@ func run() error {
 			"restart": ipc.MethodProjectRestart,
 		}[args[0]]
 		return callAndShow(ctx, c, method, map[string]string{"name": args[1]})
+
+	case "share":
+		if len(args) < 2 {
+			return fmt.Errorf("share needs a project name")
+		}
+		on := len(args) < 3 || args[2] != "off"
+		return callAndShow(ctx, c, ipc.MethodProjectShare, map[string]any{"name": args[1], "on": on})
+
+	case "network-cert":
+		if len(args) < 2 || args[1] != "replace" {
+			return fmt.Errorf("run: wharfctl network-cert replace")
+		}
+		return callAndShow(ctx, c, ipc.MethodReplaceNetworkCA, nil)
 
 	case "reset":
 		if len(args) < 2 || args[1] != "--yes" {

@@ -45,6 +45,8 @@ type State struct {
 	// ConfigTemplates lists every config template, Wharf's first
 	// (config-templates.feature).
 	ConfigTemplates []ConfigTemplate `json:"config_templates"`
+	// Network is what sharing on the local network shows (sharing.feature).
+	Network Network `json:"network"`
 }
 
 // Services is the global service state shown in Settings. Only Webserver and
@@ -170,6 +172,11 @@ type Project struct {
 	// Template is the project's config template, "" for none.
 	Template string `json:"template"`
 
+	// Shared is true while the project is shared on the local network, and
+	// ShareURL is where another device reaches it then (sharing.feature).
+	Shared   bool   `json:"shared"`
+	ShareURL string `json:"share_url,omitempty"`
+
 	Error string `json:"error,omitempty"`
 }
 
@@ -195,6 +202,7 @@ func (d *Daemon) snapshot(cfg *config.Config) State {
 		Busy:         d.busy.Load() > 0,
 
 		ConfigTemplates: d.configTemplates(cfg),
+		Network:         d.networkState(cfg),
 	}
 
 	wsState := supervisor.StateStopped
@@ -265,7 +273,9 @@ func (d *Daemon) projectState(cfg *config.Config, p config.Project) Project {
 		Linked:            p.Path != "",
 		LogDir:            d.root.ProjectLogDir(p.Name),
 		Template:          p.Template,
+		ShareURL:          d.shareURL(p),
 	}
+	out.Shared = out.ShareURL != ""
 	out.WebserverVersion = d.WebInstalls()[out.Webserver].Version
 	out.PHPFullVersion = d.phpFullVersion(out.PHPVersion)
 	custom := d.root.CustomConfig(p.Name, out.Webserver)

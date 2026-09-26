@@ -85,6 +85,12 @@ func (r Root) CustomConfig(project, server string) string {
 // built-in ones (config-templates.feature).
 func (r Root) TemplateDir() string { return filepath.Join(r.Config(), "templates") }
 
+// NetworkCADir holds Wharf's network certificate authority and the
+// certificate it issued for this machine's address (sharing.feature). Its
+// public/ folder holds the authority's certificate alone — what a phone
+// downloads — so serving that folder can never hand out a key.
+func (r Root) NetworkCADir() string { return filepath.Join(r.Data(), "network-ca") }
+
 // MkcertBin is where a downloaded mkcert lives.
 func (r Root) MkcertBin() string { return filepath.Join(r.Bin(), "mkcert") }
 

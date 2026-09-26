@@ -31,6 +31,10 @@ type (
 	onParams struct {
 		On bool `json:"on"`
 	}
+	shareParams struct {
+		Name string `json:"name"`
+		On   bool   `json:"on"`
+	}
 	resetParams struct {
 		DeleteProjects bool `json:"delete_projects"`
 	}
@@ -97,6 +101,7 @@ func (d *Daemon) Register(srv *ipc.Server) {
 		ipc.MethodSetupSSL:         d.SetupSSL,
 		ipc.MethodPHPReleases:      d.CheckPHPReleases,
 		ipc.MethodStopAll:          d.StopAll,
+		ipc.MethodReplaceNetworkCA: d.ReplaceNetworkCertificate,
 	} {
 		handle(method, d.stateAfter(act))
 	}
@@ -120,6 +125,7 @@ func (d *Daemon) Register(srv *ipc.Server) {
 	}
 	handle(ipc.MethodUnhidePHP, action(d, func(ctx context.Context, p dirParams) error { return d.UnhidePHP(ctx, p.Dir) }))
 	handle(ipc.MethodReset, action(d, func(ctx context.Context, p resetParams) error { return d.Reset(ctx, p.DeleteProjects) }))
+	handle(ipc.MethodProjectShare, action(d, func(ctx context.Context, p shareParams) error { return d.Share(ctx, p.Name, p.On) }))
 	handle(ipc.MethodSetPHPTerminal, action(d, func(ctx context.Context, p onParams) error { return d.SetPHPTerminal(ctx, p.On) }))
 	handle(ipc.MethodConfigTemplateSave, action(d, func(ctx context.Context, p configTemplateParams) error {
 		return d.SaveConfigTemplate(ctx, p.ID, p.Webserver, p.Content)
