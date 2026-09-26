@@ -48,12 +48,13 @@ void main() {
     expect(_qr('http://192.168.1.23:8800'), findsOneWidget);
     expect(find.text('http://192.168.1.23:8800'), findsOneWidget);
 
-    // INFO: Stopping sharing leaves the project running, and the row says it
-    // is no longer shared.
-    await tester.tap(find.text('Stop sharing'));
+    // INFO: Done closes the dialog and leaves the project shared: sharing
+    // ends with the project, so there is no "Stop sharing" to press.
+    expect(find.text('Stop sharing'), findsNothing);
+    await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
-    expect(daemon.calls, ['my-kirby-site on', 'my-kirby-site off']);
-    expect(find.textContaining('Shared on your network'), findsNothing);
+    expect(daemon.calls, ['my-kirby-site on']);
+    expect(find.text('Shared on your network: http://192.168.1.23:8800'), findsOneWidget);
   });
 
   // features/sharing.feature — "The certificate step is shown only for a
@@ -75,7 +76,8 @@ void main() {
 
     // INFO: When the user shares a project with SSL, Then the GUI first offers
     // the network certificate as a QR code, with its fingerprint to compare on
-    // the phone, And says how to install it on iOS and Android.
+    // the phone, And says in a few words how to install it, the same for
+    // every phone.
     tester.view.physicalSize = const Size(1000, 1200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -88,8 +90,8 @@ void main() {
     expect(_qr('http://192.168.1.23/wharf-network-ca.crt'), findsOneWidget);
     expect(_qr('https://192.168.1.23:8800'), findsOneWidget);
     expect(find.textContaining('AB CD EF'), findsOneWidget);
-    expect(find.textContaining('iPhone, iPad'), findsOneWidget);
-    expect(find.textContaining('Android'), findsOneWidget);
+    expect(find.textContaining('install the certificate it offers'), findsOneWidget);
+    expect(find.textContaining('Android'), findsNothing);
     // INFO: The QR code is the certificate's step first, the project's second.
     expect(
       tester.getTopLeft(_qr('http://192.168.1.23/wharf-network-ca.crt')).dx,

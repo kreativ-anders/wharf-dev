@@ -132,6 +132,9 @@ func TestTheNetworkCertificateAuthorityCannotVouchForRealWebsites(t *testing.T) 
 	if got := root.NotAfter.Sub(start); got > AuthorityLifetime || got < AuthorityLifetime-time.Hour {
 		t.Errorf("the authority lasts %v, not a year", got)
 	}
+	if got := root.Subject.Organization; len(got) != 1 || got[0] != "kreativ-anders.dev" {
+		t.Errorf("the phone names the authority's publisher %v, want kreativ-anders.dev", got)
+	}
 	if !root.IsCA || root.MaxPathLen != 0 || !root.MaxPathLenZero {
 		t.Errorf("the authority may delegate: IsCA %v, MaxPathLen %d", root.IsCA, root.MaxPathLen)
 	}

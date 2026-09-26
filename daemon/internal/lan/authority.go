@@ -34,6 +34,11 @@ const (
 	authorityRenewBefore = CertificateLifetime
 )
 
+// Organization is the publisher a phone shows for the authority and the
+// certificates it issues: kreativ-anders.dev, which publishes Wharf, so
+// other tools from it can name themselves the same way.
+const Organization = "kreativ-anders.dev"
+
 // CAFileName is the authority's certificate as a phone downloads it: DER,
 // which iOS and Android both install from a download.
 const CAFileName = "wharf-network-ca.crt"
@@ -145,7 +150,7 @@ func (a *Authority) Certificate(addr netip.Addr) (certFile, keyFile string, err 
 		// INFO: No common name. A verifier may read one that looks like a
 		// host name as a DNS name, which the authority may not sign for; the
 		// address is in the subject alternative name, where it belongs.
-		Subject:     pkix.Name{Organization: []string{"Wharf"}},
+		Subject:     pkix.Name{Organization: []string{Organization}},
 		NotBefore:   now.Add(-time.Hour),
 		NotAfter:    notAfter,
 		IPAddresses: []net.IP{addr.AsSlice()},
@@ -225,7 +230,7 @@ func (a *Authority) create() (*x509.Certificate, *ecdsa.PrivateKey, error) {
 	now := a.now()
 	tmpl := &x509.Certificate{
 		SerialNumber:          serial(),
-		Subject:               pkix.Name{CommonName: name, Organization: []string{"Wharf"}},
+		Subject:               pkix.Name{CommonName: name, Organization: []string{Organization}},
 		NotBefore:             now.Add(-time.Hour),
 		NotAfter:              now.Add(AuthorityLifetime),
 		IsCA:                  true,

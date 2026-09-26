@@ -57,56 +57,63 @@ class ShareSheet extends StatelessWidget {
     final withCertificate = project.shared && project.ssl && certificate != null;
     final port = Uri.tryParse(project.shareUrl)?.port;
 
+    // WARNING: The button stays outside the scroll view: inside it, a window
+    // shorter than the QR codes scrolls "Done" out of sight.
     return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 16, 16, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Semantics(
-                    header: true,
-                    child: Text('Share ${project.name}', style: Theme.of(context).textTheme.titleLarge),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Close',
-                  icon: const Icon(Icons.close, size: 18),
-                  onPressed: () => _close(context),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            if (!project.shared)
-              // INFO: Stopped meanwhile — sharing ends with the project.
-              Padding(
-                padding: const EdgeInsets.only(top: 12, bottom: 12),
-                child: Text('${project.name} is no longer shared.'),
-              )
-            else ...[
-              Text(
-                'Scan with a phone on the same network. Only this project is shared, '
-                'until you stop sharing it or stop the project.',
-                style: muted,
-              ),
-              const SizedBox(height: 20),
-              Wrap(
-                spacing: 32,
-                runSpacing: 24,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 16, 16, 0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (withCertificate)
-                    _Step(
-                      title: '1 · Install the network certificate',
-                      url: network.certificateUrl,
-                      children: [_CertificateDetails(daemon: daemon, certificate: certificate!)],
-                    ),
-                  _Step(
-                    title: withCertificate ? '2 · Open the project' : 'Open the project',
-                    url: project.shareUrl,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Semantics(
+                          header: true,
+                          child: Text('Share ${project.name}', style: Theme.of(context).textTheme.titleLarge),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Close',
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () => _close(context),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 4),
+                  if (!project.shared)
+                    // INFO: Stopped meanwhile — sharing ends with the project.
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12, bottom: 12),
+                      child: Text('${project.name} is no longer shared.'),
+                    )
+                  else ...[
+                    Text(
+                      'Scan with a phone on the same network. Only this project is shared, '
+                      'until you stop it or quit Wharf.',
+                      style: muted,
+                    ),
+                    const SizedBox(height: 20),
+                    Wrap(
+                      spacing: 32,
+                      runSpacing: 24,
+                      children: [
+                        if (withCertificate)
+                          _Step(
+                            title: '1 · Install the network certificate',
+                            url: network.certificateUrl,
+                            children: [_CertificateDetails(daemon: daemon, certificate: certificate)],
+                          ),
+                        _Step(
+                          title: withCertificate ? '2 · Open the project' : 'Open the project',
+                          url: project.shareUrl,
+                        ),
                 ],
               ),
               const SizedBox(height: 20),
@@ -117,24 +124,23 @@ class ShareSheet extends StatelessWidget {
                 style: muted,
               ),
             ],
-            const SizedBox(height: 20),
-            Row(
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 16, 24),
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
+              // INFO: Done alone: sharing ends with the project, so the dialog
+              // offers nothing that would leave it running unshared
+              // (features/sharing.feature, "Sharing ends with the project").
               children: [
-                if (project.shared)
-                  TextButton(
-                    onPressed: () async {
-                      await daemon.shareProject(project.name, on: false);
-                      if (context.mounted) _close(context);
-                    },
-                    child: const Text('Stop sharing'),
-                  ),
-                const SizedBox(width: 8),
                 FilledButton(onPressed: () => _close(context), child: const Text('Done')),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -233,16 +239,14 @@ class _CertificateDetails extends StatelessWidget {
           Text('Valid until ${_date(expires)}. Only for addresses on a local network.', style: muted),
         ],
         const SizedBox(height: 10),
+        // INFO: Kept short and the same for every phone: the phone itself
+        // offers the downloaded certificate in its settings, and menu paths
+        // change from one OS version to the next. The one step it does not
+        // offer is iOS's trust switch, so that is named.
         Text(
-          'iPhone, iPad: allow the download, then Settings → General → VPN & Device '
-          'Management → install it; then Settings → General → About → Certificate '
-          'Trust Settings → turn it on.',
-          style: muted,
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Android: download it, then Settings → Security → Encryption & credentials → '
-          'Install a certificate → CA certificate.',
+          'Open the link on the phone and install the certificate it offers in its '
+          'settings. On an iPhone or iPad, then turn on full trust for it under '
+          'Settings → General → About → Certificate Trust Settings.',
           style: muted,
         ),
         const SizedBox(height: 6),

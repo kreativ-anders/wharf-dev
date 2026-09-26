@@ -39,7 +39,7 @@ Feature: Sharing a project on the network
 
   Scenario: Stopping sharing leaves the project running
     Given "my-kirby-site" is shared
-    When the user chooses "Stop sharing"
+    When sharing is stopped with "wharfctl share my-kirby-site off"
     Then its port on the network is closed
     And "my-kirby-site.localhost" is still served on this machine
 
@@ -71,7 +71,7 @@ Feature: Sharing a project on the network
     Then the GUI shows its URL alone
     When the user shares a project with SSL
     Then the GUI first offers the network certificate as a QR code, with its fingerprint to compare on the phone
-    And says how to install it on iOS and Android
+    And says in a few words how to install it, the same for every phone
 
   Scenario: The network certificate authority cannot vouch for real websites
     When Wharf creates its network certificate authority
