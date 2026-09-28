@@ -3,6 +3,21 @@
 Written by the release workflow, never by hand: each release adds the commit
 subjects since the one before it, newest first (dev/releasing.md).
 
+## v1.1.0 - 2026-09-28
+
+- 👷 Add manual Wharf update checks (5eea763)
+- 🧑‍💻 Show project QR before SSL cert steps (8b92958)
+- ✨ Simplify network sharing dialog (75e495d)
+- ✨ Add LAN project sharing with network CA (f29be25)
+- ⚡️Render nginx front door as one block (2c6525c)
+- 🧑‍💻 Load common extensions for adopted PHP (85b93cb)
+- Add early-development notice on landing page (593b6d0)
+- 🔍️ Polish docs metadata and demo markup (948bc33)
+- ✈️ Launch custom domain and support page (28c1acf)
+- ⚡️ Harden daemon installs and shutdown flow (2b73319)
+- Create CNAME (0b7f702)
+- 📝 Point the landing page at the v1 downloads (4adefff)
+
 ## v1.0.0 - 2026-09-21
 
 - 📌 Update Flutter lockfile deps (014407c)
