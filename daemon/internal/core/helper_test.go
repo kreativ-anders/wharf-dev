@@ -2,13 +2,16 @@ package core
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"regexp"
 	goruntime "runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -41,7 +44,34 @@ type harness struct {
 	php    *fakeInstaller
 	web    *fakeWebInstaller
 	shell  *shellpath.Fake
+	net    *fakeNetwork
 	opts   Options
+}
+
+// fakeNetwork is this machine's address on the local network, as a test sets
+// it: the suite never depends on the network it runs on.
+type fakeNetwork struct {
+	mu   sync.Mutex
+	addr netip.Addr
+}
+
+func (n *fakeNetwork) set(addr string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if addr == "" {
+		n.addr = netip.Addr{}
+		return
+	}
+	n.addr = netip.MustParseAddr(addr)
+}
+
+func (n *fakeNetwork) address() (netip.Addr, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if !n.addr.IsValid() {
+		return netip.Addr{}, errors.New("no network")
+	}
+	return n.addr, nil
 }
 
 // stubWebservers stages nginx and Apache as Wharf's own copies. Apache is
@@ -158,9 +188,11 @@ func newHarness(t *testing.T, adjust ...func(*Options)) *harness {
 	// WARNING: Never the real one: it would write the shell startup files of
 	// whoever runs the suite.
 	shell := shellpath.NewFake()
+	network := &fakeNetwork{addr: netip.MustParseAddr("192.168.1.23")}
 	opts := Options{
-		Root:  root,
-		Store: store,
+		LANAddress: network.address,
+		Root:       root,
+		Store:      store,
 		// WARNING: Detection must see only what the test staged: no probing of the
 		// machine the suite happens to run on.
 		Detector: &php.Detector{
@@ -192,7 +224,7 @@ func newHarness(t *testing.T, adjust ...func(*Options)) *harness {
 		_ = d.Shutdown(ctx)
 	})
 
-	return &harness{t: t, d: d, root: root, runner: runner, ports: ports, el: el, certs: ca, sup: sup, php: installer, web: webFake, shell: shell, opts: opts}
+	return &harness{t: t, d: d, root: root, runner: runner, ports: ports, el: el, certs: ca, sup: sup, php: installer, web: webFake, shell: shell, net: network, opts: opts}
 }
 
 func stubBinary(t *testing.T, path string) {

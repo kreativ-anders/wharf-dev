@@ -270,18 +270,20 @@ void main() {
     await tester.pumpWidget(wrap(ProjectsPage(daemon: daemon)));
     double x(String tooltip) => tester.getCenter(find.byTooltip(tooltip)).dx;
 
-    // INFO: Open, Restart, Settings, then Stop, left to right.
+    // INFO: Open, Restart, Share, Settings, then Stop, left to right.
     final running = [
       x('Open http://my-kirby-site.localhost'),
       x('Restart my-kirby-site'),
+      x('Share my-kirby-site on your network'),
       x('Settings for my-kirby-site'),
       x('Stop my-kirby-site'),
     ];
     expect(running, orderedEquals(List.of(running)..sort()));
-    // INFO: A stopped project leaves Open and Restart empty, so its Settings and
-    // Start stand exactly under the running project's Settings and Stop.
-    expect(x('Settings for legacy-app'), running[2]);
-    expect(x('Start legacy-app'), running[3]);
+    // INFO: A stopped project leaves Open, Restart and Share empty, so its
+    // Settings and Start stand exactly under the running project's.
+    expect(find.byTooltip('Share legacy-app on your network'), findsNothing);
+    expect(x('Settings for legacy-app'), running[3]);
+    expect(x('Start legacy-app'), running[4]);
 
     IconButton button(String tooltip) => tester.widget<IconButton>(
       find.ancestor(of: find.byTooltip(tooltip), matching: find.byType(IconButton)).first,

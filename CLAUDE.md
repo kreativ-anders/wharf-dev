@@ -131,6 +131,7 @@ wharf/
 │   ├── roadmap-services.feature     @roadmap only — do not implement
 │   ├── service-management.feature   webserver switching, port conflicts
 │   ├── settings.feature             global settings surface
+│   ├── sharing.feature              a running project on the local network, for a phone; the network certificate authority
 │   ├── single-application.feature   one app: starts and stops its own daemon
 │   ├── tray-actions.feature         tray menu behaviour
 │   └── webserver-install.feature    nginx/Apache: adopt, install, one config per project
@@ -150,6 +151,7 @@ wharf/
 │       │   ├── php.go         PHP versions: detect, adopt, download, remove or hide, backends
 │       │   ├── webserver.go   webservers: detect, install, switch the active one
 │       │   ├── frontdoor.go   what the front door serves; own instances' ports
+│       │   ├── sharing.go     sharing on the local network: ports, the address followed, the network certificate
 │       │   ├── userfiles.go   custom configs and php.ini: read, saved, applied on save
 │       │   ├── configtemplates.go  config templates: listed, read, saved, created, deleted
 │       │   ├── terminal.go    bin/path follows the default PHP; "Use in terminal" on and off
@@ -162,6 +164,7 @@ wharf/
 │       ├── download/          HTTPS fetch, checksum, untar/unzip for PHP and mkcert
 │       ├── elevate/           PLATFORM-SPECIFIC: elevation prompts (3 adapters)
 │       ├── ipc/               newline-delimited JSON over a unix socket; loopback TCP + token on Windows
+│       ├── lan/               this machine's address on the local network; the network certificate authority
 │       ├── layout/            the portable root: bin/ www/ config/ data/
 │       ├── php/               release timeline, support status, detection, downloads
 │       ├── proctree/          PLATFORM-SPECIFIC: a service and its workers, stopped as one; is a process alive
@@ -195,12 +198,14 @@ wharf/
     │       ├── projects_page.dart  THE ONE PRIMARY VIEW; before the first project, what is missing
     │       ├── add_project.dart    "Add project…": folder picker, then the sheet proposing name, template, webserver
     │       ├── project_sheet.dart  per-project overrides, config template, custom config and logs, behind a tap
+    │       ├── share_dialog.dart   "Share": the QR code and URL for a phone, the network certificate first for SSL
     │       ├── config_editor.dart  the line-numbered editor for config templates and custom configs, and "New template…"
     │       └── settings_page.dart  side navigation: General, Webserver (config templates), PHP (picker, php.ini), SSL
     ├── test/
     │   ├── state_test.dart      snapshot parsing
     │   ├── theme_test.dart      WCAG contrast of the palette, both themes
     │   ├── widgets_test.dart    what each view renders
+    │   ├── share_test.dart      the Share dialog: URL and QR code, the certificate step only with SSL
     │   ├── add_project_test.dart  "Add project…" and the window before the first project
     │   ├── config_templates_test.dart  the config template list, editor and project picker; the custom config editor
     │   ├── accessibility_tree_test.dart  semantics updates replayed through the Windows engine's AXTree commit

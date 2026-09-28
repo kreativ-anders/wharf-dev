@@ -78,6 +78,10 @@ type Project struct {
 	// on, when it has one. Persisted, so the front door keeps forwarding to
 	// the same place across restarts.
 	Port int `json:"port,omitempty"`
+	// LANPort is the port the project was last shared on in the local
+	// network. Persisted, so a phone's bookmark still works the next time
+	// it is shared (sharing.feature, "A shared project keeps its port").
+	LANPort int `json:"lan_port,omitempty"`
 	// Path is the project's folder when it lives outside www/. Absent for a
 	// folder in www/, which is found by name (project-folders.feature).
 	Path string `json:"path,omitempty"`

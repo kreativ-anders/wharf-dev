@@ -56,6 +56,11 @@ const (
 	MethodProjectStop     = "projects.stop"
 	MethodProjectRestart  = "projects.restart"
 	MethodProjectSettings = "projects.settings"
+	// MethodProjectShare shares a running project on the local network, or
+	// stops sharing it; MethodReplaceNetworkCA replaces the network
+	// certificate authority (sharing.feature).
+	MethodProjectShare     = "projects.share"
+	MethodReplaceNetworkCA = "network.replaceCertificate"
 	// Inspect answers with what "Add project…" proposes for a folder — its
 	// name, its detected config template, the project it already is — and
 	// registers nothing (project-folders.feature).

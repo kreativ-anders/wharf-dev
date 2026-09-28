@@ -33,6 +33,9 @@ const (
 	// projectBasePort is the first loopback port handed to a project's own
 	// webserver instance, behind the front door.
 	projectBasePort = 8080
+	// lanBasePort is the first port a project is shared on in the local
+	// network (sharing.feature).
+	lanBasePort = 8800
 )
 
 // Domain is what projects are published under: <project>.localhost. The name
@@ -72,7 +75,32 @@ type Resolver struct {
 	// Installs reports the webservers found on this machine. The daemon
 	// caches detection, so this is a lookup, not a scan.
 	Installs func() map[string]webserver.Install
+	// Sharing reports what the front door serves on the local network
+	// beyond this machine, for the projects in cfg. Nil shares nothing.
+	Sharing func(cfg *config.Config) (Sharing, error)
 }
+
+// Sharing is what the front door serves to other devices on the local
+// network (sharing.feature). Everything else it serves answers this machine
+// only.
+type Sharing struct {
+	// Address is this machine's address on the local network, which a
+	// shared project's block is named after.
+	Address string
+	// Ports are the shared projects' ports on the network, by name.
+	Ports map[string]int
+	// CertFile and KeyFile are the certificate for Address from Wharf's
+	// network certificate authority, set while a shared project uses SSL.
+	CertFile string
+	KeyFile  string
+	// CADir holds the authority's certificate alone. While CertFile is set,
+	// the front door serves it on port 80 to every device, for a phone to
+	// install.
+	CADir string
+}
+
+// shares reports whether anything is shared.
+func (s Sharing) shares() bool { return len(s.Ports) > 0 }
 
 // New returns a Resolver for the given root.
 func New(root layout.Root) *Resolver { return &Resolver{Root: root} }
@@ -154,13 +182,30 @@ func PHPPort(version string) int {
 // another program holds"). Ports are persisted per project, so a project's
 // own instance comes back on the port the front door forwards to.
 func NextProjectPort(cfg *config.Config, free func(port int) bool) int {
+	return nextPort(cfg, projectBasePort, free)
+}
+
+// NextLANPort returns a port to share a project on in the local network,
+// chosen the way NextProjectPort chooses one: not recorded for another
+// project, and not held by another program as far as free can tell
+// (sharing.feature, "A shared project keeps its port").
+func NextLANPort(cfg *config.Config, free func(port int) bool) int {
+	return nextPort(cfg, lanBasePort, free)
+}
+
+// nextPort is the first port from base up that no project records, as its
+// own instance's port or as its port on the network, and that free accepts.
+func nextPort(cfg *config.Config, base int, free func(port int) bool) int {
 	taken := map[int]bool{}
 	for _, p := range cfg.Projects {
 		if p.Port > 0 {
 			taken[p.Port] = true
 		}
+		if p.LANPort > 0 {
+			taken[p.LANPort] = true
+		}
 	}
-	for port := projectBasePort; port < projectBasePort+1000; port++ {
+	for port := base; port < base+1000; port++ {
 		if !taken[port] && (free == nil || free(port)) {
 			return port
 		}
@@ -242,8 +287,15 @@ func (r *Resolver) WebserverSpec(cfg *config.Config) (supervisor.Spec, error) {
 		}
 	}
 
+	var share Sharing
+	if r.Sharing != nil {
+		if share, err = r.Sharing(cfg); err != nil {
+			return supervisor.Spec{}, err
+		}
+	}
+
 	confPath := filepath.Join(r.genDir(), name+".conf")
-	conf, err := r.renderWebserverConf(cfg, in, "global-"+name, true, served, forwarded)
+	conf, err := r.renderWebserverConf(cfg, in, "global-"+name, &share, served, forwarded)
 	if err != nil {
 		return supervisor.Spec{}, err
 	}
@@ -281,7 +333,7 @@ func (r *Resolver) ProjectSpec(cfg *config.Config, p config.Project) (supervisor
 	}
 
 	confPath := filepath.Join(r.genDir(), "project-"+p.Name+"-"+name+".conf")
-	conf, err := r.renderWebserverConf(cfg, in, "project-"+p.Name, false, []config.Project{p}, nil)
+	conf, err := r.renderWebserverConf(cfg, in, "project-"+p.Name, nil, []config.Project{p}, nil)
 	if err != nil {
 		return supervisor.Spec{}, err
 	}

@@ -43,7 +43,7 @@ Feature: Tray icon actions
 
   Scenario: Project actions keep their places in the list
     When the user looks at the project list
-    Then each row's actions stand in one order: "Open", "Restart", "Settings", then "Start" or "Stop"
+    Then each row's actions stand in one order: "Open", "Restart", "Share", "Settings", then "Start" or "Stop"
     And an action a project does not offer leaves its place empty, so the columns line up
     And "Start" is green, "Stop" red and "Restart" blue, each also told by its icon and label
 

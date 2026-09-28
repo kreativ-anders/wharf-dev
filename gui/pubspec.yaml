@@ -38,6 +38,7 @@ dependencies:
   window_manager: ^0.5.2
   url_launcher: ^6.3.2
   file_selector: ^1.1.0
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:
