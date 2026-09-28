@@ -5,11 +5,12 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../daemon.dart';
 import '../folders.dart';
 import '../models/state.dart';
+import '../theme.dart';
 
 /// "Share": shares a running project on the local network, then shows how to
 /// open it on a phone — its URL as a QR code and as text. A project with SSL
-/// first offers Wharf's network certificate, which the phone needs once;
-/// one without SSL shows its URL alone (features/sharing.feature).
+/// adds a notice that the phone needs Wharf's network certificate once, which
+/// expands to offer it (features/sharing.feature).
 Future<void> shareProject(BuildContext context, Daemon daemon, Project project) async {
   if (!project.shared) {
     await daemon.shareProject(project.name);
@@ -29,7 +30,7 @@ Future<void> shareProject(BuildContext context, Daemon daemon, Project project) 
         return Dialog(
           insetPadding: const EdgeInsets.all(24),
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: current.ssl ? 640 : 420),
+            constraints: const BoxConstraints(maxWidth: 420),
             child: ShareSheet(daemon: daemon, project: current, network: daemon.state.network),
           ),
         );
@@ -51,9 +52,10 @@ class ShareSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final muted = Theme.of(context).textTheme.bodySmall;
     final certificate = network.certificate;
-    // INFO: The certificate step only where the phone needs it: a project
-    // shared over HTTPS (features/sharing.feature, "The certificate step is
-    // shown only for a project with SSL").
+    // INFO: The certificate only where the phone needs it — a project shared
+    // over HTTPS — and folded away behind a notice: a phone needs it once, so
+    // the project's own QR code comes first every time (features/sharing.feature,
+    // "The certificate step is shown only for a project with SSL").
     final withCertificate = project.shared && project.ssl && certificate != null;
     final port = Uri.tryParse(project.shareUrl)?.port;
 
@@ -100,30 +102,19 @@ class ShareSheet extends StatelessWidget {
                       style: muted,
                     ),
                     const SizedBox(height: 20),
-                    Wrap(
-                      spacing: 32,
-                      runSpacing: 24,
-                      children: [
-                        if (withCertificate)
-                          _Step(
-                            title: '1 · Install the network certificate',
-                            url: network.certificateUrl,
-                            children: [_CertificateDetails(daemon: daemon, certificate: certificate)],
-                          ),
-                        _Step(
-                          title: withCertificate ? '2 · Open the project' : 'Open the project',
-                          url: project.shareUrl,
-                        ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Nothing loads? Phone and computer must be on the same network — a guest '
-                'network keeps devices apart. On Linux, a firewall may need '
-                'port ${port ?? ''} opened.',
-                style: muted,
-              ),
-            ],
+                    _Step(title: 'Open the project', url: project.shareUrl),
+                    if (withCertificate) ...[
+                      const SizedBox(height: 16),
+                      _CertificateNotice(daemon: daemon, network: network, certificate: certificate),
+                    ],
+                    const SizedBox(height: 20),
+                    Text(
+                      'Nothing loads? Phone and computer must be on the same network — a guest '
+                      'network keeps devices apart. On Linux, a firewall may need '
+                      'port ${port ?? ''} opened.',
+                      style: muted,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -139,6 +130,53 @@ class ShareSheet extends StatelessWidget {
                 FilledButton(onPressed: () => _close(context), child: const Text('Done')),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The notice under a project shared over HTTPS: the phone needs Wharf's
+/// network certificate once. Folded, it says so; expanded, it offers the
+/// certificate to scan.
+class _CertificateNotice extends StatelessWidget {
+  const _CertificateNotice({required this.daemon, required this.network, required this.certificate});
+
+  final Daemon daemon;
+  final Network network;
+  final NetworkCertificate certificate;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = WharfColors.of(context);
+    final shape = RoundedRectangleBorder(
+      side: BorderSide(color: colors.busy),
+      borderRadius: BorderRadius.circular(4),
+    );
+    // INFO: Icon and wording carry the warning; the colour only repeats it
+    // (dev/design-principles.md §4).
+    return Material(
+      color: colors.busy.withValues(alpha: WharfColors.actionTint),
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        shape: shape,
+        collapsedShape: shape,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        leading: Icon(Icons.warning_amber_rounded, color: colors.busy, semanticLabel: 'Note'),
+        title: const Text('HTTPS needs the network certificate on the phone'),
+        subtitle: Text(
+          'Once per phone. Already installed? Nothing to do.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        children: [
+          _Step(
+            title: 'Install the network certificate',
+            url: network.certificateUrl,
+            children: [_CertificateDetails(daemon: daemon, certificate: certificate)],
           ),
         ],
       ),
@@ -167,7 +205,9 @@ class _Step extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              Expanded(child: SelectableText(url, style: const TextStyle(fontFamily: 'monospace'))),
+              Expanded(
+                child: SelectableText(url, style: const TextStyle(fontFamily: 'monospace')),
+              ),
               IconButton(
                 tooltip: 'Copy $url',
                 icon: const Icon(Icons.copy, size: 16),
@@ -253,10 +293,7 @@ class _CertificateDetails extends StatelessWidget {
         Wrap(
           spacing: 4,
           children: [
-            TextButton(
-              onPressed: () => daemon.open(openFolder, certificate.file),
-              child: const Text('Show file'),
-            ),
+            TextButton(onPressed: () => daemon.open(openFolder, certificate.file), child: const Text('Show file')),
             TextButton(onPressed: () => _replace(context), child: const Text('Replace…')),
           ],
         ),

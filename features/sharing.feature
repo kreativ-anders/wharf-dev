@@ -70,8 +70,10 @@ Feature: Sharing a project on the network
     When the user shares a project without SSL
     Then the GUI shows its URL alone
     When the user shares a project with SSL
-    Then the GUI first offers the network certificate as a QR code, with its fingerprint to compare on the phone
-    And says in a few words how to install it, the same for every phone
+    Then the GUI shows its URL as a QR code first, as without SSL
+    And a notice below says the phone needs the network certificate once
+    And only when the user expands the notice does it offer the certificate as a QR code, with its fingerprint to compare on the phone
+    And say in a few words how to install it, the same for every phone
 
   Scenario: The network certificate authority cannot vouch for real websites
     When Wharf creates its network certificate authority

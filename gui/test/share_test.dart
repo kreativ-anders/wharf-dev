@@ -74,28 +74,38 @@ void main() {
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
 
-    // INFO: When the user shares a project with SSL, Then the GUI first offers
-    // the network certificate as a QR code, with its fingerprint to compare on
-    // the phone, And says in a few words how to install it, the same for
-    // every phone.
-    tester.view.physicalSize = const Size(1000, 1200);
+    // INFO: When the user shares a project with SSL, Then the GUI shows its
+    // URL as a QR code first, as without SSL, And a notice below says the
+    // phone needs the network certificate once.
+    tester.view.physicalSize = const Size(1000, 1400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final ssl = _ShareDaemon(_sharedSsl, _sharedSsl);
     await tester.pumpWidget(_window(ssl));
     await tester.tap(find.byTooltip('Show my-kirby-site on a phone'));
     await tester.pumpAndSettle();
-    expect(find.text('1 · Install the network certificate'), findsOneWidget);
-    expect(find.text('2 · Open the project'), findsOneWidget);
-    expect(_qr('http://192.168.1.23/wharf-network-ca.crt'), findsOneWidget);
+    expect(find.text('Open the project'), findsOneWidget);
     expect(_qr('https://192.168.1.23:8800'), findsOneWidget);
+    expect(find.text('HTTPS needs the network certificate on the phone'), findsOneWidget);
+    expect(
+      _qr('http://192.168.1.23/wharf-network-ca.crt'),
+      findsNothing,
+      reason: 'a phone that has the certificate should not scan past it',
+    );
+    expect(find.textContaining('AB CD EF'), findsNothing);
+
+    // INFO: And only when the user expands the notice does it offer the
+    // certificate as a QR code, with its fingerprint to compare on the phone,
+    // And say in a few words how to install it, the same for every phone.
+    await tester.tap(find.text('HTTPS needs the network certificate on the phone'));
+    await tester.pumpAndSettle();
+    expect(_qr('http://192.168.1.23/wharf-network-ca.crt'), findsOneWidget);
     expect(find.textContaining('AB CD EF'), findsOneWidget);
     expect(find.textContaining('install the certificate it offers'), findsOneWidget);
     expect(find.textContaining('Android'), findsNothing);
-    // INFO: The QR code is the certificate's step first, the project's second.
     expect(
-      tester.getTopLeft(_qr('http://192.168.1.23/wharf-network-ca.crt')).dx,
-      lessThan(tester.getTopLeft(_qr('https://192.168.1.23:8800')).dx),
+      tester.getTopLeft(_qr('https://192.168.1.23:8800')).dy,
+      lessThan(tester.getTopLeft(_qr('http://192.168.1.23/wharf-network-ca.crt')).dy),
     );
   });
 
