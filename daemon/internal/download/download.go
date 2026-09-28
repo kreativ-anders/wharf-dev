@@ -27,6 +27,10 @@ import (
 // ErrUnreachable reports a network failure or a non-200 response.
 var ErrUnreachable = errors.New("could not be fetched — check your internet connection")
 
+// ErrChecksum reports a file that arrived but does not match the checksum it
+// was published with.
+var ErrChecksum = errors.New("checksum mismatch")
+
 // Client is the HTTP client used when a caller supplies none. Builds are tens
 // of megabytes, so the timeout is generous.
 var Client = &http.Client{Timeout: 10 * time.Minute}
@@ -63,6 +67,24 @@ func JSON(ctx context.Context, client *http.Client, url string, out any) error {
 		return fmt.Errorf("%w: %s is not valid JSON: %v", ErrUnreachable, url, err)
 	}
 	return nil
+}
+
+// Text returns the body at url, which must be a small text file such as a
+// list of checksums. Anything past limit bytes is an error, not truncated.
+func Text(ctx context.Context, client *http.Client, url string, limit int64) (string, error) {
+	resp, err := get(ctx, client, url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrUnreachable, err)
+	}
+	if int64(len(b)) > limit {
+		return "", fmt.Errorf("%w: %s is larger than %d bytes", ErrUnreachable, url, limit)
+	}
+	return string(b), nil
 }
 
 // File saves the body at url to dest and returns its checksum. want is a hex
@@ -102,7 +124,7 @@ func File(ctx context.Context, client *http.Client, url, dest, want string) (str
 	sum := hex.EncodeToString(h.Sum(nil))
 	if want != "" && !strings.EqualFold(sum, want) {
 		os.Remove(dest)
-		return "", fmt.Errorf("checksum mismatch for %s: got %s, want %s", url, sum, want)
+		return "", fmt.Errorf("%w for %s: got %s, want %s", ErrChecksum, url, sum, want)
 	}
 	return sum, nil
 }

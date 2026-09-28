@@ -67,6 +67,11 @@ class EditorUnavailable implements Exception {
 Future<String?> Function(String www) pickFolder = (www) =>
     getDirectoryPath(initialDirectory: www.isEmpty ? null : www, confirmButtonText: 'Choose');
 
+/// Asks where to save a download, proposing [name]. A variable so widget
+/// tests can answer it without a dialog appearing.
+Future<String?> Function(String name) pickSaveLocation = (name) async =>
+    (await getSaveLocation(suggestedName: name, confirmButtonText: 'Save'))?.path;
+
 /// The tray's "Add project…": the chosen folder is added as it is, without a
 /// window. One outside www/ stays where it is
 /// (features/tray-actions.feature, "Adding a project via the tray").

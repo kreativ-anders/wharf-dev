@@ -35,11 +35,11 @@ Feature: Global settings
     And choosing a page shows that page alone
     And "General" holds the appearance, the config folder, "About", "Help" and "Reset Wharf…"
 
-  Scenario: General shows the version, and no update check yet
+  Scenario: General shows the version and a check for updates
     When the user opens Settings on "General"
     Then the version of the running Wharf is shown, as the daemon reports it
-    And "Check for updates" is shown but cannot be pressed
-    And a note says Wharf does not check for updates yet, and will only ever look when asked
+    And "Check for updates" can be pressed
+    And a note says Wharf only looks for updates when asked
 
   Scenario: General names the Wharf folder in use
     When the user opens Settings on "General"
@@ -60,17 +60,47 @@ Feature: Global settings
     Then "Help" links to Wharf's repository on GitHub, where issues are reported
     And following the link opens it in the browser
 
-  # The update check itself, fixed ahead of time so its constraints survive
-  # until it is built. Wharf has no published releases to check against yet.
-  @roadmap
   Scenario: Checking for updates on request
     Given Wharf publishes its releases on GitHub
     When the user presses "Check for updates" under "General"
     Then the daemon asks the public releases API for the newest version and compares it with its own
     And nothing is looked up at start or in the background — only on this press
-    And a failed lookup, offline or rate-limited, says to try again later instead of raising an error
-    And a newer release is offered as a download, saved only once it matches the release's SHA256SUMS
+    And a build number or commit after the version is ignored: 1.2.0+3b2c1ff is 1.2.0
+    And a newer release is named under the version, with "Download…"
+    And the same version or an older one says Wharf is up to date
+
+  Scenario: A failed update check says to try again later
+    Given the releases API cannot be reached, answers with an error, or names no version
+    When the user presses "Check for updates"
+    Then a notice says Wharf could not look for updates and to try again later
+    And no error dialog is shown, and the version shown stays as it was
+    # A build without a version ("dev") has nothing to compare: the notice
+    # says so instead of claiming an update.
+
+  Scenario: Downloading an update
+    Given the check found a newer release with a file for this system
+    When the user presses "Download…"
+    Then a save dialog proposes the release's file name: "-mac.dmg", "-linux-x64.AppImage" or "-windows-x64-setup.exe"
+    And the daemon downloads it beside the chosen place, and checks it against the release's SHA256SUMS
+    And only a file that matches is moved to the chosen place
+    And a window says it was downloaded and checked, to quit Wharf before installing it, and how
+    And "Show in folder" opens the folder it was saved in
     And Wharf never runs or installs what it downloaded
+    # The suffixes are the release workflow's (dev/releasing.md §3); renaming
+    # one there without here leaves that system with no download.
+
+  Scenario: A download that does not match is not kept
+    Given the check found a newer release with a file for this system
+    When the downloaded file does not match the release's SHA256SUMS
+    Then nothing is left at the chosen place, and no partial file beside it
+    And a notice says the download did not match and was not saved
+
+  Scenario: A release without a checked file for this system offers its page
+    Given the newest release has no file for this system, or no SHA256SUMS,
+      or names an address for one that is not an HTTPS address of GitHub's
+    When the check finds that release
+    Then "Open release page" is offered instead of "Download…"
+    And nothing is downloaded that could not be checked
 
   Scenario: Webserver status while nothing is running
     Given no project is running

@@ -22,6 +22,7 @@ import (
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/php"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/shellpath"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/supervisor"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/update"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/webserver"
 )
 
@@ -45,7 +46,33 @@ type harness struct {
 	web    *fakeWebInstaller
 	shell  *shellpath.Fake
 	net    *fakeNetwork
+	upd    *fakeUpdates
 	opts   Options
+}
+
+// fakeUpdates plays GitHub's releases: latest answers a lookup, and download
+// saves a file unless err says otherwise. calls counts lookups, to prove
+// nothing is looked up unasked.
+type fakeUpdates struct {
+	mu       sync.Mutex
+	latest   update.Release
+	err      error
+	download func(dest string) error
+	calls    int
+}
+
+func (f *fakeUpdates) Latest(context.Context) (update.Release, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+	return f.latest, f.err
+}
+
+func (f *fakeUpdates) Download(_ context.Context, _ update.Release, _, dest string) error {
+	if f.download != nil {
+		return f.download(dest)
+	}
+	return os.WriteFile(dest, []byte("the new app"), 0o644)
 }
 
 // fakeNetwork is this machine's address on the local network, as a test sets
@@ -189,7 +216,11 @@ func newHarness(t *testing.T, adjust ...func(*Options)) *harness {
 	// whoever runs the suite.
 	shell := shellpath.NewFake()
 	network := &fakeNetwork{addr: netip.MustParseAddr("192.168.1.23")}
+	// WARNING: Never the real one: the suite must not ask GitHub.
+	upd := &fakeUpdates{err: errors.New("no release staged")}
 	opts := Options{
+		Updates:    upd,
+		Version:    "1.1.0+3b2c1ff",
 		LANAddress: network.address,
 		Root:       root,
 		Store:      store,
@@ -224,7 +255,7 @@ func newHarness(t *testing.T, adjust ...func(*Options)) *harness {
 		_ = d.Shutdown(ctx)
 	})
 
-	return &harness{t: t, d: d, root: root, runner: runner, ports: ports, el: el, certs: ca, sup: sup, php: installer, web: webFake, shell: shell, net: network, opts: opts}
+	return &harness{t: t, d: d, root: root, runner: runner, ports: ports, el: el, certs: ca, sup: sup, php: installer, web: webFake, shell: shell, net: network, upd: upd, opts: opts}
 }
 
 func stubBinary(t *testing.T, path string) {

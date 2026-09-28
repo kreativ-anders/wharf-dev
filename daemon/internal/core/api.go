@@ -11,6 +11,7 @@ import (
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/php"
 	wruntime "github.com/kreativ-anders/wharf-dev/daemon/internal/runtime"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/shellpath"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/update"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/webserver"
 )
 
@@ -81,6 +82,8 @@ func (d *Daemon) Register(srv *ipc.Server) {
 		ipc.MethodInstallWebserver: true,
 		ipc.MethodSetupSSL:         true,
 		ipc.MethodPHPReleases:      true,
+		ipc.MethodCheckUpdates:     true,
+		ipc.MethodDownloadUpdate:   true,
 	}
 	handle := func(method string, h ipc.Handler) {
 		if background[method] {
@@ -102,6 +105,7 @@ func (d *Daemon) Register(srv *ipc.Server) {
 		ipc.MethodPHPReleases:      d.CheckPHPReleases,
 		ipc.MethodStopAll:          d.StopAll,
 		ipc.MethodReplaceNetworkCA: d.ReplaceNetworkCertificate,
+		ipc.MethodCheckUpdates:     d.CheckForUpdates,
 	} {
 		handle(method, d.stateAfter(act))
 	}
@@ -139,6 +143,7 @@ func (d *Daemon) Register(srv *ipc.Server) {
 	handle(ipc.MethodCustomConfigDelete, action(d, func(ctx context.Context, p customConfigParams) error {
 		return d.DeleteCustomConfig(ctx, p.Name, p.Webserver)
 	}))
+	handle(ipc.MethodDownloadUpdate, action(d, func(ctx context.Context, p pathParams) error { return d.DownloadUpdate(ctx, p.Path) }))
 	handle(ipc.MethodSetAppearance, action(d, func(_ context.Context, p modeParams) error { return d.SetAppearance(p.Mode) }))
 
 	// INFO: These answer with what they made or changed, not the snapshot.
@@ -245,7 +250,8 @@ func asIPCError(err error) error {
 	case errors.Is(err, elevate.ErrDeclined):
 		return ipc.Errorf(ipc.CodeElevationDenied, "%s", err.Error())
 	case errors.Is(err, php.ErrDownload), errors.Is(err, certs.ErrFetch),
-		errors.Is(err, webserver.ErrFetch):
+		errors.Is(err, webserver.ErrFetch), errors.Is(err, update.ErrLookup),
+		errors.Is(err, update.ErrFetch):
 		return ipc.Errorf(ipc.CodeOffline, "%s", err.Error())
 	case errors.Is(err, certs.ErrMkcertMissing):
 		return ipc.Errorf(ipc.CodeMissingBinary, "%s", err.Error())

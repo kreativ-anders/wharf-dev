@@ -39,7 +39,7 @@ one is renamed, deleted or left unimplemented. See [CLAUDE.md](CLAUDE.md) §1.
 | Webservers | Adopted where installed (a Mac's own Apache is used out of the box), or installed from Settings: nginx on Linux/Windows by download, on macOS via Homebrew; Apache on Windows by download, on Linux with the distribution's package manager. |
 | Config templates | nginx and Apache rules for Kirby, Laravel, WordPress, Statamic, Symfony, Craft CMS and Drupal built in; each project picks one, and Settings → Webserver edits them or adds your own. |
 | Appearance | Kirby-plain light and dark themes, or follow the system. |
-| Updates | Settings → General shows the running version. "Check for updates" is there but disabled until releases exist; its behaviour is specified as `@roadmap`. |
+| Updates | Settings → General shows the running version. "Check for updates" asks GitHub for the newest release — only on that press — and downloads the file for this system once it matches the release's `SHA256SUMS`. Wharf never runs what it downloaded. |
 | Releases | A release workflow builds and publishes all three platforms from one version in `gui/pubspec.yaml` (`dev/releasing.md`). Released on GitHub. |
 | Packaging | macOS: a DMG, signed and notarised when the credentials are there. Linux: an AppImage. Windows: an Inno Setup installer, deliberately not code-signed (SmartScreen warns; `dev/releasing.md`). |
 

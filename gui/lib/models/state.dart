@@ -16,6 +16,7 @@ class WharfState {
     this.version = '',
     this.configTemplates = const [],
     this.network = Network.empty,
+    this.update = WharfUpdate.empty,
   });
 
   final String root;
@@ -51,6 +52,9 @@ class WharfState {
   /// Sharing on the local network (features/sharing.feature).
   final Network network;
 
+  /// What "Check for updates" last found (features/settings.feature).
+  final WharfUpdate update;
+
   static const empty = WharfState(
     root: '',
     www: '',
@@ -85,6 +89,49 @@ class WharfState {
         .map((e) => ConfigTemplate.fromJson(e as Map<String, dynamic>))
         .toList(),
     network: Network.fromJson(json['network'] as Map<String, dynamic>? ?? const {}),
+    update: WharfUpdate.fromJson(json['update'] as Map<String, dynamic>? ?? const {}),
+  );
+}
+
+/// What "Check for updates" last found; nothing until the user asks
+/// (features/settings.feature, "Checking for updates on request").
+class WharfUpdate {
+  const WharfUpdate({
+    this.checked = false,
+    this.latest = '',
+    this.newer = false,
+    this.file = '',
+    this.page = '',
+    this.checking = false,
+    this.downloading = false,
+  });
+
+  /// True once a lookup has answered since the daemon started.
+  final bool checked;
+
+  /// The newest release's version, and whether it is newer than this one —
+  /// the daemon compares, so the window and the daemon cannot disagree.
+  final String latest;
+  final bool newer;
+
+  /// The release's file for this system, checked against its SHA256SUMS;
+  /// empty when there is none, and [page] is offered instead.
+  final String file;
+  final String page;
+
+  final bool checking;
+  final bool downloading;
+
+  static const empty = WharfUpdate();
+
+  factory WharfUpdate.fromJson(Map<String, dynamic> json) => WharfUpdate(
+    checked: json['checked'] as bool? ?? false,
+    latest: json['latest'] as String? ?? '',
+    newer: json['newer'] as bool? ?? false,
+    file: json['file'] as String? ?? '',
+    page: json['page'] as String? ?? '',
+    checking: json['checking'] as bool? ?? false,
+    downloading: json['downloading'] as bool? ?? false,
   );
 }
 

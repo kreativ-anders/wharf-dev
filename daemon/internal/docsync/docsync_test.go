@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/update"
 )
 
 // repo is the repository root, relative to this package.
@@ -152,7 +154,7 @@ func sorted(set map[string]bool) []string {
 }
 
 // Settings shows the version wharfd was stamped with (features/settings.feature,
-// "General shows the version, and no update check yet"). A build that forgets
+// "General shows the version and a check for updates"). A build that forgets
 // the stamp reports "dev" — which the Windows build did until the stamp was
 // added to its CMake target.
 func TestEveryDaemonBuildIsStamped(t *testing.T) {
@@ -270,5 +272,24 @@ func TestDescribeIsWellFormed(t *testing.T) {
 	got := strings.TrimSpace(string(out))
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+(\+[0-9a-f]{4,}(\.dirty)?)?$`).MatchString(got) {
 		t.Errorf("version.sh describe = %q, want X.Y.Z or X.Y.Z+<commit>[.dirty]", got)
+	}
+}
+
+// The update check picks the release file by its suffix (features/
+// settings.feature, "Downloading an update"). A suffix the release workflow
+// no longer writes leaves that system with nothing to download, and only a
+// real release would show it.
+func TestTheUpdateCheckLooksForWhatTheWorkflowPublishes(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(repo, ".github/workflows/release.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sys := range [][2]string{{"darwin", "arm64"}, {"linux", "amd64"}, {"windows", "amd64"}} {
+		suffix := update.Suffix(sys[0], sys[1])
+		// INFO: Inno Setup adds the .exe to the name the workflow passes it.
+		if !strings.Contains(string(b), strings.TrimSuffix(suffix, ".exe")) {
+			t.Errorf("release.yml writes no file ending in %q, which the update check looks for on %s.\n"+
+				"    Rename both together (dev/releasing.md §3).", suffix, sys[0])
+		}
 	}
 }

@@ -22,6 +22,7 @@ import (
 	wruntime "github.com/kreativ-anders/wharf-dev/daemon/internal/runtime"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/shellpath"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/supervisor"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/update"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/webserver"
 )
 
@@ -113,6 +114,9 @@ type Daemon struct {
 	linkTarget string
 	linkSynced bool
 
+	// updates is what "Check for updates" last found (settings.feature).
+	updates updates
+
 	onState atomic.Pointer[func(State)]
 }
 
@@ -148,8 +152,11 @@ type Options struct {
 	Now func() time.Time
 	// Version is what wharfd was built as, published in the snapshot so the
 	// window and the tray name the same one (settings.feature, "General
-	// shows the version, and no update check yet").
+	// shows the version and a check for updates").
 	Version string
+	// Updates looks up Wharf's newest release and downloads it. The default
+	// one asks GitHub; tests supply one that never touches the network.
+	Updates update.Source
 	// LANAddress finds this machine's address on the local network. The
 	// default asks the OS; tests supply one, so the suite never depends on
 	// the network it runs on.
@@ -250,6 +257,10 @@ func New(opts Options) (*Daemon, error) {
 		version:      opts.Version,
 		shell:        shell,
 		noTerminal:   opts.NoTerminal,
+	}
+	d.updates.src = opts.Updates
+	if d.updates.src == nil {
+		d.updates.src = update.GitHub{}
 	}
 	d.setTerminalPlaces(nil)
 	if d.lanAddress == nil {

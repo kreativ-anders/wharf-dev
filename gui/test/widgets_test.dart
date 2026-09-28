@@ -47,6 +47,32 @@ class _SlowDaemon extends Daemon {
   Future<void> startProject(String name) => open((_) => done, name);
 }
 
+/// A fixture daemon whose update check answers with [found], and whose
+/// download records where it was asked to save.
+class _UpdateDaemon extends Daemon {
+  _UpdateDaemon(String json, this.found) : super(root: '/tmp/wharf-test') {
+    state = WharfState.fromJson(jsonDecode(json) as Map<String, dynamic>);
+  }
+
+  final Map<String, dynamic> found;
+  var checks = 0;
+  final saved = <String>[];
+
+  @override
+  Future<void> checkForUpdates() async {
+    checks++;
+    final json = jsonDecode(_twoProjects) as Map<String, dynamic>;
+    state = WharfState.fromJson({...json, 'update': found});
+    notifyListeners();
+  }
+
+  @override
+  Future<bool> downloadUpdate(String path) async {
+    saved.add(path);
+    return true;
+  }
+}
+
 /// A fixture daemon that records every reset it is asked for.
 class _ResetDaemon extends Daemon {
   _ResetDaemon(String json) : super(root: '/tmp/wharf-test') {
@@ -584,21 +610,101 @@ void main() {
     expect(find.byTooltip('Webserver'), findsOneWidget);
   });
 
-  // features/settings.feature — "General shows the version, and no update
-  // check yet"
-  testWidgets('General shows the version and an update check that is off', (tester) async {
+  // features/settings.feature — "General shows the version and a check for
+  // updates"
+  testWidgets('General shows the version and a check for updates', (tester) async {
     await showSettings(tester, fixture(_twoProjects));
 
     expect(find.text('Wharf v0.1.0'), findsOneWidget);
     final check = tester.widget<OutlinedButton>(
       find.widgetWithText(OutlinedButton, 'Check for updates'),
     );
-    expect(check.onPressed, isNull, reason: 'the update check is not built yet');
-    expect(find.textContaining('only look when you ask'), findsOneWidget);
+    expect(check.onPressed, isNotNull);
+    expect(find.textContaining('only looks for updates when you ask'), findsOneWidget);
+    expect(find.textContaining('up to date'), findsNothing, reason: 'nothing is known before a check');
 
     // INFO: A GUI no daemon has answered yet says so, rather than showing "Wharf ".
     await showSettings(tester, fixture('{}'));
     expect(find.text('Version unknown'), findsOneWidget);
+  });
+
+  // features/settings.feature — "Checking for updates on request"
+  testWidgets('a check names a newer release, or says Wharf is up to date', (tester) async {
+    final daemon = _UpdateDaemon(_twoProjects, {
+      'checked': true,
+      'latest': '1.2.0',
+      'newer': true,
+      'file': 'Wharf-1.2.0-mac.dmg',
+    });
+    await showSettings(tester, daemon);
+    expect(daemon.checks, 0, reason: 'nothing is looked up before the press');
+
+    await tester.tap(find.text('Check for updates'));
+    await tester.pump();
+    expect(daemon.checks, 1);
+    expect(find.text('Wharf 1.2.0 is available.'), findsOneWidget);
+    expect(find.text('Download…'), findsOneWidget);
+
+    final current = _UpdateDaemon(_twoProjects, {'checked': true, 'latest': '0.1.0'});
+    await showSettings(tester, current);
+    await tester.tap(find.text('Check for updates'));
+    await tester.pump();
+    expect(find.text('Wharf is up to date.'), findsOneWidget);
+    expect(find.text('Download…'), findsNothing);
+  });
+
+  // features/settings.feature — "Downloading an update"
+  testWidgets('Download… proposes the release file and says what to do next', (tester) async {
+    final previous = pickSaveLocation;
+    addTearDown(() => pickSaveLocation = previous);
+    final proposed = <String>[];
+    pickSaveLocation = (name) async {
+      proposed.add(name);
+      return '/Users/x/Downloads/$name';
+    };
+    final opened = captureOpened();
+    final daemon = _UpdateDaemon(_twoProjects, {
+      'checked': true,
+      'latest': '1.2.0',
+      'newer': true,
+      'file': 'Wharf-1.2.0-mac.dmg',
+    });
+    await showSettings(tester, daemon);
+    await tester.tap(find.text('Check for updates'));
+    await tester.pump();
+
+    await tester.tap(find.text('Download…'));
+    await tester.pumpAndSettle();
+    expect(proposed, ['Wharf-1.2.0-mac.dmg']);
+    expect(daemon.saved, ['/Users/x/Downloads/Wharf-1.2.0-mac.dmg']);
+    expect(find.text('Update downloaded and checked'), findsOneWidget);
+    expect(find.textContaining('Quit Wharf before installing it'), findsOneWidget);
+
+    await tester.tap(find.text('Show in folder'));
+    await tester.pumpAndSettle();
+    expect(opened, ['/Users/x/Downloads']);
+  });
+
+  // features/settings.feature — "A release without a checked file for this
+  // system offers its page"
+  testWidgets('a release with no file to check offers its page instead', (tester) async {
+    final previous = openLink;
+    addTearDown(() => openLink = previous);
+    final links = <String>[];
+    openLink = (url) async => links.add(url);
+    final daemon = _UpdateDaemon(_twoProjects, {
+      'checked': true,
+      'latest': '1.2.0',
+      'newer': true,
+      'page': 'https://github.com/kreativ-anders/wharf-dev/releases/tag/v1.2.0',
+    });
+    await showSettings(tester, daemon);
+    await tester.tap(find.text('Check for updates'));
+    await tester.pump();
+
+    expect(find.text('Download…'), findsNothing);
+    await tester.tap(find.text('Open release page'));
+    expect(links, ['https://github.com/kreativ-anders/wharf-dev/releases/tag/v1.2.0']);
   });
 
   // features/settings.feature — "General names the Wharf folder in use"

@@ -155,6 +155,7 @@ wharf/
 │       │   ├── userfiles.go   custom configs and php.ini: read, saved, applied on save
 │       │   ├── configtemplates.go  config templates: listed, read, saved, created, deleted
 │       │   ├── terminal.go    bin/path follows the default PHP; "Use in terminal" on and off
+│       │   ├── update.go      "Check for updates" on request; the checked download
 │       │   ├── errors.go      what the user got wrong, told apart from what the daemon did
 │       │   ├── state.go       the snapshot the GUI renders
 │       │   ├── api.go         IPC method wiring
@@ -173,6 +174,7 @@ wharf/
 │       ├── shellpath/         PLATFORM-SPECIFIC: bin/path's php, and bin/path on the user's PATH (startup files / user environment)
 │       ├── specsync/          THE SYNC GUARD (§1)
 │       ├── supervisor/        process lifecycle, port waiting, state machine
+│       ├── update/            Wharf's newest release on GitHub; its file, checked against SHA256SUMS
 │       ├── watchdog/          daemon exits when the app that started it is gone
 │       └── webserver/         find nginx/Apache (Wharf's, Homebrew's, the OS's), install them
 │
@@ -277,7 +279,7 @@ that records it changes in the same commit.
 - The app stops the daemon by asking over IPC, never by a signal: on Windows a
   signal is `TerminateProcess` (`daemon/README.md`).
 - The macOS sandbox stays off (§4 below).
-- The update check, once built, looks only when asked and never runs what it
+- The update check looks only when asked and never runs what it
   downloaded (`features/settings.feature`, `dev/architecture.md` §4b).
 - One version source, `gui/pubspec.yaml`; one GitHub workflow, and no push or
   PR CI (`dev/releasing.md`).

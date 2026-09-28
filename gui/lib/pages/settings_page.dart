@@ -342,10 +342,9 @@ class _ConfigSection extends StatelessWidget {
 }
 
 /// The running version and where it runs: the version, selectable for a
-/// bug report, the update check that is not built yet (features/settings.feature,
-/// "General shows the version, and no update check yet") and the Wharf folder in
-/// use ("General names the Wharf folder in use"). The update button is shown disabled rather
-/// than left out, and the note says why, so nobody goes looking for it.
+/// bug report, the check for updates (features/settings.feature, "General
+/// shows the version and a check for updates") and the Wharf folder in use
+/// ("General names the Wharf folder in use").
 class _AboutSection extends StatelessWidget {
   const _AboutSection({required this.daemon, required this.state});
 
@@ -363,12 +362,9 @@ class _AboutSection extends StatelessWidget {
         children: [
           SelectableText(state.version.isEmpty ? 'Version unknown' : 'Wharf ${state.version}'),
           const SizedBox(height: 4),
-          Text(
-            'Wharf does not check for updates yet. When it does, it will only look when you ask.',
-            style: small,
-          ),
+          Text('Wharf only looks for updates when you ask.', style: small),
           const SizedBox(height: 12),
-          const OutlinedButton(onPressed: null, child: Text('Check for updates')),
+          _UpdateCheck(daemon: daemon, update: state.update),
           const SizedBox(height: 20),
           Text('Wharf folder', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 4),
@@ -385,6 +381,109 @@ class _AboutSection extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// "Check for updates" and what it found: a newer release with "Download…",
+/// or its page when it has no file that can be checked, or that Wharf is up
+/// to date (features/settings.feature).
+class _UpdateCheck extends StatelessWidget {
+  const _UpdateCheck({required this.daemon, required this.update});
+
+  final Daemon daemon;
+  final WharfUpdate update;
+
+  @override
+  Widget build(BuildContext context) {
+    final busy = update.checking || update.downloading;
+    final found = update.checked
+        ? (update.newer ? 'Wharf ${update.latest} is available.' : 'Wharf is up to date.')
+        : null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (found != null) ...[
+          // INFO: A live region, so a screen reader hears the answer to the press.
+          Semantics(liveRegion: true, child: Text(found)),
+          const SizedBox(height: 8),
+        ],
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            OutlinedButton(
+              onPressed: busy ? null : daemon.checkForUpdates,
+              child: Text(update.checking ? 'Checking…' : 'Check for updates'),
+            ),
+            if (update.newer && update.file.isNotEmpty)
+              FilledButton.icon(
+                onPressed: busy ? null : () => _download(context),
+                icon: update.downloading
+                    ? const SizedBox.square(dimension: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.download, size: 16),
+                label: Text(update.downloading ? 'Downloading…' : 'Download…'),
+              )
+            else if (update.newer && update.page.isNotEmpty)
+              OutlinedButton.icon(
+                onPressed: () => openLink(update.page),
+                icon: const Icon(Icons.open_in_new, size: 16),
+                label: const Text('Open release page'),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _download(BuildContext context) async {
+    final path = await pickSaveLocation(update.file);
+    if (path == null) return;
+    final saved = await daemon.downloadUpdate(path);
+    if (!saved || !context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => _UpdateDownloaded(path: path, daemon: daemon),
+    );
+  }
+}
+
+/// What to do with the file Wharf downloaded and checked. Wharf never runs it
+/// (features/settings.feature, "Downloading an update").
+class _UpdateDownloaded extends StatelessWidget {
+  const _UpdateDownloaded({required this.path, required this.daemon});
+
+  final String path;
+  final Daemon daemon;
+
+  @override
+  Widget build(BuildContext context) {
+    // WARNING: The "quit first" sentence stays outside the per-system step:
+    // finanzgecko lost it on Linux once when each system had its own text.
+    final step = Platform.isMacOS
+        ? 'Then open the file and drag Wharf into Applications, over the old one.'
+        : Platform.isWindows
+        ? 'Then run the installer; it replaces the old version.'
+        : 'Then make the file executable and start it instead of the old one.';
+    return AlertDialog(
+      title: const Text('Update downloaded and checked'),
+      content: Text(
+        'The file matches the checksum published with the release.\n\n'
+        'Quit Wharf before installing it — replacing a running Wharf can fail. $step\n\n'
+        'Your projects and settings in the Wharf folder stay as they are.',
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        FilledButton.icon(
+          onPressed: () {
+            Navigator.pop(context);
+            daemon.open(openFolder, File(path).parent.path);
+          },
+          icon: const Icon(Icons.folder_open, size: 16),
+          label: const Text('Show in folder'),
+        ),
+      ],
     );
   }
 }

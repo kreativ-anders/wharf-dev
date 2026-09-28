@@ -85,9 +85,9 @@ Rules the pipeline keeps, each learned the hard way in finanzgecko:
   commit. Raise the pin on purpose, after `make check` passes locally.
 - **One versioned file per platform**, and no unversioned copy beside it.
   The file-name suffixes (`-mac.dmg`, `-linux-x64.AppImage`,
-  `-windows-x64-setup.exe`) are what the update check will look for
-  (`features/settings.feature`, "Checking for updates on request"), so they
-  are renamed together or not at all.
+  `-windows-x64-setup.exe`) are what the update check looks for
+  (`update.Suffix` in `daemon/internal/update`), so they are renamed
+  together or not at all.
 - **The VC++ runtime DLLs ship next to the Windows exe.** Flutter's template
   links them dynamically. finanzgecko's winget validation VM, which lacked
   them, failed at start with `STATUS_DLL_NOT_FOUND`.
@@ -168,5 +168,3 @@ the job, including after a failure.
   rather than publish an unsigned DMG.
 - **The repository must be public** for anyone but its members to download
   a release, and for the update check to see one.
-- The update check stays `@roadmap` until there is a release to check
-  against; its rules are already fixed in `features/settings.feature`.

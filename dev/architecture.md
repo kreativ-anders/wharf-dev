@@ -280,16 +280,38 @@ Each download is staged beside its destination and renamed into place only
 when complete, so a failure leaves no half-installed folder. The newest patch
 of a PHP minor version is found from each source's index, not hard-coded.
 
-Wharf itself is not updated from inside the app yet. Settings → General shows
-the version `wharfd` was built as (`-X main.version`, from
-`gui/pubspec.yaml` through `tool/version.sh` — see `dev/releasing.md`) —
-the daemon publishes it, so the window and the tray cannot name different
-ones — and a "Check for updates" button that stays disabled until there are
-releases to check against. When it is built (`features/settings.feature`,
-"Checking for updates on request", `@roadmap`), the rule above holds for it
-too: it looks only when the user asks, never at start or in the background;
-a download is saved only once it matches the release's checksums; and Wharf
-never runs what it downloaded.
+Settings → General shows the version `wharfd` was built as
+(`-X main.version`, from `gui/pubspec.yaml` through `tool/version.sh` — see
+`dev/releasing.md`) — the daemon publishes it, so the window and the tray
+cannot name different ones — and "Check for updates"
+(`features/settings.feature`, `internal/update`). The rule above holds for
+it too:
+
+- **It looks only when the user asks**, never at start or in the
+  background. The daemon asks GitHub's public releases API for the newest
+  release and compares versions itself; what follows the version (`+3b2c1ff`,
+  `.dirty`) is ignored, and an unstamped `dev` build refuses to compare. The
+  answer goes into the snapshot (`update`), so it is the daemon's state like
+  any other, and is gone after a restart.
+- **A failed lookup is one sentence**: try again later. Offline, rate
+  limited and GitHub down are not told apart; the cause goes to the log.
+- **The file is the release workflow's**, picked by its suffix
+  (`dev/releasing.md` §3). A release without one for this system, without a
+  `SHA256SUMS`, or naming an address that is not an HTTPS address of
+  GitHub's offers its page instead: nothing is guessed, and a host that is
+  not GitHub's is never contacted.
+- **Saved only once it matches.** The GUI asks where to save it; the daemon
+  downloads it beside that place, hidden, checks it against the release's
+  `SHA256SUMS` and only then renames it into place. A mismatch leaves
+  nothing behind. `SHA256SUMS` is unsigned, so this proves the file is
+  intact, not who made it (`dev/releasing.md` §3).
+- **Wharf never runs what it downloaded.** The window says to quit Wharf
+  and install it by hand; on Windows, running it would mean launching an
+  unsigned executable fresh from the network.
+
+This is finanzgecko's update check, moved into the daemon: there the app
+fetched, here the daemon does, because it owns the state and already has
+the download and checksum code for PHP and mkcert.
 
 Neither nginx.org nor apache.org publishes portable builds, so webservers
 come from the best source each platform has, and a copy already on the

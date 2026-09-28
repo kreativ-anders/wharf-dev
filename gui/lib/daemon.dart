@@ -25,6 +25,8 @@ class Method {
   static const installWebserver = 'services.installWebserver';
   static const detectWebservers = 'services.detectWebservers';
   static const setAppearance = 'settings.setAppearance';
+  static const checkUpdates = 'settings.checkUpdates';
+  static const downloadUpdate = 'settings.downloadUpdate';
   static const reset = 'settings.reset';
   static const stopAll = 'services.stopAll';
   static const projectAdd = 'projects.add';
@@ -209,6 +211,24 @@ class Daemon extends ChangeNotifier {
   /// Light, dark or the system's — stored by the daemon like every other
   /// setting, so the window keeps no state of its own.
   Future<void> setAppearance(String mode) => _act(Method.setAppearance, {'mode': mode});
+
+  /// Asks the daemon to look for a newer Wharf — the only time it ever looks.
+  /// A failed lookup becomes the notice saying to try again later
+  /// (features/settings.feature, "A failed update check says to try again later").
+  Future<void> checkForUpdates() => _act(Method.checkUpdates);
+
+  /// Has the daemon save the newest release's file to [path], once it matches
+  /// the release's SHA256SUMS. True when it did; otherwise the notice says why
+  /// (features/settings.feature, "Downloading an update").
+  Future<bool> downloadUpdate(String path) async {
+    var saved = false;
+    await _guard(() async {
+      final result = await _require().call(Method.downloadUpdate, {'path': path});
+      _set(() => state = WharfState.fromJson(result));
+      saved = true;
+    });
+    return saved;
+  }
 
   /// Installs mkcert and asks once to trust its certificate authority. A
   /// declined prompt is a notice, not an error (features/local-ssl.feature).

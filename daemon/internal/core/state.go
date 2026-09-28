@@ -47,6 +47,8 @@ type State struct {
 	ConfigTemplates []ConfigTemplate `json:"config_templates"`
 	// Network is what sharing on the local network shows (sharing.feature).
 	Network Network `json:"network"`
+	// Update is what "Check for updates" last found (settings.feature).
+	Update Update `json:"update"`
 }
 
 // Services is the global service state shown in Settings. Only Webserver and
@@ -203,6 +205,7 @@ func (d *Daemon) snapshot(cfg *config.Config) State {
 
 		ConfigTemplates: d.configTemplates(cfg),
 		Network:         d.networkState(cfg),
+		Update:          d.updateState(),
 	}
 
 	wsState := supervisor.StateStopped

@@ -4,16 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/config"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/download"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/ipc"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/php"
 	"github.com/kreativ-anders/wharf-dev/daemon/internal/runtime"
+	"github.com/kreativ-anders/wharf-dev/daemon/internal/update"
 )
 
 // features/settings.feature — "Changing the global active webserver"
@@ -283,8 +288,8 @@ func TestChoosingLightOrDarkAppearance(t *testing.T) {
 	}
 }
 
-// features/settings.feature — "General shows the version, and no update check
-// yet"
+// features/settings.feature — "General shows the version and a check for
+// updates"
 func TestGeneralShowsTheVersion(t *testing.T) {
 	h := newHarness(t, func(o *Options) { o.Version = "v1.2.3" })
 
@@ -428,5 +433,175 @@ func TestResettingWharfAndDeletingTheProjectsInWWW(t *testing.T) {
 	// INFO: And a folder added from elsewhere is still left where it is
 	if _, err := os.Stat(elsewhere); err != nil {
 		t.Fatalf("a folder outside www/ was deleted: %v", err)
+	}
+}
+
+// release stages a newer release with a file for the system the suite runs
+// on, and a SHA256SUMS to check it against.
+func (h *harness) release(version string) string {
+	h.t.Helper()
+	suffix := update.Suffix(goruntime.GOOS, goruntime.GOARCH)
+	if suffix == "" {
+		h.t.Skipf("the release workflow builds no file for %s/%s", goruntime.GOOS, goruntime.GOARCH)
+	}
+	file := "Wharf-" + version + suffix
+	h.upd.latest = update.Release{
+		Version: version,
+		Page:    "https://github.com/kreativ-anders/wharf-dev/releases/tag/v" + version,
+		Files:   map[string]string{file: "https://github.com/x/" + file, update.Checksums: "https://github.com/x/SHA256SUMS"},
+	}
+	h.upd.err = nil
+	return file
+}
+
+// features/settings.feature — "Checking for updates on request"
+func TestCheckingForUpdatesOnRequest(t *testing.T) {
+	h := newHarness(t) // runs 1.1.0+3b2c1ff
+
+	// INFO: And nothing is looked up at start or in the background — only on this press
+	if h.upd.calls != 0 || h.d.State().Update.Checked {
+		t.Fatalf("looked up %d times before the press", h.upd.calls)
+	}
+
+	// INFO: Then the daemon asks the public releases API … and compares it with its own
+	file := h.release("1.2.0")
+	if err := h.d.CheckForUpdates(h.ctx()); err != nil {
+		t.Fatal(err)
+	}
+	st := h.d.State().Update
+	if !st.Checked || !st.Newer || st.Latest != "1.2.0" || st.File != file || st.Checking {
+		t.Fatalf("update = %+v, want 1.2.0 offered as %s", st, file)
+	}
+	if h.upd.calls != 1 {
+		t.Errorf("looked up %d times, want once", h.upd.calls)
+	}
+
+	// INFO: And a build number or commit after the version is ignored
+	h.release("1.1.0")
+	if err := h.d.CheckForUpdates(h.ctx()); err != nil {
+		t.Fatal(err)
+	}
+	if st := h.d.State().Update; !st.Checked || st.Newer || st.File != "" {
+		t.Fatalf("update = %+v, want up to date: 1.1.0+3b2c1ff is 1.1.0", st)
+	}
+
+	// INFO: And the same version or an older one says Wharf is up to date
+	h.release("1.0.9")
+	if err := h.d.CheckForUpdates(h.ctx()); err != nil {
+		t.Fatal(err)
+	}
+	if st := h.d.State().Update; st.Newer {
+		t.Fatalf("update = %+v, an older release is not newer", st)
+	}
+	raw, _ := json.Marshal(h.d.State())
+	if !strings.Contains(string(raw), `"update":{"checked":true`) {
+		t.Fatalf("snapshot does not publish the update under the key the GUI reads:\n%s", raw)
+	}
+}
+
+// features/settings.feature — "A failed update check says to try again later"
+func TestAFailedUpdateCheckSaysToTryAgainLater(t *testing.T) {
+	h := newHarness(t)
+	h.release("1.2.0")
+	if err := h.d.CheckForUpdates(h.ctx()); err != nil {
+		t.Fatal(err)
+	}
+
+	h.upd.err = fmt.Errorf("%w (403 rate limited)", update.ErrLookup)
+	err := h.d.CheckForUpdates(h.ctx())
+	var ipcErr *ipc.Error
+	if !errors.As(asIPCError(err), &ipcErr) || ipcErr.Code != ipc.CodeOffline || !strings.Contains(ipcErr.Message, "try again later") {
+		t.Fatalf("err = %v, want an offline notice saying to try again later", asIPCError(err))
+	}
+	if strings.Contains(ipcErr.Message, "403") {
+		t.Errorf("notice %q shows the cause, which nothing but waiting fixes", ipcErr.Message)
+	}
+	// INFO: And the version shown stays as it was
+	if st := h.d.State().Update; st.Latest != "1.2.0" || st.Checking {
+		t.Errorf("update = %+v, want the last answer kept", st)
+	}
+
+	// INFO: A build without a version has nothing to compare.
+	dev := newHarness(t, func(o *Options) { o.Version = "dev" })
+	var invalidErr *InvalidError
+	if err := dev.d.CheckForUpdates(dev.ctx()); !errors.As(err, &invalidErr) || dev.upd.calls != 0 {
+		t.Errorf("err = %v after %d lookups, want a refusal before any lookup", err, dev.upd.calls)
+	}
+}
+
+// features/settings.feature — "Downloading an update"
+func TestDownloadingAnUpdate(t *testing.T) {
+	h := newHarness(t)
+	file := h.release("1.2.0")
+	dest := filepath.Join(t.TempDir(), file)
+
+	// INFO: Nothing to download before a check found something.
+	var conflictErr *ConflictError
+	if err := h.d.DownloadUpdate(h.ctx(), dest); !errors.As(err, &conflictErr) {
+		t.Fatalf("err = %v before any check, want a conflict", err)
+	}
+	if err := h.d.CheckForUpdates(h.ctx()); err != nil {
+		t.Fatal(err)
+	}
+	var invalidErr *InvalidError
+	if err := h.d.DownloadUpdate(h.ctx(), file); !errors.As(err, &invalidErr) {
+		t.Errorf("err = %v for a relative path, want it refused", err)
+	}
+
+	var during Update
+	h.upd.download = func(dest string) error {
+		during = h.d.State().Update
+		return os.WriteFile(dest, []byte("the new app"), 0o644)
+	}
+	if err := h.d.DownloadUpdate(h.ctx(), dest); err != nil {
+		t.Fatal(err)
+	}
+	if !during.Downloading || h.d.State().Update.Downloading {
+		t.Errorf("downloading during = %v, after = %v; want true, then false", during.Downloading, h.d.State().Update.Downloading)
+	}
+	if b, err := os.ReadFile(dest); err != nil || string(b) != "the new app" {
+		t.Fatalf("saved %q, %v", b, err)
+	}
+	// INFO: And Wharf never runs or installs what it downloaded
+	if len(h.runner.StartedIDs()) != 0 {
+		t.Errorf("started %v after a download", h.runner.StartedIDs())
+	}
+}
+
+// features/settings.feature — "A download that does not match is not kept"
+func TestADownloadThatDoesNotMatchIsNotKept(t *testing.T) {
+	h := newHarness(t)
+	h.release("1.2.0")
+	if err := h.d.CheckForUpdates(h.ctx()); err != nil {
+		t.Fatal(err)
+	}
+	h.upd.download = func(string) error { return fmt.Errorf("%w for x", download.ErrChecksum) }
+
+	err := h.d.DownloadUpdate(h.ctx(), filepath.Join(t.TempDir(), "Wharf.dmg"))
+	var conflictErr *ConflictError
+	if !errors.As(err, &conflictErr) || !strings.Contains(err.Error(), "was not saved") {
+		t.Fatalf("err = %v, want a notice that the download did not match and was not saved", err)
+	}
+	// INFO: That nothing is left on disk is the update package's to prove
+	// (TestDownloadKeepsNothingThatDoesNotMatch); this proves the sentence.
+}
+
+// features/settings.feature — "A release without a checked file for this
+// system offers its page"
+func TestAReleaseWithoutACheckedFileOffersItsPage(t *testing.T) {
+	h := newHarness(t)
+	h.release("1.2.0")
+	delete(h.upd.latest.Files, update.Checksums)
+	if err := h.d.CheckForUpdates(h.ctx()); err != nil {
+		t.Fatal(err)
+	}
+	st := h.d.State().Update
+	if !st.Newer || st.File != "" || st.Page == "" {
+		t.Fatalf("update = %+v, want 1.2.0 offered by its page, with no file", st)
+	}
+	downloaded := false
+	h.upd.download = func(string) error { downloaded = true; return nil }
+	if err := h.d.DownloadUpdate(h.ctx(), filepath.Join(t.TempDir(), "x")); err == nil || downloaded {
+		t.Errorf("err = %v, downloaded = %v; want nothing downloaded that could not be checked", err, downloaded)
 	}
 }

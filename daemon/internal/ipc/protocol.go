@@ -47,8 +47,13 @@ const (
 	MethodInstallWebserver = "services.installWebserver"
 	MethodDetectWebservers = "services.detectWebservers"
 	MethodSetAppearance    = "settings.setAppearance"
-	MethodReset            = "settings.reset"
-	MethodStopAll          = "services.stopAll"
+	// MethodCheckUpdates asks GitHub for Wharf's newest release, only ever
+	// on the user's press; MethodDownloadUpdate saves its file for this
+	// system to a path, once it matches the release's SHA256SUMS.
+	MethodCheckUpdates   = "settings.checkUpdates"
+	MethodDownloadUpdate = "settings.downloadUpdate"
+	MethodReset          = "settings.reset"
+	MethodStopAll        = "services.stopAll"
 
 	MethodProjectAdd      = "projects.add"
 	MethodProjectRemove   = "projects.remove"
