@@ -3,6 +3,9 @@
 Written by the release workflow, never by hand: each release adds the commit
 subjects since the one before it, newest first (dev/releasing.md).
 
+## v1.1.1 - 2026-10-03
+
+
 ## v1.1.0 - 2026-09-28
 
 - 👷 Add manual Wharf update checks (5eea763)
