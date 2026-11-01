@@ -100,7 +100,7 @@
                   <span class="mark is-writes" aria-hidden="true"></span>
                   <div>
                     <h3>The Wharf folder <span class="when">On first start</span></h3>
-                    <p><code>~/Wharf</code> — PHP and webservers it installed,
+                    <p><code>~/Wharf</code>: PHP and webservers it installed,
                     your settings, generated configs, certificates and logs.</p>
                     <p class="undo">To undo: quit Wharf and delete the folder.</p>
                   </div>
@@ -112,7 +112,7 @@
                     <p>So that <code>php</code> in a terminal is the PHP Wharf
                     uses, it adds one marked block to <code>~/.zshrc</code>,
                     <code>~/.bashrc</code>, <code>~/.profile</code> and fish's
-                    config — whichever exist. On Windows, it adds one folder to
+                    config, whichever exist. On Windows, it adds one folder to
                     your user <code>PATH</code> instead. Every other line stays
                     as it was, and no password is needed.</p>
                     <p class="undo">To undo: turn off <em>Settings → PHP → Use in
@@ -158,7 +158,7 @@
                     <h3>Ports 80 and 443, on Linux <span class="when">When the first project starts</span></h3>
                     <p>Linux lets only administrators use ports below 1024, and
                     projects answer on 80 and 443. Wharf asks for your password
-                    once, then lowers that limit to 80 — now, and in
+                    once, then lowers that limit to 80, right away and in
                     <code>/etc/sysctl.d/60-wharf.conf</code> for every start after.
                     Any program on this computer may then use ports from 80 up.
                     Say no, and the project stays stopped.</p>
@@ -171,7 +171,7 @@
                   <div>
                     <h3>Your distribution's Apache, on Linux <span class="when">When you install Apache</span></h3>
                     <p>Wharf installs your distribution's Apache package with its
-                    package manager — apt, dnf, zypper or pacman — after asking
+                    package manager (apt, dnf, zypper or pacman) after asking
                     for your password. Where the package starts an Apache
                     service of its own, Wharf switches that service off, so it
                     does not hold port 80.</p>
@@ -220,7 +220,7 @@
                   <div>
                     <h3>Anything running after you quit</h3>
                     <p>Quit Wharf, and everything it started stops. Nothing starts
-                    at login. Your projects answer your computer only — nobody
+                    at login. Your projects answer your computer only, so nobody
                     else on the network can reach them.</p>
                   </div>
                 </li>
@@ -233,9 +233,9 @@
               <p class="pane-intro">Wharf downloads nothing on its own. It
               connects to the places below only when you choose
               <em>Download</em> or <em>Install</em>, turn on HTTPS or press
-              <em>Check for updates</em> — and to see which PHP release it
-              would download when you open the PHP settings. Like any download, the server sees your IP address.
-              Wharf sends nothing else: no ID, no usage data.</p>
+              <em>Check for updates</em>, and when you open the PHP settings, to
+              see which PHP release it would download. Like any download, the server sees your IP address.
+              Wharf sends nothing else, neither an ID nor usage data.</p>
 
               <div class="table">
                 <table>
@@ -340,14 +340,14 @@
             <!-- Your rights -->
             <section id="rights" aria-labelledby="rights-title">
               <h2 id="rights-title">Your rights</h2>
-              <p>Responsible for this website is Manuel Steinberg — see the
+              <p>Responsible for this website is Manuel Steinberg; see the
               <a href="imprint.html">imprint</a> for the address. Ask about your
               data at any time through the
               <a href="https://kreativ-anders.de/kontakt/#formular">contact form</a>.</p>
               <p>Under the GDPR you have the right to access your data, to have
               it corrected or deleted, to restrict or object to its processing,
               and to receive it in a portable form. You may also complain to a
-              data protection authority — for us, the Bavarian State Office for
+              data protection authority. For us, that is the Bavarian State Office for
               Data Protection Supervision (<a href="https://www.lda.bayern.de">BayLDA</a>).</p>
               <p class="pane-note">Last updated: 21 September 2026.</p>
             </section>

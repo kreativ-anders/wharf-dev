@@ -20,7 +20,7 @@
   <meta property="og:image" content="https://getwharf.dev/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="The Wharf mark — a pier standing in a wave — beside the words: Local PHP development. Just files and folders.">
+  <meta property="og:image:alt" content="The Wharf mark, a pier standing in a wave, beside the words: Local PHP development. Just files and folders.">
   <meta name="twitter:card" content="summary_large_image">
 
   <link rel="stylesheet" href="style.css">
@@ -54,7 +54,7 @@
         "@id": "https://getwharf.dev/#app",
         "name": "Wharf",
         "author": { "@id": "https://getwharf.dev/#org" },
-        "description": "A local development environment for PHP. Runs nginx, Apache and PHP as native processes on Windows, macOS and Linux — no Docker, no VM. Every folder is a project, reachable at name.localhost.",
+        "description": "A local development environment for PHP. Runs nginx, Apache and PHP as native processes on Windows, macOS and Linux, without Docker or a VM. Every folder is a project, reachable at name.localhost.",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Windows, Linux",
         "url": "https://getwharf.dev/",
@@ -88,7 +88,7 @@
           {
             "@type": "Question",
             "name": "Will Wharf ask for my password?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Adding a project never does. On every system, the first time you turn on HTTPS, your computer has to be told once to trust Wharf's certificates. Saying no is fine — HTTPS stays on, browsers show a warning until you trust it, and Settings offers to ask again. On Linux, Wharf also asks once before the first project starts, to use ports 80 and 443, and when it installs Apache." }
+            "acceptedAnswer": { "@type": "Answer", "text": "Adding a project never does. On every system, the first time you turn on HTTPS, your computer has to be told once to trust Wharf's certificates. You can say no: HTTPS stays on, browsers show a warning until you trust it, and Settings offers to ask again. On Linux, Wharf also asks once before the first project starts, to use ports 80 and 443, and when it installs Apache." }
           },
           {
             "@type": "Question",
@@ -103,7 +103,7 @@
           {
             "@type": "Question",
             "name": "Do I have to move my projects into a special folder?",
-            "acceptedAnswer": { "@type": "Answer", "text": "No. Choose Add project… and pick the folder wherever it is — a Git checkout in your code folder is fine. It stays where it is, and removing the project never touches its files." }
+            "acceptedAnswer": { "@type": "Answer", "text": "No. Choose Add project… and pick the folder wherever it is, for example a Git checkout in your code folder. It stays where it is, and removing the project never touches its files." }
           },
           {
             "@type": "Question",
@@ -113,7 +113,7 @@
           {
             "@type": "Question",
             "name": "Is Wharf only for Kirby?",
-            "acceptedAnswer": { "@type": "Answer", "text": "No — any folder of PHP is a project. When you add one, Wharf recognises Kirby, Laravel, WordPress, Statamic, Symfony, Craft CMS and Drupal and picks ready-made nginx and Apache rules for it. You can change the pick, or choose none, for each project." }
+            "acceptedAnswer": { "@type": "Answer", "text": "No. Any folder of PHP is a project. When you add one, Wharf recognises Kirby, Laravel, WordPress, Statamic, Symfony, Craft CMS and Drupal and picks ready-made nginx and Apache rules for it. You can change the pick, or choose none, for each project." }
           },
           {
             "@type": "Question",
@@ -123,7 +123,7 @@
           {
             "@type": "Question",
             "name": "Can I download Wharf?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Yes: a DMG for macOS, an AppImage for Linux and an installer for Windows, on the GitHub releases page. The Windows installer is not code-signed — a certificate costs more than a free tool can carry — so SmartScreen warns once: choose More info, then Run anyway." }
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes: a DMG for macOS, an AppImage for Linux and an installer for Windows, on the GitHub releases page. The Windows installer is not code-signed, because a certificate costs more than a free tool can carry, so SmartScreen warns once: choose More info, then Run anyway." }
           }
         ]
       }
@@ -134,13 +134,9 @@
 <body>
   <a class="skip" href="#main">Skip to content</a>
 
-  <aside class="notice" aria-label="Early development">
-    <p class="wrap">
-      <span class="status is-busy" aria-hidden="true"></span>
-      <span><strong>Early days, maybe rough seas.</strong>
-      Wharf is young software, and you may run into the odd bug.
-      Found one? <a href="https://github.com/kreativ-anders/wharf-dev/issues">Let us know</a>.</span>
-    </p>
+  <aside class="notice" aria-label="Bug reports">
+    <p class="wrap">Wharf is new. If something doesn't work,
+    <a href="https://github.com/kreativ-anders/wharf-dev/issues">open an issue on GitHub</a>.</p>
   </aside>
 
   <header class="site wrap">
@@ -170,7 +166,7 @@
       <h1 id="hero-title">Local PHP development.<br><span class="soft">Just files and folders.</span></h1>
       <p class="lede">
         Wharf is a local PHP development environment that runs PHP, nginx and
-        Apache right on your computer, like MAMP or Laragon — no Docker, no VM. Every folder is a project with a real address like
+        Apache right on your computer, like MAMP or Laragon, without Docker or a VM. Every folder is a project with a real address like
         <code>my-kirby-site.localhost</code>, HTTPS in one switch, and the PHP
         version it needs.
       </p>
@@ -238,20 +234,20 @@
         <ol class="steps">
           <li>
             <h3>Pick a folder</h3>
-            <p>“Add project…” takes any folder right where it lives — your code
-            never moves. Wharf proposes a name and the rules for your CMS; one
-            click, and it runs.</p>
+            <p>“Add project…” takes any folder where it lives, and your code
+            stays put. Wharf proposes a name and the rules for your CMS, and one
+            click starts it.</p>
           </li>
           <li>
             <h3>Start it from the tray</h3>
-            <p>Start, stop and open live in the tray menu, no window needed.
-            Quit Wharf, and everything it started stops.</p>
+            <p>Start, stop and open projects from the tray menu without opening
+            the window. Quit Wharf, and everything it started stops.</p>
           </li>
           <li>
             <h3>Open a real URL</h3>
             <p>Each project gets its own address, with HTTPS if you want it.
-            Your computer finds it by itself: nothing to set up, no password,
-            no port number in the address.</p>
+            Your computer finds it by itself, so there is nothing to set up and
+            no password to type, and the address has no port number.</p>
             <p class="address"><span class="dim">https://</span>my-kirby-site.localhost</p>
           </li>
         </ol>
@@ -287,8 +283,8 @@
         </li>
         <li>
           <h3>Settings and logs</h3>
-          <p>One <code>php.ini</code> for every PHP version; webserver rules and
-          a log folder per project. Plain files, one click away.</p>
+          <p>One <code>php.ini</code> for every PHP version, plus webserver rules
+          and a log folder per project. All plain files that open with one click.</p>
         </li>
         <li>
           <h3>Accessible</h3>
@@ -350,9 +346,9 @@
             <a class="button ghost" href="https://github.com/kreativ-anders/wharf-dev/issues">Report an issue</a>
           </p>
           <h3 id="support">Pay what you want</h3>
-          <p>Wharf is and stays free. If it saves you time, you can support
-          its development with an amount of your choice — once, no
-          subscription.</p>
+          <p>Wharf is free and stays free. If it saves you time, you can support
+          its development with an amount of your choice. You pay once; there
+          is no subscription.</p>
           <p class="cta">
             <!-- INFO: no target="_blank" — the checkout replaces this tab, so Stripe's redirect lands on thanks.html here, not in an orphaned tab. -->
             <a class="button ghost" href="https://buy.stripe.com/cNi7sL7h92jM4k9bKSes001">Support Wharf</a>
@@ -402,7 +398,7 @@
     <section id="faq" class="band" aria-labelledby="faq-title">
       <div class="wrap narrow">
         <p class="eyebrow">FAQ</p>
-        <h2 id="faq-title">Questions, answered.</h2>
+        <h2 id="faq-title">Frequent questions.</h2>
         <div class="faq">
           <details>
             <summary>Does Wharf use Docker or a virtual machine?</summary>
@@ -413,7 +409,7 @@
             <summary>Will Wharf ask for my password?</summary>
             <p>Adding a project never does. On every system, the first time you
             turn on HTTPS, your computer has to be told once to trust Wharf's
-            certificates. Saying no is fine — HTTPS stays on, browsers show a
+            certificates. You can say no: HTTPS stays on, browsers show a
             warning until you trust it, and Settings offers to ask again. On
             Linux, Wharf also asks once before the first project starts, to use
             ports 80 and 443, and when it installs Apache.</p>
@@ -436,8 +432,8 @@
           </details>
           <details>
             <summary>Do I have to move my projects into a special folder?</summary>
-            <p>No. Choose “Add project…” and pick the folder wherever it is — a
-            Git checkout in your code folder is fine. It stays where it is, and
+            <p>No. Choose “Add project…” and pick the folder wherever it is, for
+            example a Git checkout in your code folder. It stays where it is, and
             removing the project never touches its files.</p>
           </details>
           <details>
@@ -448,7 +444,7 @@
           </details>
           <details>
             <summary>Is Wharf only for Kirby?</summary>
-            <p>No — any folder of PHP is a project. When you add one, Wharf
+            <p>No. Any folder of PHP is a project. When you add one, Wharf
             recognises Kirby, Laravel, WordPress, Statamic, Symfony, Craft CMS
             and Drupal and picks ready-made nginx and Apache rules for it. You
             can change the pick, or choose none, for each project.</p>
@@ -463,8 +459,8 @@
             <p>Yes: a DMG for macOS, an AppImage for Linux and an
             installer for Windows, on the
             <a href="https://github.com/kreativ-anders/wharf-dev/releases/latest">GitHub releases page</a>. The Windows installer is not
-            code-signed — a certificate costs more than a free tool can carry —
-            so SmartScreen warns once: choose <em>More info</em>, then
+            code-signed, because a certificate costs more than a free tool can
+            carry, so SmartScreen warns once: choose <em>More info</em>, then
             <em>Run anyway</em>.</p>
           </details>
         </div>
