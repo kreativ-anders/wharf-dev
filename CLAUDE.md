@@ -105,12 +105,13 @@ wharf/
 │   ├── releasing.md           one version source, cutting a release, what the workflow does
 │   └── quality-audit.md       the recurring on-demand review: a11y, landing page, code
 │
-├── docs/                      the public landing page (GitHub Pages) — HTML + CSS; one script, Pirsch's cookie-free counter
+├── docs/                      the public landing page (GitHub Pages) — HTML + CSS; Pirsch's cookie-free counter and the theme switch are its only scripts
 │   ├── index.html             content from features/; FAQ mirrored in its JSON-LD
 │   ├── privacy.html           what Wharf changes on a computer, where it downloads from; this site's data (Pirsch, Stripe)
 │   ├── imprint.html           the legal notice (§ 5 DDG)
 │   ├── thanks.html            where Stripe's pay-what-you-want link returns; noindex
 │   ├── style.css              the app's Kirby-plain palette (gui/lib/theme.dart)
+│   ├── theme.js               the header's system / light / dark switch, remembered in localStorage
 │   ├── icon.svg               favicon: the app mark on its tile
 │   ├── apple-touch-icon.png   the app icon at 180 px
 │   ├── og.png                 1200×630 link preview, drawn from the same mark

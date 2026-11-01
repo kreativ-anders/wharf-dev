@@ -2,46 +2,37 @@
    black on white, greys for structure, no brand colour. Hue appears only
    where it means something — a status mark, what an action does, a link. */
 
-:root {
-  --bg: #ffffff;
-  --surface: #f6f6f6;
-  --fg: #1c1c1c;
-  --dim: #666666;       /* 5.3:1 on --surface */
-  --line: #e0e0e0;
-  --ink: #1c1c1c;
-  --on-ink: #ffffff;
-  --link: #266eb5;      /* 4.9:1 on --surface */
+/* INFO: each colour is light-dark(light, dark), so color-scheme alone picks
+   the palette: the system's by default, or the visitor's choice from the
+   header switch (theme.js sets data-theme). */
 
-  --running: #5c7a1f;
-  --busy: #b86114;
-  --failed: #dc1818;
-  --idle: #858585;
+:root {
+  color-scheme: light dark;
+
+  --bg: light-dark(#ffffff, #1c1c1c);
+  --surface: light-dark(#f6f6f6, #242424);
+  --fg: light-dark(#1c1c1c, #f2f2f2);
+  --dim: light-dark(#666666, #b2b2b2);   /* 5.3:1 on --surface */
+  --line: light-dark(#e0e0e0, #3d3d3d);
+  --ink: light-dark(#1c1c1c, #f2f2f2);
+  --on-ink: light-dark(#ffffff, #1c1c1c);
+  --link: light-dark(#266eb5, #8dbae7);  /* 4.9:1 on --surface */
+
+  --running: light-dark(#5c7a1f, #a3d147);
+  --busy: light-dark(#b86114, #ec9951);
+  --failed: light-dark(#dc1818, #ee6363);
+  --idle: light-dark(#858585, #999999);
   --restart: var(--link);
+  --castoff: light-dark(#0f7c80, #5fc4c8);
 
   --wrap: 68rem;
   --measure: 38rem;
   --radius: 10px;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  color-scheme: light dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1c1c1c;
-    --surface: #242424;
-    --fg: #f2f2f2;
-    --dim: #b2b2b2;
-    --line: #3d3d3d;
-    --ink: #f2f2f2;
-    --on-ink: #1c1c1c;
-    --link: #8dbae7;
-
-    --running: #a3d147;
-    --busy: #ec9951;
-    --failed: #ee6363;
-    --idle: #999999;
-  }
-}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
 
 *,
 *::before,
@@ -153,9 +144,34 @@ header.site {
 
 .pier { width: 1.4rem; height: 1.4rem; fill: currentColor; flex: none; }
 
-nav { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; }
+nav { display: flex; margin-left: auto; flex-wrap: wrap; gap: 0.25rem 1.25rem; }
 nav a { color: var(--dim); text-decoration: none; font-size: 0.95rem; }
 nav a:hover { color: var(--fg); }
+
+/* The theme switch: system, light, dark — the pressed one is filled, not
+   only coloured (dev/design-principles.md §4). */
+
+.theme {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.theme button {
+  width: 2rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--dim);
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.theme button:hover { color: var(--fg); }
+.theme button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
 
 footer.site {
   display: flex;
@@ -667,9 +683,6 @@ footer.site { flex-wrap: wrap; }
    "Cast off" and "Add project…" in opposite corners below the list
    (single-application.feature, "Casting off from the main window"). */
 
-:root { --castoff: #0f7c80; }
-@media (prefers-color-scheme: dark) { :root { --castoff: #5fc4c8; } }
-
 .appname { display: inline-flex; align-items: center; gap: 0.5rem; }
 .appname .pier { width: 1.1rem; height: 1.1rem; }
 .chip.is-stop-line { color: var(--failed); border-color: var(--failed); }
@@ -702,3 +715,4 @@ footer.site { flex-wrap: wrap; }
 }
 .pair-even h2 { margin-bottom: 1.25rem; }
 .pair-even .cta { margin-top: 1.5rem; }
+.pair-even .cta + h3 { margin-top: 3rem; }

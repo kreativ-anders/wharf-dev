@@ -12,6 +12,7 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="stylesheet" href="style.css">
+  <script src="theme.js"></script>
   <script defer src="https://api.pirsch.io/pa.js"
     id="pianjs"
     data-code="ZofmomDudXybFGlh8XVY09NWh9as10iU"></script>
@@ -53,6 +54,11 @@
       <a href="./#faq">FAQ</a>
       <a href="https://github.com/kreativ-anders/wharf-dev">GitHub</a>
     </nav>
+    <div class="theme" role="group" aria-label="Colour theme" hidden>
+      <button type="button" value="system" aria-pressed="true" title="System"><span aria-hidden="true">◐</span><span class="sr-only">System</span></button>
+      <button type="button" value="light" aria-pressed="false" title="Light"><span aria-hidden="true">☀</span><span class="sr-only">Light</span></button>
+      <button type="button" value="dark" aria-pressed="false" title="Dark"><span aria-hidden="true">☾</span><span class="sr-only">Dark</span></button>
+    </div>
   </header>
 
   <main id="main">
@@ -262,8 +268,11 @@
                   <div>
                     <h3>No cookies, no fonts from elsewhere</h3>
                     <p>This site sets no cookies and loads no fonts or images
-                    from other servers. Its one script is the visit counter
-                    below. The Wharf app contains none of it.</p>
+                    from other servers. Its one script from elsewhere is the
+                    visit counter below. Its own small script only remembers
+                    whether you picked the light or dark theme, in your
+                    browser&rsquo;s local storage; that choice never leaves
+                    your device. The Wharf app contains none of it.</p>
                   </div>
                 </li>
                 <li>
