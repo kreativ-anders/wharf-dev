@@ -117,6 +117,11 @@
           },
           {
             "@type": "Question",
+            "name": "What about a database?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Version 1 covers PHP and the webserver. WordPress, Laravel, Craft CMS or Drupal reach the MySQL, MariaDB or PostgreSQL you already run, at 127.0.0.1 as usual, for example one installed with Homebrew, your package manager or the official installer. A database managed by Wharf is on the roadmap." }
+          },
+          {
+            "@type": "Question",
             "name": "Can I install an older nginx or Apache for one project?",
             "acceptedAnswer": { "@type": "Answer", "text": "Not yet. Wharf installs the newest nginx and Apache, because the places it gets them from rarely offer older versions." }
           },
@@ -135,8 +140,8 @@
   <a class="skip" href="#main">Skip to content</a>
 
   <aside class="notice" aria-label="Bug reports">
-    <p class="wrap">Wharf is new. If something doesn't work,
-    <a href="https://github.com/kreativ-anders/wharf-dev/issues">open an issue on GitHub</a>.</p>
+    <p class="wrap">Something broken or missing?
+    <a href="https://github.com/kreativ-anders/wharf-dev/issues">Open an issue on GitHub</a>.</p>
   </aside>
 
   <header class="site wrap">
@@ -171,10 +176,10 @@
         version it needs.
       </p>
       <p class="cta">
-        <a class="button" href="https://github.com/kreativ-anders/wharf-dev/releases/latest">Download</a>
+        <a class="button" href="https://github.com/kreativ-anders/wharf-dev/releases/latest">Download for macOS, Windows &amp; Linux</a>
         <a class="button ghost" href="#how">See how it works</a>
       </p>
-      <p class="note"><span class="status is-running" aria-hidden="true"></span> Released: native apps for macOS, Windows and Linux.</p>
+      <p class="note"><span class="status is-running" aria-hidden="true"></span> Free, MIT licence. DMG for macOS, installer for Windows, AppImage for Linux, from the GitHub releases page. Version 1 covers PHP and the webserver. Your database stays as it is.</p>
 
       <figure class="shot">
         <div class="window" aria-hidden="true">
@@ -277,7 +282,8 @@
         <li>
           <h3>Knows your CMS</h3>
           <p>Kirby, Laravel, WordPress, Statamic, Symfony, Craft CMS or Drupal:
-          Wharf recognises the folder and picks the right webserver rules.</p>
+          Wharf recognises the folder and picks the right webserver rules.
+          Sites that need MySQL or PostgreSQL use the database you already run.</p>
         </li>
         <li>
           <h3>Settings and logs</h3>
@@ -448,6 +454,14 @@
             can change the pick, or choose none, for each project.</p>
           </details>
           <details>
+            <summary>What about a database?</summary>
+            <p>Version 1 covers PHP and the webserver. WordPress, Laravel, Craft
+            CMS or Drupal reach the MySQL, MariaDB or PostgreSQL you already run,
+            at <code>127.0.0.1</code> as usual, for example one installed with
+            Homebrew, your package manager or the official installer. A database
+            managed by Wharf is on the roadmap.</p>
+          </details>
+          <details>
             <summary>Can I install an older nginx or Apache for one project?</summary>
             <p>Not yet. Wharf installs the newest nginx and Apache, because the
             places it gets them from rarely offer older versions.</p>
@@ -468,8 +482,9 @@
 
   <footer class="site wrap">
     <svg class="pier" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><path d="M0 10h100v15H0zM16 10h15v52H16zM69 10h15v52H69zM0 72.5L5 74.66 10 76.61 15 78.16 20 79.16 25 79.5 30 79.16 35 78.16 40 76.61 45 74.66 50 72.5 55 70.34 60 68.39 65 66.84 70 65.84 75 65.5 80 65.84 85 66.84 90 68.39 95 70.34 100 72.5V87.5L95 85.34 90 83.39 85 81.84 80 80.84 75 80.5 70 80.84 65 81.84 60 83.39 55 85.34 50 87.5 45 89.66 40 91.61 35 93.16 30 94.16 25 94.5 20 94.16 15 93.16 10 91.61 5 89.66 0 87.5z"/></svg>
-    <p>Wharf is open source under the MIT licence. Inspired by the minimalism
-    of <a href="https://getkirby.com">Kirby</a>.
+    <p>Wharf is open source under the MIT licence, built and maintained by
+    <a href="https://kreativ-anders.de/">kreativ-anders</a> (Manuel Steinberg).
+    Inspired by the minimalism of <a href="https://getkirby.com">Kirby</a>.
     <a href="https://github.com/kreativ-anders/wharf-dev">Source on GitHub</a></p>
     <p class="legal-links"><a href="imprint.html">Imprint</a> <a href="privacy.html">Privacy</a></p>
   </footer>
