@@ -9,9 +9,22 @@
     try { return localStorage.getItem(key) || "system"; } catch (e) { return "system"; }
   }
 
+  // INFO: the browser bar's colour is picked by each meta's media query, which
+  // only sees the system theme — so a chosen theme gives both metas its colour.
+  var bars = {};
+  document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) {
+    var scheme = /dark/.test(m.media) ? "dark" : "light";
+    bars[scheme] = m.content;
+    m.setAttribute("data-scheme", scheme);
+  });
+
   function apply(choice) {
-    if (choice === "light" || choice === "dark") root.setAttribute("data-theme", choice);
+    var explicit = choice === "light" || choice === "dark";
+    if (explicit) root.setAttribute("data-theme", choice);
     else root.removeAttribute("data-theme");
+    document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) {
+      m.content = bars[explicit ? choice : m.getAttribute("data-scheme")];
+    });
   }
 
   apply(stored());
