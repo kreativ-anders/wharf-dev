@@ -578,14 +578,12 @@ footer.site { flex-wrap: wrap; }
 
 .side {
   position: sticky;
-  top: 0;
+  top: 1rem;
   align-self: start;
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 0.5rem;
-  border-right: 1px solid var(--line);
-  min-height: 100%;
 }
 .side a {
   display: flex;
@@ -612,7 +610,9 @@ footer.site { flex-wrap: wrap; }
   font-weight: 600;
 }
 
-.pane { padding: 0.5rem 2rem 2.5rem; }
+/* INFO: the divider is the pane's, not the nav's: a nav stretched to the
+   pane's height has no room left to stick. */
+.pane { padding: 0.5rem 2rem 2.5rem; border-left: 1px solid var(--line); }
 .pane > section { padding-block: 1.5rem; scroll-margin-top: 1rem; }
 .pane > section + section { border-top: 1px solid var(--line); }
 .pane h2 { margin: 0 0 0.6rem; font-size: 1.15rem; letter-spacing: -0.01em; }
@@ -659,8 +659,6 @@ footer.site { flex-wrap: wrap; }
     position: static;
     flex-direction: row;
     flex-wrap: wrap;
-    min-height: 0;
-    border-right: 0;
     border-bottom: 1px solid var(--line);
   }
   .side a { flex: none; border-left: 0; border-bottom: 3px solid transparent; border-radius: 4px 4px 0 0; }
@@ -669,7 +667,7 @@ footer.site { flex-wrap: wrap; }
   .settings:has(#downloads:target) .side a[href="#downloads"],
   .settings:has(#website:target) .side a[href="#website"],
   .settings:has(#rights:target) .side a[href="#rights"] { border-bottom-color: var(--fg); }
-  .pane { padding-inline: 1.1rem; }
+  .pane { padding-inline: 1.1rem; border-left: 0; }
 }
 
 /* The window mock, as the app draws it today: the name and mark in the bar,
