@@ -115,7 +115,7 @@ wharf/
 │   ├── apple-touch-icon.png   the app icon at 180 px
 │   ├── og.png                 1200×630 link preview, drawn from the same mark
 │   ├── robots.txt, sitemap.xml
-│   ├── CNAME                  the site's domain: wharf.kreativ-anders.dev
+│   ├── CNAME                  the site's domain: getwharf.dev
 │   └── .nojekyll              serve the files as-is, no Jekyll build
 │
 ├── features/                  THE SPECIFICATION — Gherkin, one file per capability
