@@ -687,3 +687,37 @@ func TestAPHPVersionInUseIsNeitherRemovedNorHidden(t *testing.T) {
 		t.Fatalf("hidden = %v, want none", got)
 	}
 }
+
+// features/php-runtime.feature — "The picker says why a PHP version in use
+// cannot be removed"
+func TestThePickerSaysWhyAPHPVersionInUseCannotBeRemoved(t *testing.T) {
+	h := newHarness(t)
+	def := h.d.Config().Services.PHP.Version
+	h.mkProject("legacy")
+	if _, err := h.d.AddProject(h.ctx(), "legacy"); err != nil {
+		t.Fatal(err)
+	}
+	pinned := "8.1"
+	if _, err := h.d.UpdateSettings(h.ctx(), "legacy", Settings{PHP: &pinned}); err != nil {
+		t.Fatal(err)
+	}
+
+	inUse := h.d.State().Services.PHP.InUse
+	if !strings.Contains(inUse[def], "global default") {
+		t.Fatalf("in_use[%s] = %q, want it to name the global default", def, inUse[def])
+	}
+	if !strings.Contains(inUse["8.1"], "legacy") {
+		t.Fatalf("in_use[8.1] = %q, want it to name legacy", inUse["8.1"])
+	}
+	// INFO: The picker says exactly what the refusal would say.
+	if err := h.d.RemovePHP(h.ctx(), "8.1"); err == nil || err.Error() != inUse["8.1"] {
+		t.Fatalf("RemovePHP = %v, want %q", err, inUse["8.1"])
+	}
+	for _, in := range h.d.PHPInstalls() {
+		if in.Version != def && in.Version != "8.1" {
+			if why, ok := inUse[in.Version]; ok {
+				t.Fatalf("in_use[%s] = %q, want nothing for a version nobody uses", in.Version, why)
+			}
+		}
+	}
+}

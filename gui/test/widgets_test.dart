@@ -848,6 +848,30 @@ void main() {
     expect(daemon.calls, ['remove 8.4']);
   });
 
+  // features/php-runtime.feature — "The picker says why a PHP version in use
+  // cannot be removed"
+  testWidgets('a PHP version in use cannot be removed, and the button says why', (tester) async {
+    final json = jsonDecode(_phpRemovable) as Map<String, dynamic>;
+    (json['services'] as Map<String, dynamic>)['php']['in_use'] = {
+      '8.4': 'PHP 8.4 is the global default — select another version first',
+      '8.2': 'PHP 8.2 is used by legacy — choose another PHP version for it first',
+    };
+    final daemon = _PhpDaemon(jsonEncode(json));
+    await showSettings(tester, daemon, SettingsSection.php);
+
+    for (final why in [
+      'PHP 8.4 is the global default — select another version first',
+      'PHP 8.2 is used by legacy — choose another PHP version for it first',
+    ]) {
+      final button = find.ancestor(of: find.byTooltip(why), matching: find.byType(IconButton));
+      expect(button, findsOneWidget, reason: 'the button names what uses the version');
+      expect(tester.widget<IconButton>(button).onPressed, isNull, reason: 'and is disabled');
+    }
+    expect(find.byTooltip('Remove PHP 8.2.28'), findsNothing);
+    expect(find.byTooltip('Hide PHP 8.4.3 from Wharf'), findsNothing);
+    expect(daemon.calls, isEmpty);
+  });
+
   // features/php-runtime.feature — "Showing a hidden PHP version again"
   testWidgets('a hidden PHP folder can be shown again', (tester) async {
     final daemon = _PhpDaemon(_phpRemovable);

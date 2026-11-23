@@ -347,6 +347,7 @@ class Php {
     this.downloadable = const [],
     this.downloading = const [],
     this.hidden = const [],
+    this.inUse = const {},
     this.settings = '',
     this.settingsExist = false,
     this.terminal = PhpTerminal.off,
@@ -377,6 +378,10 @@ class Php {
   /// Folders of PHP installs found on the machine that the user hid; each
   /// can be shown again (features/php-runtime.feature).
   final List<String> hidden;
+
+  /// What uses each installed version that cannot be removed or hidden, in
+  /// the words the daemon would refuse with (features/php-runtime.feature).
+  final Map<String, String> inUse;
 
   /// config/php.ini, the user's own PHP settings, and whether it exists yet
   /// (features/php-settings.feature).
@@ -410,6 +415,9 @@ class Php {
         .map((e) => e as String)
         .toList(),
     hidden: (json['hidden'] as List<dynamic>? ?? const []).map((e) => e as String).toList(),
+    inUse: (json['in_use'] as Map<String, dynamic>? ?? const {}).map(
+      (k, v) => MapEntry(k, v as String),
+    ),
     settings: json['settings'] as String? ?? '',
     settingsExist: json['settings_exist'] as bool? ?? false,
     terminal: json['terminal'] is Map<String, dynamic>

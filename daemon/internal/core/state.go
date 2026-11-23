@@ -119,6 +119,10 @@ type PHP struct {
 	// user hid, so each can be shown again (php-runtime.feature, "Showing a
 	// hidden PHP version again").
 	Hidden []string `json:"hidden"`
+	// InUse maps each installed version that cannot be removed or hidden to
+	// what uses it, so the picker says so before the click (php-runtime.feature,
+	// "The picker says why a PHP version in use cannot be removed").
+	InUse map[string]string `json:"in_use"`
 	// Settings is config/php.ini, the user's own PHP settings, and
 	// SettingsExist whether it has been created yet (php-settings.feature).
 	Settings      string `json:"settings"`
@@ -241,6 +245,7 @@ func (d *Daemon) snapshot(cfg *config.Config) State {
 		Downloadable: downloadable(installs, d.now(), d.latestPHP()),
 		Downloading:  d.downloadingVersions(),
 		Hidden:       hidden,
+		InUse:        phpUses(cfg, installs),
 		Settings:     d.root.PHPIni(),
 		Terminal:     d.terminalState(cfg),
 	}
