@@ -3,6 +3,14 @@
 Written by the release workflow, never by hand: each release adds the commit
 subjects since the one before it, newest first (dev/releasing.md).
 
+## v1.2.1 - 2026-11-23
+
+- 🐛 Trust the certificate authority on macOS without an error (#20) (6ea17bc)
+- ⬆️ Bump actions/setup-go from 6.5.0 to 7.1.0 (#16) (fc32001)
+- ⬆️ Bump actions/upload-artifact from 7.0.1 to 7.0.2 (#15) (f82d0dc)
+- ⬆️ Bump actions/download-artifact from 8.0.1 to 8.0.2 (#14) (4da6555)
+- ⬆️ Bump softprops/action-gh-release from 3.0.3 to 3.0.4 (#13) (aead4a5)
+
 ## v1.1.1 - 2026-10-03
 
 
