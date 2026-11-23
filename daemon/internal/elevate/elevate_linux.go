@@ -33,6 +33,12 @@ func pkexec(argv ...string) error {
 	return nil
 }
 
+// TrustAuthority has mkcert add the authority to the system's trust store,
+// with administrator rights.
+func (s systemElevator) TrustAuthority(mkcert, caRoot string) error {
+	return s.RequestElevatedRun(mkcert, []string{"-install"}, mkcertTrustEnv(caRoot))
+}
+
 // unprivilegedPortStart is the lowest port Linux lets a process without
 // administrator rights listen on; 1024 unless someone lowered it.
 const unprivilegedPortStart = "/proc/sys/net/ipv4/ip_unprivileged_port_start"

@@ -16,6 +16,13 @@ func (Direct) RequestElevatedRun(program string, _ []string, _ []string) error {
 	return ErrDeclined
 }
 
+// TrustAuthority behaves as if the prompt were declined: on every OS it is
+// a password prompt.
+func (Direct) TrustAuthority(mkcert, _ string) error {
+	slog.Warn("elevation disabled: not trusting the local certificate authority", "program", mkcert)
+	return ErrDeclined
+}
+
 // AllowLowPorts behaves as if the prompt were declined, where there is one to
 // decline.
 func (Direct) AllowLowPorts() error {

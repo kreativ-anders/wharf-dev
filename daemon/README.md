@@ -38,7 +38,7 @@ Linux letting the front door use ports 80 and 443 and installing Apache;
 |---|---|
 | `internal/layout` | Resolves the portable root folder (`bin/`, `www/`, `config/`, `data/`) |
 | `internal/config` | `wharf.json`: load, atomic write, hand-edit repair |
-| `internal/elevate` | **Platform-specific**: UAC / osascript / pkexec |
+| `internal/elevate` | **Platform-specific**: UAC / `security` and osascript / pkexec |
 | `internal/proctree` | **Platform-specific**: a service and its workers, stopped as one (process group / job object) |
 | `internal/shellpath` | **Platform-specific**: `bin/path`'s php, and `bin/path` on the user's PATH (shell startup files / user environment) |
 | `internal/supervisor` | Process lifecycle, port waiting, state transitions |

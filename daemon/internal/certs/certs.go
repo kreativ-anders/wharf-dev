@@ -258,8 +258,7 @@ func (m *Mkcert) Setup(ctx context.Context) error {
 		if err := m.verifyVendored(bin); err != nil {
 			return err
 		}
-		err := m.Elevator.RequestElevatedRun(bin, []string{"-install"},
-			[]string{"CAROOT=" + caRoot, "TRUST_STORES=system"})
+		err := m.Elevator.TrustAuthority(bin, caRoot)
 		m.refresh(ctx)
 		return err
 	}
