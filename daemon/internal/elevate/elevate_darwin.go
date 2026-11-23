@@ -2,7 +2,9 @@ package elevate
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -18,6 +20,38 @@ func (systemElevator) RequestElevatedRun(program string, args []string, env []st
 		return fmt.Errorf("elevated run of %s: %w", program, err)
 	}
 	return nil
+}
+
+// TrustAuthority trusts the authority for this user, run as the user: macOS
+// shows its own password prompt for the change. mkcert is not needed here.
+//
+// WARNING: Not `mkcert -install` through osascript with administrator
+// privileges. Changing trust settings needs a confirmation from macOS's own
+// dialog, which a process started that way cannot show, so the trust was
+// refused after the password had been typed ("no user interaction was
+// possible", issue #19). See dev/architecture.md §4.
+func (systemElevator) TrustAuthority(_, caRoot string) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("trust the local certificate authority: %w", err)
+	}
+	out, err := exec.Command("/usr/bin/security", "add-trusted-cert",
+		"-r", "trustRoot",
+		"-k", filepath.Join(home, "Library", "Keychains", "login.keychain-db"),
+		filepath.Join(caRoot, "rootCA.pem"),
+	).CombinedOutput()
+	return trustResult(string(out), err)
+}
+
+// trustResult tells a dismissed trust prompt apart from a failure.
+func trustResult(out string, err error) error {
+	if err == nil {
+		return nil
+	}
+	if strings.Contains(strings.ToLower(out), "canceled by the user") {
+		return ErrDeclined
+	}
+	return fmt.Errorf("trust the local certificate authority: %w: %s", err, strings.TrimSpace(out))
 }
 
 func runAsAdmin(argv []string) error { return runScriptAsAdmin(shellJoin(argv)) }

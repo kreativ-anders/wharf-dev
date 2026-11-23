@@ -5,8 +5,9 @@ Feature: Local SSL certificates
   So that I never have to install or configure mkcert myself
 
   Certificates come from mkcert's local certificate authority. Browsers only
-  accept them once that authority is trusted, which needs administrator rights
-  once per machine.
+  accept them once that authority is trusted, which takes one password prompt:
+  on Windows and Linux for administrator rights, on macOS the system's own
+  prompt for the user's certificate trust settings.
 
   Background:
     Given the daemon is running

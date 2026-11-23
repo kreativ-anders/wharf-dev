@@ -42,6 +42,12 @@ func (f *Fake) RequestElevatedRun(program string, args []string, env []string) e
 	return nil
 }
 
+// TrustAuthority is recorded as the privileged `mkcert -install` it is on
+// Linux and Windows, so tests see one run per trust prompt on every OS.
+func (f *Fake) TrustAuthority(mkcert, caRoot string) error {
+	return f.RequestElevatedRun(mkcert, []string{"-install"}, mkcertTrustEnv(caRoot))
+}
+
 // RunCount reports how many privileged runs were approved.
 func (f *Fake) RunCount() int {
 	f.mu.Lock()

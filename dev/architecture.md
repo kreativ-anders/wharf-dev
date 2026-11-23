@@ -52,16 +52,23 @@ Every design decision favours identical behaviour across OS over the most
 - **Pretty URLs** — `<name>.localhost` everywhere, resolved to loopback by
   the OS or the browser itself; nothing is written anywhere, and the hosts
   file is never read or written.
-- **Elevation** — one interface with two functions, and the only password
-  prompts Wharf has. `RequestElevatedRun(program, args, env)` trusts
-  mkcert's local certificate authority, which writes to the system trust
-  store (`features/local-ssl.feature`: without it every browser warns), and
-  installs Apache with a Linux package manager (§4b). `AllowLowPorts()` lets
-  the front door take ports 80 and 443 (§4c); it prompts on Linux only, and
+- **Elevation** — one interface with three functions, and the only password
+  prompts Wharf has. `TrustAuthority(mkcert, caRoot)` trusts mkcert's local
+  certificate authority (`features/local-ssl.feature`: without it every
+  browser warns). On Windows and Linux mkcert does it with administrator
+  rights and writes to the system trust store. On macOS the daemon runs
+  `security add-trusted-cert` as the user, into the user's trust settings,
+  and macOS asks for the password itself: an `osascript with administrator
+  privileges` run cannot show the confirmation macOS demands for a trust
+  change, so the change was refused after the password had been typed
+  (issue #19). The trust then belongs to the macOS account, like the
+  authority itself. `RequestElevatedRun(program, args, env)` installs
+  Apache with a Linux package manager (§4b). `AllowLowPorts()` lets the
+  front door take ports 80 and 443 (§4c); it prompts on Linux only, and
   only while the limit is still 1024. Three small adapters behind them (UAC /
-  `osascript with administrator privileges` / `pkexec`) are one of the
-  platform-specific surfaces of the codebase; process trees and the
-  terminal PATH are the others (below).
+  `security` and `osascript with administrator privileges` / `pkexec`) are
+  one of the platform-specific surfaces of the codebase; process trees and
+  the terminal PATH are the others (below).
 - **IPC** — see §4a. One protocol and one client API across all three OS; the
   socket type differs on Windows only because the GUI's language cannot open a
   unix socket there.

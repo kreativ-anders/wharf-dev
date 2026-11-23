@@ -35,6 +35,12 @@ func (systemElevator) RequestElevatedRun(program string, args []string, env []st
 	return nil
 }
 
+// TrustAuthority has mkcert add the authority to the system's trust store,
+// with administrator rights.
+func (s systemElevator) TrustAuthority(mkcert, caRoot string) error {
+	return s.RequestElevatedRun(mkcert, []string{"-install"}, mkcertTrustEnv(caRoot))
+}
+
 // runAs starts cmd.exe elevated with a PowerShell argument list.
 func runAs(argumentList string) error {
 	script := fmt.Sprintf(
