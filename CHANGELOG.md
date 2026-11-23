@@ -3,6 +3,13 @@
 Written by the release workflow, never by hand: each release adds the commit
 subjects since the one before it, newest first (dev/releasing.md).
 
+## v1.2.2 - 2026-11-23
+
+- 🐛 Say why a PHP version in use cannot be removed, before the click (#25) (bf2b695)
+- 📝 Document which PHP extensions the downloaded build lacks (#24) (6e7974c)
+- ➖ Drop the unused Cupertino Icons package (#22) (654548f)
+- Bump url_launcher from 6.3.2 to 6.3.3 in /gui (#17) (b271dd6)
+
 ## v1.2.1 - 2026-11-23
 
 - 🐛 Trust the certificate authority on macOS without an error (#20) (6ea17bc)
