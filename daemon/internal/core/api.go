@@ -145,6 +145,7 @@ func (d *Daemon) Register(srv *ipc.Server) {
 	}))
 	handle(ipc.MethodDownloadUpdate, action(d, func(ctx context.Context, p pathParams) error { return d.DownloadUpdate(ctx, p.Path) }))
 	handle(ipc.MethodSetAppearance, action(d, func(_ context.Context, p modeParams) error { return d.SetAppearance(p.Mode) }))
+	handle(ipc.MethodSetBrowser, action(d, func(_ context.Context, p pathParams) error { return d.SetBrowser(p.Path) }))
 
 	// INFO: These answer with what they made or changed, not the snapshot.
 	handle(ipc.MethodPHPSettings, func(ctx context.Context, _ json.RawMessage) (any, error) {

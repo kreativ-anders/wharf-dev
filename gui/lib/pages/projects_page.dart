@@ -1,9 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher_string.dart';
-
 import '../daemon.dart';
+import '../folders.dart';
 import '../models/state.dart';
 import '../theme.dart';
 import 'add_project.dart';
@@ -315,7 +314,7 @@ class _Actions extends StatelessWidget {
               ? IconButton(
                   tooltip: 'Open ${project.url}',
                   icon: const Icon(Icons.open_in_new, size: 18),
-                  onPressed: () => launchUrlString(project.url),
+                  onPressed: () => openProject(daemon, project.url),
                 )
               : null,
         ),

@@ -288,6 +288,82 @@ func TestChoosingLightOrDarkAppearance(t *testing.T) {
 	}
 }
 
+// features/settings.feature — "Choosing the browser projects open in"
+func TestChoosingTheBrowserProjectsOpenIn(t *testing.T) {
+	h := newHarness(t)
+	if got := h.d.State().Browser; got != (Browser{}) {
+		t.Fatalf("browser = %+v, want the system default", got)
+	}
+
+	// INFO: A .app bundle is a folder; an app anywhere else is a file.
+	firefox := filepath.Join(t.TempDir(), "Firefox.app")
+	if err := os.MkdirAll(firefox, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.d.SetBrowser(firefox); err != nil {
+		t.Fatal(err)
+	}
+	// INFO: Then "browser" is written to config/wharf.json with Firefox's location
+	cfg, err := config.Load(h.root.ConfigFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Get().Browser != firefox {
+		t.Fatalf("wharf.json browser = %q, want %q", cfg.Get().Browser, firefox)
+	}
+	// INFO: And "Open" everywhere uses it — the window, the sheet and the tray
+	// all read it from this one snapshot (widgets_test.dart opens it).
+	if got := h.d.State().Browser; got != (Browser{Path: firefox, Found: true}) {
+		t.Fatalf("browser = %+v, want Firefox, found", got)
+	}
+
+	binary := filepath.Join(t.TempDir(), "firefox")
+	stubBinary(t, binary)
+	if err := h.d.SetBrowser(binary); err != nil {
+		t.Fatalf("an executable file is an app too: %v", err)
+	}
+
+	// INFO: And choosing "System default" again removes the key
+	if err := h.d.SetBrowser(""); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(h.root.ConfigFile())
+	if strings.Contains(string(raw), "browser") {
+		t.Fatalf("browser key survived choosing the system default:\n%s", raw)
+	}
+
+	// INFO: A folder that is not an app, or nothing at all, is refused with
+	// what to pick instead.
+	var invalid *InvalidError
+	for _, bad := range []string{t.TempDir(), filepath.Join(t.TempDir(), "gone.app")} {
+		if err := h.d.SetBrowser(bad); !errors.As(err, &invalid) {
+			t.Fatalf("SetBrowser(%s) err = %v, want invalid", bad, err)
+		}
+	}
+}
+
+// features/settings.feature — "A chosen browser that is gone falls back to the
+// default"
+func TestAChosenBrowserThatIsGoneFallsBackToTheDefault(t *testing.T) {
+	h := newHarness(t)
+	firefox := filepath.Join(t.TempDir(), "Firefox.app")
+	if err := os.MkdirAll(firefox, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.d.SetBrowser(firefox); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(firefox); err != nil {
+		t.Fatal(err)
+	}
+	// INFO: The key stays, so the app is found again once it is reinstalled;
+	// the snapshot says it is gone and where it was expected, which General
+	// shows and every "Open" falls back on (widgets_test.dart).
+	if got := h.d.State().Browser; got != (Browser{Path: firefox, Found: false}) {
+		t.Fatalf("browser = %+v, want %s, not found", got, firefox)
+	}
+}
+
 // features/settings.feature — "General shows the version and a check for
 // updates"
 func TestGeneralShowsTheVersion(t *testing.T) {

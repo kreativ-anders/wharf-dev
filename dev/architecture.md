@@ -407,6 +407,14 @@ them surviving a restart:
 - `projects[].hosts_entry` — *removed.* It recorded a hosts line from the
   `<name>.wharf` days; an old file loses the key on its next write.
 - `appearance` — `"light"` or `"dark"`; absent means follow the system.
+- `browser` — the app every "Open" starts a project in: a macOS `.app`
+  bundle, which is opened with `open -a`, or any other app file, which is
+  run with the address. Absent means the system's default browser
+  (`features/settings.feature`). The user picks the app; Wharf does not list
+  installed browsers, because the OS's list of apps that open web addresses
+  holds tools that are not browsers (Hammerspoon, test builds of Chromium).
+  The GUI starts it, as it opens folders; the daemon records it and says in
+  the snapshot whether it is still there.
 - `projects[].path` — appears only for a project whose folder is not in
   `www/`: the folder is added where it is (`features/project-folders.feature`).
 - `services.php.paths` — appears only when the tool adopted a PHP already

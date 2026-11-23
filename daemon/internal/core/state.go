@@ -29,6 +29,8 @@ type State struct {
 	Version string `json:"version"`
 	// Appearance is "system", "light" or "dark".
 	Appearance string `json:"appearance"`
+	// Browser is the app projects open in (settings.feature).
+	Browser Browser `json:"browser"`
 	// WWW is the folder projects are put in by default, which the GUI offers
 	// to open (project-folders.feature, "Opening the www folder").
 	WWW          string    `json:"www"`
@@ -49,6 +51,15 @@ type State struct {
 	Network Network `json:"network"`
 	// Update is what "Check for updates" last found (settings.feature).
 	Update Update `json:"update"`
+}
+
+// Browser is the app the user chose for "Open projects in". Path is empty for
+// the system's default browser. Found is false once the app is gone, and the
+// GUI then opens the system's default instead (settings.feature, "A chosen
+// browser that is gone falls back to the default").
+type Browser struct {
+	Path  string `json:"path"`
+	Found bool   `json:"found"`
 }
 
 // Services is the global service state shown in Settings. Only Webserver and
@@ -196,6 +207,7 @@ func (d *Daemon) snapshot(cfg *config.Config) State {
 		Root:         d.root.Dir,
 		Version:      d.version,
 		Appearance:   appearance(cfg.Appearance),
+		Browser:      Browser{Path: cfg.Browser, Found: cfg.Browser != "" && browserFound(cfg.Browser)},
 		WWW:          d.root.WWW(),
 		Config:       d.root.Config(),
 		Domain:       wruntime.Domain,

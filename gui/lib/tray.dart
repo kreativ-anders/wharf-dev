@@ -2,9 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:tray_manager/tray_manager.dart';
-import 'package:url_launcher/url_launcher_string.dart';
-
 import 'daemon.dart';
+import 'folders.dart';
 import 'models/state.dart';
 
 /// The tray menu. Start, stop and open belong here, not buried in a window
@@ -154,7 +153,7 @@ class TrayController with TrayListener {
     final name = parts[1];
     if (parts[0] == 'open') {
       final project = daemon.state.projects.where((p) => p.name == name).firstOrNull;
-      if (project != null) launchUrlString(project.url);
+      if (project != null) openProject(daemon, project.url);
       return;
     }
     final action = ProjectAction.values.where((a) => a.name == parts[0]).firstOrNull;
