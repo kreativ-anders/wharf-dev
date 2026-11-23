@@ -274,7 +274,7 @@ user asks — "Download" in the PHP picker, or turning SSL on without mkcert:
 
 | Binary | Source | Trust |
 |---|---|---|
-| PHP, macOS/Linux | static-php-cli's "bulk" builds (`dl.static-php.dev`): single static `php-fpm` and `php`, every extension Kirby needs plus intl, imagick, mysqli, opcache and sodium. Not "common": it lacks intl and imagick, and a static build cannot load an extension later | HTTPS; no checksums are published |
+| PHP, macOS/Linux | static-php-cli's "bulk" builds (`dl.static-php.dev`): single static `php-fpm` and `php` with static-php-cli's widest extension set, see below. Not "common": it lacks intl and imagick, and a static build cannot add one later, see below | HTTPS; no checksums are published |
 | PHP, Windows | the official builds (`windows.php.net`), NTS x64 | SHA-256 from `releases.json` |
 | mkcert | a pinned GitHub release | SHA-256 pinned in `internal/certs` |
 | nginx, Linux/Windows | static builds from jirutka/nginx-binaries, newest version | SHA-1 from the index — the only checksum published |
@@ -282,6 +282,37 @@ user asks — "Download" in the PHP picker, or turning SSL on without mkcert:
 | Apache, Windows | Apache Lounge, newest 2.4 Win64 build | SHA-256 published beside each zip |
 | Apache, macOS | nothing to install — macOS ships `/usr/sbin/httpd` | — |
 | Apache, Linux | the distribution's package (apt, dnf, zypper or pacman), behind one password prompt | the distribution's own |
+
+**Why "bulk", and what it leaves out.** Wharf is a development tool for PHP
+projects in general. It does not implement one framework's requirements.
+The PHP it downloads should therefore run a typical project without setup.
+A static build cannot add an extension later (issue #5). On Linux, the musl
+builds are fully static and cannot load any `.so`. On macOS a `.so` loads
+only if it was built for exactly that PHP, and static-php-cli publishes no
+such files. So Wharf takes the widest set static-php-cli publishes rather
+than the smallest that works. "bulk" is that set. static-php-cli lists what it
+carries in `README.txt` beside the builds: image handling (gd, imagick),
+internationalisation (intl, iconv, mbstring), cryptography (openssl,
+sodium), XML (dom, SimpleXML, xsl), caches (apcu, redis, opcache), MySQL,
+PostgreSQL and SQLite clients, and the rest of PHP's usual extensions.
+
+These are missing and come up in everyday PHP work:
+
+- `pdo_sqlite` and `pdo_pgsql`. PDO comes only with `pdo_mysql`, so code
+  that opens SQLite or PostgreSQL through PDO fails. `sqlite3` and `pgsql`
+  are there, but they are different APIs. "common" had both, so this is
+  what switching to "bulk" cost.
+- `xdebug`, for step debugging and coverage.
+- `memcached`.
+- `ldap` and `gettext`.
+- ImageMagick's command-line tools (`convert`, `magick`). ImageMagick is
+  linked into imagick and is not available as a program.
+
+Wharf does not build or host its own PHP to close these gaps: that would
+mean a build pipeline and a download source to maintain for every version,
+OS and CPU. A project that needs one of them adopts a PHP that has it, such
+as Homebrew's or the distribution's. Wharf uses an adopted PHP the same way
+as a downloaded one.
 
 Each download is staged beside its destination and renamed into place only
 when complete, so a failure leaves no half-installed folder. The newest patch

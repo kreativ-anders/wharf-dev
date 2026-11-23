@@ -52,9 +52,14 @@ Feature: PHP runtime detection and selection
     And the picker shows it as downloading until it is done
     And it becomes selectable without any further setup
 
-  # INFO: A static build cannot load an extension later — "extension=intl" in
+  # INFO: A static build loads an extension later only from a .so built for
+  # exactly that PHP, and static-php-cli publishes none. "extension=intl" in
   # config/php.ini fails with "Unable to load dynamic library" (issue #5). So
   # the build Wharf downloads must already carry what projects commonly need.
+  # Wharf serves PHP projects in general, so it takes static-php-cli's widest
+  # set, "bulk". Even that lacks pdo_sqlite, pdo_pgsql, xdebug, memcached,
+  # ldap and gettext. A project that needs one adopts a PHP that has it
+  # (dev/architecture.md §4b).
   Scenario: A downloaded build already carries intl and imagick
     Given the machine runs macOS or Linux
     When the user downloads PHP "8.4"
