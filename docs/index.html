@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://api.pirsch.io; connect-src 'self' https://api.pirsch.io; img-src 'self' data:; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Wharf — local PHP development environment, no Docker</title>
   <meta name="description" content="A local PHP development environment for Windows, macOS and Linux: native nginx, Apache and PHP, no Docker. Every folder is a project at name.localhost.">
   <link rel="canonical" href="https://getwharf.dev/">
