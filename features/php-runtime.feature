@@ -52,6 +52,15 @@ Feature: PHP runtime detection and selection
     And the picker shows it as downloading until it is done
     And it becomes selectable without any further setup
 
+  # INFO: A static build cannot load an extension later — "extension=intl" in
+  # config/php.ini fails with "Unable to load dynamic library" (issue #5). So
+  # the build Wharf downloads must already carry what projects commonly need.
+  Scenario: A downloaded build already carries intl and imagick
+    Given the machine runs macOS or Linux
+    When the user downloads PHP "8.4"
+    Then the build comes from static-php-cli's "bulk" set
+    And it carries intl, imagick, mysqli, opcache and sodium without any php.ini line
+
   Scenario: Adding a PHP version leaves a running backend on its port
     Given PHP "8.5" is installed and its backend is running
     When PHP "8.4" is downloaded, adopted or found by a re-scan

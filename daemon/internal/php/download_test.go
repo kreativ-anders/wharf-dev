@@ -254,3 +254,14 @@ func TestAPHPFoundWithoutAPHPIniLoadsTheCommonExtensions(t *testing.T) {
 		t.Fatalf("a build under PHPRC got %q", got)
 	}
 }
+
+// features/php-runtime.feature — "A downloaded build already carries intl and imagick"
+func TestADownloadedBuildAlreadyCarriesIntlAndImagick(t *testing.T) {
+	// WARNING: "common" lacks intl and imagick (issue #5). The set's README
+	// lists its extensions; this pins the choice of set, since the
+	// extensions are compiled into the binary and cannot be checked offline.
+	base := NewDownloader().StaticBase
+	if !strings.HasSuffix(base, "/static-php-cli/bulk") {
+		t.Fatalf("PHP is downloaded from %s, want static-php-cli's bulk set", base)
+	}
+}

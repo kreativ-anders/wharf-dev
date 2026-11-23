@@ -267,7 +267,7 @@ user asks — "Download" in the PHP picker, or turning SSL on without mkcert:
 
 | Binary | Source | Trust |
 |---|---|---|
-| PHP, macOS/Linux | static-php-cli builds (`dl.static-php.dev`): single static `php-fpm` and `php`, every extension Kirby needs | HTTPS; no checksums are published |
+| PHP, macOS/Linux | static-php-cli's "bulk" builds (`dl.static-php.dev`): single static `php-fpm` and `php`, every extension Kirby needs plus intl, imagick, mysqli, opcache and sodium. Not "common": it lacks intl and imagick, and a static build cannot load an extension later | HTTPS; no checksums are published |
 | PHP, Windows | the official builds (`windows.php.net`), NTS x64 | SHA-256 from `releases.json` |
 | mkcert | a pinned GitHub release | SHA-256 pinned in `internal/certs` |
 | nginx, Linux/Windows | static builds from jirutka/nginx-binaries, newest version | SHA-1 from the index — the only checksum published |
