@@ -30,9 +30,10 @@ type Installer interface {
 }
 
 // Downloader installs prebuilt PHP binaries. PHP publishes official builds
-// for Windows only, so the other two platforms use static-php-cli's builds:
-// single static binaries with no library dependencies, carrying every
-// extension Kirby needs (ctype, curl, dom, gd, mbstring, openssl, …). Both
+// for Windows only, so the other two platforms use static-php-cli's "bulk"
+// builds: single static binaries with no library dependencies, carrying
+// every extension Kirby needs and the ones projects commonly add (intl,
+// imagick, mysqli, opcache, sodium). Both
 // sources publish a machine-readable index, so the newest patch release of a
 // minor version is found rather than hard-coded.
 type Downloader struct {
@@ -49,7 +50,11 @@ type Downloader struct {
 // NewDownloader returns a Downloader pointed at the public build servers.
 func NewDownloader() *Downloader {
 	return &Downloader{
-		StaticBase:  "https://dl.static-php.dev/static-php-cli/common",
+		// WARNING: not "common": it lacks intl and imagick, and a static
+		// build cannot load an extension added later in php.ini (issue #5,
+		// php-runtime.feature, "A downloaded build already carries intl and
+		// imagick").
+		StaticBase:  "https://dl.static-php.dev/static-php-cli/bulk",
 		WindowsBase: "https://windows.php.net/downloads/releases",
 	}
 }
@@ -251,8 +256,9 @@ func (d *Downloader) installWindows(ctx context.Context, version, destDir, tmp s
 	return full, os.WriteFile(filepath.Join(destDir, "php.ini"), []byte(windowsINI()), 0o644)
 }
 
-// Extensions are loaded by every PHP Wharf runs, as static-php-cli's builds
-// carry them.
+// Extensions are loaded by a PHP whose extensions are separate files — the
+// Windows build, or one adopted without a php.ini — so it serves what a
+// static build has built in.
 //
 // WARNING: exif after mbstring, which it uses when loaded.
 var Extensions = []string{
