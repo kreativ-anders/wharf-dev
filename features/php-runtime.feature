@@ -133,3 +133,11 @@ Feature: PHP runtime detection and selection
     When the user removes or hides "8.3"
     Then nothing is deleted and nothing is hidden
     And the message names what uses "8.3" and what to change first
+
+  # INFO: A refusal only after the click reads as "nothing happened" when
+  # the notice is scrolled out of view, so the picker says it up front.
+  Scenario: The picker says why a PHP version in use cannot be removed
+    Given PHP "8.3" is the global default, or a project's PHP override
+    When the user looks at "8.3" in the picker
+    Then its "Remove" or "Hide" button is disabled
+    And the button names what uses "8.3" and what to change first

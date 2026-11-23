@@ -224,6 +224,18 @@ func phpInUse(cfg *config.Config, version string) error {
 	return conflict("PHP %s is used by %s — choose another PHP version for them first", version, strings.Join(users, ", "))
 }
 
+// phpUses is phpInUse for every install: the same words RemovePHP would
+// refuse with, so the picker and the refusal cannot disagree.
+func phpUses(cfg *config.Config, installs []php.Install) map[string]string {
+	out := map[string]string{}
+	for _, in := range installs {
+		if err := phpInUse(cfg, in.Version); err != nil {
+			out[in.Version] = err.Error()
+		}
+	}
+	return out
+}
+
 // phpInstall is the install the picker shows for a version.
 func (d *Daemon) phpInstall(version string) (php.Install, bool) {
 	for _, in := range d.PHPInstalls() {

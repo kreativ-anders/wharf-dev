@@ -1033,6 +1033,20 @@ class _RemovePhpButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = 'PHP ${install.fullVersion.isEmpty ? install.version : install.fullVersion}';
+    // INFO: Disabled with the daemon's reason as its tooltip, so the user learns
+    // what to change before clicking (php-runtime.feature, "The picker says
+    // why a PHP version in use cannot be removed").
+    final inUse = daemon.state.services.php.inUse[install.version];
+    if (inUse != null) {
+      return IconButton(
+        tooltip: inUse,
+        icon: Icon(
+          install.source == 'vendored' ? Icons.delete_outline : Icons.visibility_off_outlined,
+          size: 18,
+        ),
+        onPressed: null,
+      );
+    }
     if (install.source != 'vendored') {
       return IconButton(
         tooltip: 'Hide $name from Wharf',
