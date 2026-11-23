@@ -55,6 +55,7 @@ const usage = `usage: wharfctl [--root DIR] <command> [args]
   webserver install <name>   install nginx or Apache
   webserver scan             re-scan the machine for webservers
   appearance <mode>          system, light or dark
+  browser [<app>]            the app projects open in; none for the system default
   php                        list PHP versions found on this machine
   php use <version>          set the global default PHP version
   php add <version>          register a version without selecting it
@@ -212,6 +213,13 @@ func run() error {
 			return fmt.Errorf("usage: wharfctl appearance <system|light|dark>")
 		}
 		return callAndShow(ctx, c, ipc.MethodSetAppearance, map[string]string{"mode": args[1]})
+
+	case "browser":
+		path := ""
+		if len(args) > 1 {
+			path = args[1]
+		}
+		return callAndShow(ctx, c, ipc.MethodSetBrowser, map[string]string{"path": path})
 
 	case "php":
 		return runPHP(ctx, c, args[1:])

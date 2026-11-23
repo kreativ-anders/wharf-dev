@@ -47,6 +47,9 @@ const (
 	MethodInstallWebserver = "services.installWebserver"
 	MethodDetectWebservers = "services.detectWebservers"
 	MethodSetAppearance    = "settings.setAppearance"
+	// MethodSetBrowser records the app projects open in; an empty path is
+	// the system's default browser again.
+	MethodSetBrowser = "settings.setBrowser"
 	// MethodCheckUpdates asks GitHub for Wharf's newest release, only ever
 	// on the user's press; MethodDownloadUpdate saves its file for this
 	// system to a path, once it matches the release's SHA256SUMS.

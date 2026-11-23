@@ -25,6 +25,7 @@ class Method {
   static const installWebserver = 'services.installWebserver';
   static const detectWebservers = 'services.detectWebservers';
   static const setAppearance = 'settings.setAppearance';
+  static const setBrowser = 'settings.setBrowser';
   static const checkUpdates = 'settings.checkUpdates';
   static const downloadUpdate = 'settings.downloadUpdate';
   static const reset = 'settings.reset';
@@ -211,6 +212,10 @@ class Daemon extends ChangeNotifier {
   /// Light, dark or the system's — stored by the daemon like every other
   /// setting, so the window keeps no state of its own.
   Future<void> setAppearance(String mode) => _act(Method.setAppearance, {'mode': mode});
+
+  /// Records the app projects open in; an empty [path] goes back to the
+  /// system's default browser (features/settings.feature).
+  Future<void> setBrowser(String path) => _act(Method.setBrowser, {'path': path});
 
   /// Asks the daemon to look for a newer Wharf — the only time it ever looks.
   /// A failed lookup becomes the notice saying to try again later

@@ -371,6 +371,44 @@ func (d *Daemon) SetAppearance(mode string) error {
 	return nil
 }
 
+// SetBrowser records the app projects open in, or with an empty path goes
+// back to the system's default browser by removing the key
+// (settings.feature, "Choosing the browser projects open in"). The app is
+// picked by the user, not detected: the OS's list of apps that open web
+// addresses holds tools that are not browsers. Starting it is the GUI's, like
+// opening a folder; the daemon only records it and says whether it is there.
+func (d *Daemon) SetBrowser(path string) error {
+	path = strings.TrimSpace(path)
+	if path != "" {
+		path = filepath.Clean(path)
+		if !browserFound(path) {
+			return invalid("%s is not an app that can be started. Choose the browser's app (Firefox.app, firefox.exe, /usr/bin/firefox) instead", path)
+		}
+	}
+	_, err := d.store.Update(func(c *config.Config) error {
+		c.Browser = path
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	d.publish()
+	return nil
+}
+
+// browserFound reports whether path is still an app: a macOS .app bundle,
+// which is a folder, or a file anywhere else.
+func browserFound(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	if info.IsDir() {
+		return strings.EqualFold(filepath.Ext(path), ".app")
+	}
+	return info.Mode().IsRegular()
+}
+
 // OnState registers the callback that receives every new snapshot.
 func (d *Daemon) OnState(fn func(State)) { d.onState.Store(&fn) }
 

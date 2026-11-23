@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher_string.dart';
 
 import '../daemon.dart';
 import '../folders.dart';
@@ -78,7 +77,7 @@ class _ProjectSheet extends StatelessWidget {
             Semantics(
               link: true,
               child: InkWell(
-                onTap: () => launchUrlString(project.url),
+                onTap: () => openProject(daemon, project.url),
                 child: Text(
                   project.url,
                   style: muted?.copyWith(decoration: TextDecoration.underline),

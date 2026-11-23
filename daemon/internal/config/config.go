@@ -26,9 +26,13 @@ import (
 type Config struct {
 	// Appearance is "light" or "dark"; absent means follow the system
 	// (settings.feature, "Choosing light or dark appearance").
-	Appearance string    `json:"appearance,omitempty"`
-	Services   Services  `json:"services"`
-	Projects   []Project `json:"projects"`
+	Appearance string `json:"appearance,omitempty"`
+	// Browser is the app every "Open" starts a project in; absent means the
+	// system's default browser (settings.feature, "Choosing the browser
+	// projects open in").
+	Browser  string    `json:"browser,omitempty"`
+	Services Services  `json:"services"`
+	Projects []Project `json:"projects"`
 }
 
 // Appearances are the values Appearance may take; "system" is written as the
@@ -301,6 +305,9 @@ func (c *Config) normalise() {
 	if c.Appearance != "light" && c.Appearance != "dark" {
 		c.Appearance = ""
 	}
+	if c.Browser = strings.TrimSpace(c.Browser); c.Browser != "" {
+		c.Browser = filepath.Clean(c.Browser)
+	}
 	if c.Services.Webserver.Active == "" {
 		c.Services.Webserver.Active = def.Services.Webserver.Active
 	}
@@ -364,6 +371,7 @@ func (c *Config) normalise() {
 func (c *Config) clone() *Config {
 	out := &Config{
 		Appearance: c.Appearance,
+		Browser:    c.Browser,
 		Services: Services{
 			Webserver: Webserver{
 				Active:    c.Services.Webserver.Active,

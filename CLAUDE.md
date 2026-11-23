@@ -190,7 +190,7 @@ wharf/
     │   ├── main.dart          window, tray wiring, close-to-tray
     │   ├── daemon.dart        THE APP'S STATE — one snapshot from the daemon
     │   ├── daemon_launcher.dart  finds, starts and stops wharfd: one application
-    │   ├── folders.dart       opening folders and files, the folder picker, the tray's add
+    │   ├── folders.dart       opening folders and files, the folder and app pickers, the tray's add; projects in the chosen browser
     │   ├── project_name.dart  the daemon's name rewrite, mirrored for the "Add project…" name field
     │   ├── theme.dart         Kirby-plain light/dark palette, status mark (shape + colour)
     │   ├── tray.dart          the tray menu (features/tray-actions.feature)

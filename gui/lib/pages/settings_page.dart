@@ -113,6 +113,9 @@ class _SettingsPageState extends State<SettingsPage> {
         _SectionHeader('Appearance'),
         _AppearanceSection(daemon: daemon, mode: state.appearance),
         const SizedBox(height: 28),
+        _SectionHeader('Open projects in'),
+        _BrowserSection(daemon: daemon, browser: state.browser),
+        const SizedBox(height: 28),
         _SectionHeader('Config file'),
         _ConfigSection(daemon: daemon, config: state.config),
         const SizedBox(height: 28),
@@ -301,6 +304,59 @@ class _AppearanceSection extends StatelessWidget {
           selected: {mode},
           onSelectionChanged: (s) => daemon.setAppearance(s.first),
         ),
+      ),
+    );
+  }
+}
+
+/// The browser every "Open" uses: the system's default, or an app the user
+/// picked. Wharf lists no installed browsers — the OS's own list holds apps
+/// that are not browsers — so the user points at one
+/// (features/settings.feature, "Choosing the browser projects open in").
+class _BrowserSection extends StatelessWidget {
+  const _BrowserSection({required this.daemon, required this.browser});
+
+  final Daemon daemon;
+  final Browser browser;
+
+  Future<void> _choose() async {
+    final app = await pickApp();
+    if (app != null) await daemon.setBrowser(app);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final small = Theme.of(context).textTheme.bodySmall;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(browser.isSystemDefault ? 'System default' : browser.name),
+          if (!browser.isSystemDefault) SelectableText(browser.path, style: small),
+          // INFO: Said in words, not only by a colour (dev/design-principles.md §4).
+          if (!browser.isSystemDefault && !browser.found) ...[
+            const SizedBox(height: 4),
+            Text(
+              '${browser.name} was not found there. Projects open in the system default until it is back or another app is chosen.',
+              style: TextStyle(color: WharfColors.of(context).failed, fontSize: 12.5),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _choose,
+                icon: const Icon(Icons.open_in_browser, size: 18),
+                label: const Text('Choose app…'),
+              ),
+              if (!browser.isSystemDefault)
+                TextButton(onPressed: () => daemon.setBrowser(''), child: const Text('System default')),
+            ],
+          ),
+        ],
       ),
     );
   }

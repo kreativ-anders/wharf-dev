@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tray_manager/tray_manager.dart' show MenuItem;
 import 'package:wharf_gui/daemon.dart';
 import 'package:wharf_gui/folders.dart';
 import 'package:wharf_gui/models/state.dart';
@@ -32,6 +33,27 @@ class _PhpSettingsDaemon extends Daemon {
   @override
   Future<void> editPhpSettings(Future<void> Function(String) open) =>
       open(state.services.php.settings);
+}
+
+/// A fixture daemon that records each browser General chooses.
+class _BrowserDaemon extends Daemon {
+  _BrowserDaemon(String json) : super(root: '/tmp/wharf-test') {
+    state = WharfState.fromJson(jsonDecode(json) as Map<String, dynamic>);
+  }
+
+  final chosen = <String>[];
+
+  @override
+  Future<void> setBrowser(String path) async => chosen.add(path);
+}
+
+/// Records each project address opened, with the browser it was opened in.
+List<(String, Browser)> captureBrowser() {
+  final opened = <(String, Browser)>[];
+  final previous = openInBrowser;
+  openInBrowser = (url, browser) async => opened.add((url, browser));
+  addTearDown(() => openInBrowser = previous);
+  return opened;
 }
 
 /// A fixture daemon whose "Start" takes until [done] completes, the way a
@@ -705,6 +727,73 @@ void main() {
     expect(find.text('Download…'), findsNothing);
     await tester.tap(find.text('Open release page'));
     expect(links, ['https://github.com/kreativ-anders/wharf-dev/releases/tag/v1.2.0']);
+  });
+
+  // features/settings.feature — "Choosing the browser projects open in"
+  testWidgets('General picks the app projects open in, and every Open uses it', (tester) async {
+    final previous = pickApp;
+    addTearDown(() => pickApp = previous);
+    pickApp = () async => '/Applications/Firefox.app';
+
+    final daemon = _BrowserDaemon(_twoProjects);
+    await showSettings(tester, daemon);
+    expect(find.text('Open projects in'), findsOneWidget);
+    expect(find.text('System default'), findsOneWidget);
+    await tester.tap(find.text('Choose app…'));
+    await tester.pump();
+    expect(daemon.chosen, ['/Applications/Firefox.app']);
+
+    // INFO: The daemon recorded it; the snapshot it publishes names it.
+    final firefox = _twoProjects.replaceFirst(
+      '"version": "v0.1.0",',
+      '"version": "v0.1.0", "browser": {"path": "/Applications/Firefox.app", "found": true},',
+    );
+    final chosen = _BrowserDaemon(firefox);
+    await showSettings(tester, chosen);
+    expect(find.text('Firefox'), findsOneWidget);
+    expect(find.text('/Applications/Firefox.app'), findsOneWidget);
+    expect(find.textContaining('was not found'), findsNothing);
+    await tester.tap(find.text('System default'));
+    expect(chosen.chosen, [''], reason: 'System default removes the key');
+
+    // INFO: And "Open" in the window, in a project's settings and in the tray
+    // opens the project in Firefox.
+    final opened = captureBrowser();
+    await tester.pumpWidget(wrap(ProjectsPage(daemon: chosen)));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Open http://my-kirby-site.localhost'));
+    await tester.tap(find.text('my-kirby-site'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('http://my-kirby-site.localhost').last);
+    TrayController(
+      chosen,
+      onOpenWindow: () {},
+      onAddProject: () async {},
+      onQuit: () async {},
+    ).onTrayMenuItemClick(MenuItem(key: 'open:my-kirby-site'));
+    await tester.pump();
+    expect(opened, hasLength(3));
+    for (final (url, browser) in opened) {
+      expect(url, 'http://my-kirby-site.localhost');
+      expect(browser.path, '/Applications/Firefox.app');
+    }
+  });
+
+  // features/settings.feature — "A chosen browser that is gone falls back to the
+  // default"
+  testWidgets('a chosen browser that is gone is named, and projects open in the default', (tester) async {
+    final gone = _twoProjects.replaceFirst(
+      '"version": "v0.1.0",',
+      '"version": "v0.1.0", "browser": {"path": "/Applications/Firefox.app", "found": false},',
+    );
+    final daemon = fixture(gone);
+    await showSettings(tester, daemon);
+    expect(find.text('/Applications/Firefox.app'), findsOneWidget, reason: 'where it was expected');
+    expect(find.textContaining('Firefox was not found there'), findsOneWidget);
+    expect(find.textContaining('open in the system default'), findsOneWidget);
+    // INFO: Then it opens in the system's default browser: what the opener does
+    // with an app that is not found.
+    expect(daemon.state.browser.found, isFalse);
   });
 
   // features/settings.feature — "General names the Wharf folder in use"

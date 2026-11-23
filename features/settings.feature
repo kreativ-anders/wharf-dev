@@ -122,6 +122,21 @@ Feature: Global settings
     And "appearance": "dark" is written to config/wharf.json
     And choosing "System" again removes the key, so the window follows the OS
 
+  # INFO: The user picks the app, Wharf does not list installed browsers: the
+  # OS's own list holds apps that are not browsers (issue #7).
+  Scenario: Choosing the browser projects open in
+    Given projects open in the system's default browser
+    When the user chooses "Choose app…" under "Open projects in" in General and picks Firefox
+    Then "browser" is written to config/wharf.json with Firefox's location
+    And "Open" in the window, in a project's settings and in the tray opens the project in Firefox
+    And choosing "System default" again removes the key
+
+  Scenario: A chosen browser that is gone falls back to the default
+    Given "browser" names an app that is no longer there
+    When the user opens a project
+    Then it opens in the system's default browser
+    And General says the chosen browser was not found, and where it was expected
+
   Scenario: Resetting Wharf
     Given projects exist in "www/" and one was added from elsewhere
     When the user chooses "Reset Wharf…" in Settings and confirms

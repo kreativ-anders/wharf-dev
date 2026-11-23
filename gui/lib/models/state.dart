@@ -13,6 +13,7 @@ class WharfState {
     required this.ssl,
     required this.busy,
     this.appearance = 'system',
+    this.browser = Browser.systemDefault,
     this.version = '',
     this.configTemplates = const [],
     this.network = Network.empty,
@@ -28,6 +29,9 @@ class WharfState {
   /// 'system', 'light' or 'dark' — a setting in wharf.json like any other
   /// (features/settings.feature).
   final String appearance;
+
+  /// The app every "Open" starts a project in (features/settings.feature).
+  final Browser browser;
 
   /// Where projects go by default, and the config folder — both of which the
   /// GUI offers to open (features/project-folders.feature).
@@ -73,6 +77,7 @@ class WharfState {
     root: json['root'] as String? ?? '',
     version: json['version'] as String? ?? '',
     appearance: json['appearance'] as String? ?? 'system',
+    browser: Browser.fromJson(json['browser'] as Map<String, dynamic>? ?? const {}),
     www: json['www'] as String? ?? '',
     config: json['config'] as String? ?? '',
     domain: json['domain'] as String? ?? 'localhost',
@@ -91,6 +96,30 @@ class WharfState {
     network: Network.fromJson(json['network'] as Map<String, dynamic>? ?? const {}),
     update: WharfUpdate.fromJson(json['update'] as Map<String, dynamic>? ?? const {}),
   );
+}
+
+/// The app chosen under "Open projects in". An empty [path] is the system's
+/// default browser; [found] is false once the chosen app is gone, and projects
+/// then open in the default (features/settings.feature, "A chosen browser that
+/// is gone falls back to the default").
+class Browser {
+  const Browser({this.path = '', this.found = false});
+
+  final String path;
+  final bool found;
+
+  static const systemDefault = Browser();
+
+  bool get isSystemDefault => path.isEmpty;
+
+  /// What General calls the app: its file name without .app or .exe.
+  String get name {
+    final file = path.split(RegExp(r'[/\\]')).lastWhere((s) => s.isNotEmpty, orElse: () => path);
+    return file.replaceFirst(RegExp(r'\.(app|exe)$', caseSensitive: false), '');
+  }
+
+  factory Browser.fromJson(Map<String, dynamic> json) =>
+      Browser(path: json['path'] as String? ?? '', found: json['found'] as bool? ?? false);
 }
 
 /// What "Check for updates" last found; nothing until the user asks

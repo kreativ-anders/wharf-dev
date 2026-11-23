@@ -2,8 +2,10 @@ import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 import 'daemon.dart';
+import 'models/state.dart';
 
 /// Opens a folder in the system file manager, or a file in its editor.
 typedef PathOpener = Future<void> Function(String path);
@@ -61,6 +63,52 @@ class EditorUnavailable implements Exception {
   @override
   String toString() => 'No text editor would open $path — open it by hand.';
 }
+
+/// Opens a project's address in [browser]: the app chosen under "Open
+/// projects in" while it is there, otherwise — and if it will not start — the
+/// system's default browser (features/settings.feature). A variable so widget
+/// tests can see what would have opened without a browser appearing.
+Future<void> Function(String url, Browser browser) openInBrowser = _openInBrowser;
+
+/// Every "Open" of a project — the window's row, its settings, the tray —
+/// goes through here, so all three use the same browser.
+Future<void> openProject(Daemon daemon, String url) =>
+    daemon.open((url) => openInBrowser(url, daemon.state.browser), url);
+
+Future<void> _openInBrowser(String url, Browser browser) async {
+  if (browser.found) {
+    try {
+      await _startApp(browser.path, url);
+      return;
+    } on ProcessException {
+      // INFO: An app that is there but will not start still opens the project,
+      // in the default browser, rather than not at all.
+    }
+  }
+  await launchUrlString(url);
+}
+
+/// A macOS .app is a folder that `open -a` starts; an app anywhere else is a
+/// file, run with the address. The shape of the path decides, not the OS.
+Future<void> _startApp(String app, String url) async {
+  if (app.toLowerCase().endsWith('.app')) {
+    final result = await Process.run('open', ['-a', app, url]);
+    if (result.exitCode != 0) {
+      throw ProcessException('open', ['-a', app, url], '${result.stderr}', result.exitCode);
+    }
+    return;
+  }
+  await Process.start(app, [url], mode: ProcessStartMode.detached);
+}
+
+/// Asks for the app projects open in. It starts in /Applications where there
+/// is one (macOS); elsewhere the picker's own default. A variable so widget
+/// tests can answer it without a dialog appearing.
+Future<String?> Function() pickApp = () async {
+  final apps = Directory('/Applications');
+  final picked = await openFile(initialDirectory: apps.existsSync() ? apps.path : null, confirmButtonText: 'Choose');
+  return picked?.path;
+};
 
 /// Asks for a folder: a picker that starts in www/ but accepts any folder.
 /// A variable so widget tests can answer it without a dialog appearing.
