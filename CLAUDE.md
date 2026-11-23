@@ -89,8 +89,9 @@ wharf/
 ├── CONTRIBUTING.md            set-up, workflow, commit subjects — points here for the rules
 ├── CHANGELOG.md               written by the release workflow, never by hand
 ├── Makefile                   build, test, cross-compile, spec matrix, version and release
-├── .github/workflows/
-│   └── release.yml            THE ONLY WORKFLOW: gate → bump → build per OS → release
+├── .github/
+│   ├── dependabot.yml         weekly update pull requests: Go, pub, actions — not a workflow
+│   └── workflows/release.yml  THE ONLY WORKFLOW: gate → bump → build per OS → release
 ├── tool/
 │   └── version.sh             the one place a version is computed, bumped, tagged, changelogged
 ├── packaging/                 one file per platform, the same script locally and in CI

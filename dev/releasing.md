@@ -93,6 +93,10 @@ Rules the pipeline keeps, each learned the hard way in finanzgecko:
   them, failed at start with `STATUS_DLL_NOT_FOUND`.
 - **Every action is pinned to a commit SHA**, the tag it came from in a
   comment. A tag can be moved to other code without a commit here.
+- **Dependabot proposes updates, weekly** (`.github/dependabot.yml`): Go
+  modules, pub packages and the pinned actions. It is not a workflow, and
+  its pull requests run no CI, so `make check` locally before merging one.
+  Flutter's own pin it does not see.
 - **Read-only by default.** Only `bump` and `release` get `contents: write`;
   the build legs, which run third-party actions, cannot push or publish.
 - **`SHA256SUMS` proves integrity, not authenticity.** It is unsigned, and

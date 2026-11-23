@@ -1,0 +1,17 @@
+# Opens a pull request when a dependency has a fix or a new release.
+# INFO: not a workflow — the release workflow stays the only one
+# (dev/releasing.md); this only proposes changes for a person to merge.
+version: 2
+updates:
+  - package-ecosystem: pub
+    directory: /gui
+    schedule:
+      interval: weekly
+  - package-ecosystem: gomod
+    directory: /daemon
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
