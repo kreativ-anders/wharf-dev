@@ -202,20 +202,13 @@ func (d *Downloader) installStatic(ctx context.Context, goos, goarch, version, d
 	return full, writeStaticINI(destDir)
 }
 
-// staticBuild names the files a static-php-cli build is made of, as
-// installStatic leaves them.
+// staticBuild is what installStatic leaves in a version's folder.
 var staticBuild = []string{"php", "php-fpm"}
 
-// staticINI is the php.ini written beside a static-php-cli build. The php
-// CLI finds it there on its own, the terminal's link to it included;
-// php-fpm does not look there and is pointed at it (runtime.PHPSpec).
+// staticINI is the php.ini written beside a static-php-cli build.
 func staticINI() string {
-	return `; Written by Wharf for this PHP build. Put your own settings in
-; config/php.ini, which PHP reads after this file, so a value there wins.
-
-; Swoole is built in, and its short names would define go() and defer() as
-; global functions: Kirby's go() helper then fails with "Cannot redeclare
-; function go()" (issue #23). Swoole stays usable through its classes.
+	return `; Written by Wharf. Your own settings belong in config/php.ini, which wins.
+; Swoole's go() and defer() would break Kirby's go() helper (issue #23).
 swoole.use_shortname = Off
 `
 }
@@ -224,12 +217,8 @@ func writeStaticINI(dir string) error {
 	return os.WriteFile(filepath.Join(dir, "php.ini"), []byte(staticINI()), 0o644)
 }
 
-// EnsureStaticINI gives a static-php-cli build downloaded by a Wharf that
-// wrote no php.ini beside it the one a download writes now
-// (php-runtime.feature, "A build downloaded by an earlier Wharf gets its
-// php.ini on the next start"). A folder holding anything but php and php-fpm
-// was put there by someone else, and is left as it is: a php.ini beside a
-// build that reads its own from elsewhere would hide that one.
+// EnsureStaticINI writes staticINI into a folder holding only a downloaded
+// build; any other folder is left alone, as its own php.ini could be hidden.
 func EnsureStaticINI(dir string) (bool, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -237,7 +226,7 @@ func EnsureStaticINI(dir string) (bool, error) {
 	}
 	var names []string
 	for _, e := range entries {
-		// INFO: Finder leaves .DS_Store in every folder it opened.
+		// INFO: Finder's .DS_Store.
 		if !strings.HasPrefix(e.Name(), ".") {
 			names = append(names, e.Name())
 		}

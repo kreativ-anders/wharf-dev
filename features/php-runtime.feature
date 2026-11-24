@@ -66,10 +66,8 @@ Feature: PHP runtime detection and selection
     Then the build comes from static-php-cli's "bulk" set
     And it carries intl, imagick, mysqli, opcache and sodium without any php.ini line
 
-  # INFO: "bulk" also carries Swoole, which by default defines go() and
-  # defer() as global functions. Kirby's own go() helper then stops every
-  # request with "Cannot redeclare function go()" (issue #23). Swoole cannot
-  # be taken out of a static build, but its short names can be turned off.
+  # INFO: "bulk" carries Swoole, whose go() and defer() break Kirby's go()
+  # helper (issue #23). A static build cannot drop it, so its short names are off.
   Scenario: A downloaded build leaves go() and defer() to the project
     Given the machine runs macOS or Linux
     When the user downloads PHP "8.4"

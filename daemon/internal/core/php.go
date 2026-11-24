@@ -24,9 +24,7 @@ func (d *Daemon) RefreshPHP(ctx context.Context) []php.Install {
 	return installs
 }
 
-// ensureStaticINIs writes the php.ini a download writes now into every build
-// an earlier Wharf downloaded without one (php-runtime.feature, "A build
-// downloaded by an earlier Wharf gets its php.ini on the next start").
+// ensureStaticINIs gives builds an earlier Wharf downloaded their php.ini.
 func (d *Daemon) ensureStaticINIs() {
 	vendor := filepath.Join(d.root.Bin(), "php")
 	entries, err := os.ReadDir(vendor)

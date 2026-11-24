@@ -264,11 +264,8 @@ func (r *Resolver) PHPSpec(cfg *config.Config, version string) (supervisor.Spec,
 		}, php.ExtensionArgs(filepath.Dir(bin), r.Root.PHPIni())...)
 	} else {
 		spec.Args = []string{"--nodaemonize", "--fpm-config", confPath}
-		// INFO: php-fpm, unlike the php CLI, does not read a php.ini beside
-		// its binary, and a downloaded build keeps Wharf's there
-		// (php-runtime.feature, "A downloaded build leaves go() and defer()
-		// to the project"). Only Wharf's own folder: an adopted build reads
-		// its php.ini from where its installer put it.
+		// INFO: php-fpm does not read a php.ini beside its binary; adopted
+		// builds keep reading their own.
 		ini := filepath.Join(filepath.Dir(bin), "php.ini")
 		if _, adopted := cfg.PHPPath(version); !adopted {
 			if _, err := os.Stat(ini); err == nil {

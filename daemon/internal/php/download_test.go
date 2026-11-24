@@ -286,9 +286,7 @@ func TestADownloadedBuildLeavesGoAndDeferToTheProject(t *testing.T) {
 		t.Fatalf("install: %v", err)
 	}
 
-	// INFO: Then "bin/php/8.4/php.ini" is written beside its binaries, turning
-	// off swoole.use_shortname — beside "php", where the CLI and the
-	// terminal's link to it look.
+	// INFO: Then php.ini beside the binaries turns off swoole.use_shortname
 	ini, err := os.ReadFile(filepath.Join(dest, "php.ini"))
 	if err != nil {
 		t.Fatalf("no php.ini beside the build: %v", err)
@@ -311,7 +309,7 @@ func TestEnsureStaticINIWritesOnlyIntoADownloadedBuild(t *testing.T) {
 		return dir
 	}
 
-	// INFO: Finder's .DS_Store does not make a downloaded build someone else's.
+	// INFO: .DS_Store does not count.
 	downloaded := stage("php", "php-fpm", ".DS_Store")
 	if wrote, err := EnsureStaticINI(downloaded); err != nil || !wrote {
 		t.Fatalf("a downloaded build got no php.ini (wrote %v, err %v)", wrote, err)

@@ -723,8 +723,7 @@ func TestThePickerSaysWhyAPHPVersionInUseCannotBeRemoved(t *testing.T) {
 	}
 }
 
-// stageStaticBuild puts a build into bin/php/<version> as installStatic leaves
-// one, with or without the php.ini a download now writes beside it.
+// stageStaticBuild stages a downloaded build, with or without its php.ini.
 func stageStaticBuild(t *testing.T, root layout.Root, version string, ini bool) string {
 	t.Helper()
 	dir := root.PHPBin(version)
@@ -754,19 +753,17 @@ func TestADownloadedBackendReadsThePHPIniBesideItsBuild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// INFO: And its FastCGI backend ... reads it — php-fpm does not look
-	// beside its binary on its own.
+	// INFO: And its FastCGI backend reads it
 	ini := filepath.Join(dir, "php.ini")
 	if i := slices.Index(spec.Args, "-c"); i < 0 || i+1 >= len(spec.Args) || spec.Args[i+1] != ini {
 		t.Fatalf("php-fpm args %v do not name %s", spec.Args, ini)
 	}
-	// INFO: And "config/php.ini" is read after it, so a value there still wins
+	// INFO: And "config/php.ini" is read after it
 	if !slices.Contains(spec.Env, "PHP_INI_SCAN_DIR="+string(os.PathListSeparator)+h.root.Config()) {
 		t.Fatalf("env %v no longer reads config/php.ini after the build's own", spec.Env)
 	}
 
-	// INFO: A build without one, as an adopted or hand-placed build may be,
-	// is started as before.
+	// INFO: A build without one starts as before.
 	plain, err := h.d.res.PHPSpec(h.d.Config(), "8.3")
 	if err != nil {
 		t.Fatal(err)
@@ -781,14 +778,13 @@ func TestADownloadedBackendReadsThePHPIniBesideItsBuild(t *testing.T) {
 func TestABuildFromAnEarlierWharfGetsItsPHPIniOnStart(t *testing.T) {
 	var earlier, other string
 	h := newHarness(t, func(o *Options) {
-		// INFO: Given PHP "8.5" was downloaded into "bin/php/8.5" by a Wharf
-		// that wrote no php.ini beside it
+		// INFO: Given an 8.5 build without php.ini
 		earlier = stageStaticBuild(t, o.Root, "8.5", false)
 		other = stageStaticBuild(t, o.Root, "8.4", false)
 		stubBinary(t, filepath.Join(other, "lib", "libphp.dylib"))
 	})
 
-	// INFO: Then "bin/php/8.5/php.ini" is written as a new download writes it
+	// INFO: Then its php.ini is written
 	got, err := os.ReadFile(filepath.Join(earlier, "php.ini"))
 	if err != nil {
 		t.Fatalf("no php.ini beside the earlier download: %v", err)
@@ -796,8 +792,7 @@ func TestABuildFromAnEarlierWharfGetsItsPHPIniOnStart(t *testing.T) {
 	if !strings.Contains(string(got), "\nswoole.use_shortname = Off\n") {
 		t.Fatalf("php.ini does not turn off Swoole's short names:\n%s", got)
 	}
-	// INFO: And a folder in "bin/php" holding anything but a downloaded build
-	// is left as it is
+	// INFO: And other folders are left as they are
 	for _, dir := range []string{other, h.root.PHPBin("8.3")} {
 		if _, err := os.Stat(filepath.Join(dir, "php.ini")); err == nil {
 			t.Fatalf("a php.ini was written into %s", dir)
