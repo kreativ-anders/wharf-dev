@@ -207,10 +207,7 @@ var staticBuild = []string{"php", "php-fpm"}
 
 // staticINI is the php.ini written beside a static-php-cli build.
 func staticINI() string {
-	return `; Written by Wharf. Your own settings belong in config/php.ini, which wins.
-; Swoole's go() and defer() would break Kirby's go() helper (issue #23).
-swoole.use_shortname = Off
-`
+	return "swoole.use_shortname = Off\n"
 }
 
 func writeStaticINI(dir string) error {

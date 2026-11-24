@@ -291,7 +291,7 @@ func TestADownloadedBuildLeavesGoAndDeferToTheProject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("no php.ini beside the build: %v", err)
 	}
-	if !strings.Contains(string(ini), "\nswoole.use_shortname = Off\n") {
+	if !strings.Contains(string(ini), "swoole.use_shortname = Off") {
 		t.Fatalf("php.ini does not turn off Swoole's short names:\n%s", ini)
 	}
 }
