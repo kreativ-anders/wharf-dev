@@ -207,7 +207,7 @@ var staticBuild = []string{"php", "php-fpm"}
 
 // staticINI is the php.ini written beside a static-php-cli build.
 func staticINI() string {
-	return "; Settings for this PHP version only. config/php.ini applies to all versions and wins.\nswoole.use_shortname = Off\n"
+	return "; Settings for this PHP version only. config/php.ini applies to every version and overrides them.\nswoole.use_shortname = Off\n"
 }
 
 func writeStaticINI(dir string) error {
