@@ -37,8 +37,7 @@ func TestAddFlagsMatchWhatTheSheetSends(t *testing.T) {
 	}
 }
 
-// "add shop --start" used to drop its flags, because only a path was read
-// for them: shop was registered and left stopped.
+// "add shop --start" used to drop its flags and leave shop stopped.
 func TestAddByNameKeepsItsFlags(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "Wharf")
 	params, err := wwwAddParams(root, "shop", []string{"--webserver", "apache", "--start"})

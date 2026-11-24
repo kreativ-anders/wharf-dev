@@ -132,10 +132,8 @@ func run() error {
 				return err
 			}
 		} else if len(args) > 2 {
-			// WARNING: A name alone is the GUI's "Add" on an unregistered
-			// folder, which takes no flags: they were dropped without a word,
-			// so "add shop --start" left shop stopped. With flags the folder
-			// goes the way the "Add project…" sheet sends it, as a path.
+			// WARNING: A bare name takes no flags in the daemon; sent as a name,
+			// "add shop --start" dropped --start. With flags, send www/<name> as a path.
 			var st core.State
 			if err := c.Call(ctx, ipc.MethodState, nil, &st); err != nil {
 				return err
@@ -505,9 +503,8 @@ func printState(st core.State) {
 	}
 }
 
-// wwwAddParams are the params for adding the folder www/<name> with flags.
-// A folder in www/ keeps its own name, so --name is refused rather than
-// ignored.
+// wwwAddParams are the params for adding www/<name> with flags; --name is
+// refused, since a folder in www/ keeps its own name.
 func wwwAddParams(root, name string, flags []string) (map[string]any, error) {
 	params := map[string]any{"path": layout.Root{Dir: root}.ProjectDir(name)}
 	if err := addFlags(flags, params); err != nil {
