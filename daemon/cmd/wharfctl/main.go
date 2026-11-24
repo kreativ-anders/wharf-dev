@@ -36,7 +36,7 @@ const usage = `usage: wharfctl [--root DIR] <command> [args]
 
   status                     show services and projects
   add <name|path>            register a folder in www/ by name, or any folder by path
-       --name N              the project name, if not the folder's
+       --name N              the project name, if not the folder's (a path only)
        --template T | ""     the config template, or none; detected if left out
        --webserver W         pin it to nginx or apache
        --start               start it once it is registered
