@@ -278,6 +278,7 @@ func New(opts Options) (*Daemon, error) {
 	// INFO: Any process state change re-publishes the snapshot, so the tray menu and
 	// the window never disagree about what is running.
 	sup.OnChange(func(supervisor.Status) { d.publish() })
+	d.ensureStaticINIs()
 
 	// INFO: A fresh config has no idea what is installed; first run finds out, so
 	// the tool is usable without a download step.

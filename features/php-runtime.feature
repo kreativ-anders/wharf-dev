@@ -66,6 +66,21 @@ Feature: PHP runtime detection and selection
     Then the build comes from static-php-cli's "bulk" set
     And it carries intl, imagick, mysqli, opcache and sodium without any php.ini line
 
+  # INFO: "bulk" carries Swoole, whose go() and defer() break Kirby's go()
+  # helper (issue #23). A static build cannot drop it, so its short names are off.
+  Scenario: A downloaded build leaves go() and defer() to the project
+    Given the machine runs macOS or Linux
+    When the user downloads PHP "8.4"
+    Then "bin/php/8.4/php.ini" is written beside its binaries, turning off swoole.use_shortname
+    And its FastCGI backend and the "php" in the terminal both read it
+    And "config/php.ini" is read after it, so a value there still wins
+
+  Scenario: A build downloaded by an earlier Wharf gets its php.ini on the next start
+    Given PHP "8.5" was downloaded into "bin/php/8.5" by a Wharf that wrote no php.ini beside it
+    When the daemon starts
+    Then "bin/php/8.5/php.ini" is written as a new download writes it
+    And a folder in "bin/php" holding anything but a downloaded build is left as it is
+
   Scenario: Adding a PHP version leaves a running backend on its port
     Given PHP "8.5" is installed and its backend is running
     When PHP "8.4" is downloaded, adopted or found by a re-scan

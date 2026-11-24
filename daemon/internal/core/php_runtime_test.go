@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -718,6 +719,83 @@ func TestThePickerSaysWhyAPHPVersionInUseCannotBeRemoved(t *testing.T) {
 			if why, ok := inUse[in.Version]; ok {
 				t.Fatalf("in_use[%s] = %q, want nothing for a version nobody uses", in.Version, why)
 			}
+		}
+	}
+}
+
+// stageStaticBuild stages a downloaded build, with or without its php.ini.
+func stageStaticBuild(t *testing.T, root layout.Root, version string, ini bool) string {
+	t.Helper()
+	dir := root.PHPBin(version)
+	stubBinary(t, filepath.Join(dir, "php"))
+	stubBinary(t, filepath.Join(dir, "php-fpm"))
+	if ini {
+		if err := os.WriteFile(filepath.Join(dir, "php.ini"), []byte("swoole.use_shortname = Off\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+// features/php-runtime.feature — "A downloaded build leaves go() and defer()
+// to the project"
+func TestADownloadedBackendReadsThePHPIniBesideItsBuild(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		t.Skip("Windows downloads the official build, which carries no Swoole")
+	}
+	h := newHarness(t)
+	dir := stageStaticBuild(t, h.root, "8.4", true)
+	if err := h.d.AddPHPVersion(h.ctx(), "8.4"); err != nil {
+		t.Fatalf("add 8.4: %v", err)
+	}
+
+	spec, err := h.d.res.PHPSpec(h.d.Config(), "8.4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// INFO: And its FastCGI backend reads it
+	ini := filepath.Join(dir, "php.ini")
+	if i := slices.Index(spec.Args, "-c"); i < 0 || i+1 >= len(spec.Args) || spec.Args[i+1] != ini {
+		t.Fatalf("php-fpm args %v do not name %s", spec.Args, ini)
+	}
+	// INFO: And "config/php.ini" is read after it
+	if !slices.Contains(spec.Env, "PHP_INI_SCAN_DIR="+string(os.PathListSeparator)+h.root.Config()) {
+		t.Fatalf("env %v no longer reads config/php.ini after the build's own", spec.Env)
+	}
+
+	// INFO: A build without one starts as before.
+	plain, err := h.d.res.PHPSpec(h.d.Config(), "8.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(plain.Args, "-c") {
+		t.Fatalf("a build without a php.ini beside it was given -c: %v", plain.Args)
+	}
+}
+
+// features/php-runtime.feature — "A build downloaded by an earlier Wharf gets
+// its php.ini on the next start"
+func TestABuildFromAnEarlierWharfGetsItsPHPIniOnStart(t *testing.T) {
+	var earlier, other string
+	h := newHarness(t, func(o *Options) {
+		// INFO: Given an 8.5 build without php.ini
+		earlier = stageStaticBuild(t, o.Root, "8.5", false)
+		other = stageStaticBuild(t, o.Root, "8.4", false)
+		stubBinary(t, filepath.Join(other, "lib", "libphp.dylib"))
+	})
+
+	// INFO: Then its php.ini is written
+	got, err := os.ReadFile(filepath.Join(earlier, "php.ini"))
+	if err != nil {
+		t.Fatalf("no php.ini beside the earlier download: %v", err)
+	}
+	if !strings.Contains(string(got), "\nswoole.use_shortname = Off\n") {
+		t.Fatalf("php.ini does not turn off Swoole's short names:\n%s", got)
+	}
+	// INFO: And other folders are left as they are
+	for _, dir := range []string{other, h.root.PHPBin("8.3")} {
+		if _, err := os.Stat(filepath.Join(dir, "php.ini")); err == nil {
+			t.Fatalf("a php.ini was written into %s", dir)
 		}
 	}
 }

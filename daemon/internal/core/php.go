@@ -24,6 +24,30 @@ func (d *Daemon) RefreshPHP(ctx context.Context) []php.Install {
 	return installs
 }
 
+// ensureStaticINIs gives builds an earlier Wharf downloaded their php.ini.
+func (d *Daemon) ensureStaticINIs() {
+	vendor := filepath.Join(d.root.Bin(), "php")
+	entries, err := os.ReadDir(vendor)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		dir := filepath.Join(vendor, e.Name())
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(dir, "php.ini")); err == nil {
+			continue
+		}
+		wrote, err := php.EnsureStaticINI(dir)
+		if err != nil {
+			d.log.Warn("could not write php.ini beside a downloaded PHP", "dir", dir, "err", err)
+		} else if wrote {
+			d.log.Info("wrote php.ini beside a downloaded PHP", "dir", dir)
+		}
+	}
+}
+
 // PHPInstalls returns the cached detection result.
 func (d *Daemon) PHPInstalls() []php.Install {
 	if p := d.phpInstalls.Load(); p != nil {

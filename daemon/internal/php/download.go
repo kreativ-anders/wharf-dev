@@ -199,7 +199,43 @@ func (d *Downloader) installStatic(ctx context.Context, goos, goarch, version, d
 			return "", err
 		}
 	}
-	return full, nil
+	return full, writeStaticINI(destDir)
+}
+
+// staticBuild is what installStatic leaves in a version's folder.
+var staticBuild = []string{"php", "php-fpm"}
+
+// staticINI is the php.ini written beside a static-php-cli build.
+func staticINI() string {
+	return `; Written by Wharf. Your own settings belong in config/php.ini, which wins.
+; Swoole's go() and defer() would break Kirby's go() helper (issue #23).
+swoole.use_shortname = Off
+`
+}
+
+func writeStaticINI(dir string) error {
+	return os.WriteFile(filepath.Join(dir, "php.ini"), []byte(staticINI()), 0o644)
+}
+
+// EnsureStaticINI writes staticINI into a folder holding only a downloaded
+// build; any other folder is left alone, as its own php.ini could be hidden.
+func EnsureStaticINI(dir string) (bool, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false, err
+	}
+	var names []string
+	for _, e := range entries {
+		// INFO: Finder's .DS_Store.
+		if !strings.HasPrefix(e.Name(), ".") {
+			names = append(names, e.Name())
+		}
+	}
+	slices.Sort(names)
+	if !slices.Equal(names, staticBuild) {
+		return false, nil
+	}
+	return true, writeStaticINI(dir)
 }
 
 // windowsRelease is one minor version in windows.php.net's releases.json.
