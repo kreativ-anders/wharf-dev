@@ -3,6 +3,11 @@
 Written by the release workflow, never by hand: each release adds the commit
 subjects since the one before it, newest first (dev/releasing.md).
 
+## v1.2.3 - 2026-11-24
+
+- 🐛 Keep wharfctl add's flags for a project named by its www/ folder (#27) (fd6f3ef)
+- 🐛 Leave go() and defer() to Kirby with the PHP Wharf downloads (#26) (3bbdf09)
+
 ## v1.2.2 - 2026-11-23
 
 - 🐛 Say why a PHP version in use cannot be removed, before the click (#25) (bf2b695)
