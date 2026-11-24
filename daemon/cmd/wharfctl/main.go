@@ -131,6 +131,19 @@ func run() error {
 			if err := addFlags(args[2:], params); err != nil {
 				return err
 			}
+		} else if len(args) > 2 {
+			// WARNING: A name alone is the GUI's "Add" on an unregistered
+			// folder, which takes no flags: they were dropped without a word,
+			// so "add shop --start" left shop stopped. With flags the folder
+			// goes the way the "Add project…" sheet sends it, as a path.
+			var st core.State
+			if err := c.Call(ctx, ipc.MethodState, nil, &st); err != nil {
+				return err
+			}
+			var err error
+			if params, err = wwwAddParams(st.Root, args[1], args[2:]); err != nil {
+				return err
+			}
 		}
 		var p core.Project
 		if err := c.Call(ctx, ipc.MethodProjectAdd, params, &p); err != nil {
@@ -490,6 +503,20 @@ func printState(st core.State) {
 	if len(st.Unregistered) > 0 {
 		fmt.Printf("\nunregistered folders in www/: %s\n", strings.Join(st.Unregistered, ", "))
 	}
+}
+
+// wwwAddParams are the params for adding the folder www/<name> with flags.
+// A folder in www/ keeps its own name, so --name is refused rather than
+// ignored.
+func wwwAddParams(root, name string, flags []string) (map[string]any, error) {
+	params := map[string]any{"path": layout.Root{Dir: root}.ProjectDir(name)}
+	if err := addFlags(flags, params); err != nil {
+		return nil, err
+	}
+	if _, renamed := params["name"]; renamed {
+		return nil, fmt.Errorf("a folder in www/ keeps its own name — leave out --name, or add a folder from elsewhere by its path")
+	}
+	return params, nil
 }
 
 // addFlags reads add's flags into params, as the "Add project…" sheet sends
