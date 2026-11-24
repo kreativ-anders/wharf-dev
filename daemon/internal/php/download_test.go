@@ -265,3 +265,73 @@ func TestADownloadedBuildAlreadyCarriesIntlAndImagick(t *testing.T) {
 		t.Fatalf("PHP is downloaded from %s, want static-php-cli's bulk set", base)
 	}
 }
+
+// features/php-runtime.feature — "A downloaded build leaves go() and defer()
+// to the project"
+func TestADownloadedBuildLeavesGoAndDeferToTheProject(t *testing.T) {
+	index, _ := json.Marshal([]map[string]string{
+		{"name": "php-8.4.12-fpm-linux-x86_64.tar.gz"},
+		{"name": "php-8.4.12-cli-linux-x86_64.tar.gz"},
+	})
+	ts := httptest.NewServer(&files{body: map[string][]byte{
+		"/?format=json":                       index,
+		"/php-8.4.12-fpm-linux-x86_64.tar.gz": tarGz(t, "php-fpm", "fpm"),
+		"/php-8.4.12-cli-linux-x86_64.tar.gz": tarGz(t, "php", "cli"),
+	}})
+	defer ts.Close()
+
+	d := &Downloader{StaticBase: ts.URL, GOOS: "linux", GOARCH: "amd64"}
+	dest := t.TempDir()
+	if _, err := d.Install(context.Background(), "8.4", dest); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+
+	// INFO: Then "bin/php/8.4/php.ini" is written beside its binaries, turning
+	// off swoole.use_shortname — beside "php", where the CLI and the
+	// terminal's link to it look.
+	ini, err := os.ReadFile(filepath.Join(dest, "php.ini"))
+	if err != nil {
+		t.Fatalf("no php.ini beside the build: %v", err)
+	}
+	if !strings.Contains(string(ini), "\nswoole.use_shortname = Off\n") {
+		t.Fatalf("php.ini does not turn off Swoole's short names:\n%s", ini)
+	}
+}
+
+// features/php-runtime.feature — "A build downloaded by an earlier Wharf gets
+// its php.ini on the next start"
+func TestEnsureStaticINIWritesOnlyIntoADownloadedBuild(t *testing.T) {
+	stage := func(names ...string) string {
+		dir := t.TempDir()
+		for _, n := range names {
+			if err := os.WriteFile(filepath.Join(dir, n), []byte("x"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return dir
+	}
+
+	// INFO: Finder's .DS_Store does not make a downloaded build someone else's.
+	downloaded := stage("php", "php-fpm", ".DS_Store")
+	if wrote, err := EnsureStaticINI(downloaded); err != nil || !wrote {
+		t.Fatalf("a downloaded build got no php.ini (wrote %v, err %v)", wrote, err)
+	}
+	got, _ := os.ReadFile(filepath.Join(downloaded, "php.ini"))
+	if string(got) != staticINI() {
+		t.Fatalf("php.ini is not what a download writes:\n%s", got)
+	}
+
+	for _, names := range [][]string{
+		{"php", "php-fpm", "php-cgi"},
+		{"php", "php-fpm", "php.ini-development"},
+		{"php-fpm"},
+	} {
+		dir := stage(names...)
+		if wrote, err := EnsureStaticINI(dir); err != nil || wrote {
+			t.Fatalf("%v: wrote %v, err %v — want it left as it is", names, wrote, err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "php.ini")); err == nil {
+			t.Fatalf("%v: a php.ini was written into a folder Wharf did not download", names)
+		}
+	}
+}

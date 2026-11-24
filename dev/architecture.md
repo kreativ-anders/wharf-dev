@@ -314,6 +314,22 @@ OS and CPU. A project that needs one of them adopts a PHP that has it, such
 as Homebrew's or the distribution's. Wharf uses an adopted PHP the same way
 as a downloaded one.
 
+"bulk" also carries more than a project wants. Swoole is one: with its
+default `swoole.use_shortname = On` it defines `go()` and `defer()` as
+global functions, and Kirby's `go()` helper then fails with "Cannot redeclare
+function go()" (issue #23). A static build cannot drop an extension, so
+Wharf writes a `php.ini` beside every build it downloads, `bin/php/X.Y/php.ini`,
+with what has to be different from PHP's defaults. Today that is the
+Swoole setting alone. The `php` CLI reads it from beside its binary on its
+own, including through the link in `bin/path`. php-fpm does not look there,
+so the daemon passes it with `-c`. `config/php.ini` is still read after it,
+so the user's value wins. A build an earlier Wharf downloaded without one
+gets the file when the daemon starts, but only if its folder holds just `php`
+and `php-fpm`. A folder holding anything else was put there by someone
+else, and a `php.ini` beside a build that reads its own from elsewhere would
+hide that one. The Windows build has no Swoole. It already has a `php.ini`
+of Wharf's beside it, for its extensions.
+
 Each download is staged beside its destination and renamed into place only
 when complete, so a failure leaves no half-installed folder. The newest patch
 of a PHP minor version is found from each source's index, not hard-coded.
